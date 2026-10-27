@@ -360,96 +360,134 @@ async function main() {
   // 3. Create Initial Admin User
   console.log('👤 Creating initial admin user...');
 
-  const adminPassword = await getAdminPassword();
-  const hashedAdminPassword = await bcrypt.hash(adminPassword, 10);
-
-  const adminUser = await prisma.user.create({
-    data: {
-      firstName: 'Admin',
-      lastName: 'System',
-      email: 'admin@iris.local',
-      password: hashedAdminPassword,
-      active: true,
-      status: 'CONFIRMED',
-    },
-  });
-
-  console.log(`  ✓ Created admin user: ${adminUser.email}`);
-
-  // 4. Assign Admin Role
+  // 3. Admin User Provisioning
   const adminRole = await prisma.role.findFirst({
     where: { name: 'Admin' },
   });
 
-  if (adminRole) {
-    await prisma.platformStaff.create({
+  if (isProduction()) {
+    const seedAdminEmail = process.env.SEED_ADMIN_EMAIL;
+    const seedAdminPassword = process.env.SEED_ADMIN_PASSWORD;
+
+    if (seedAdminEmail && seedAdminPassword) {
+      console.log('👤 Creating nominal admin user from environment variables...');
+      const validation = validatePassword(seedAdminPassword);
+      if (!validation.valid) {
+        console.error('❌ SEED_ADMIN_PASSWORD does not meet security requirements:');
+        validation.errors.forEach((err) => console.error(`   - ${err}`));
+        process.exit(1);
+      }
+
+      const hashedAdminPassword = await bcrypt.hash(seedAdminPassword, 10);
+      const adminUser = await prisma.user.create({
+        data: {
+          firstName: 'Admin',
+          lastName: 'System',
+          email: seedAdminEmail,
+          password: hashedAdminPassword,
+          active: true,
+          status: 'CONFIRMED',
+        },
+      });
+
+      if (adminRole) {
+        await prisma.platformStaff.create({
+          data: {
+            userId: adminUser.id,
+            roleId: adminRole.id,
+            active: true,
+          },
+        });
+      }
+      console.log(`✅ Admin user provisioned in production: ${adminUser.email}\n`);
+    } else {
+      console.log('🔒 Production mode: Skipping initial admin creation.');
+      console.log('   (No SEED_ADMIN_EMAIL/SEED_ADMIN_PASSWORD provided. Relying on nominal accounts or invitation flow)\n');
+    }
+  } else {
+    // Development mode: Keep convenient local admin
+    console.log('👤 Creating initial development admin user...');
+    const adminPassword = await getAdminPassword();
+    const hashedAdminPassword = await bcrypt.hash(adminPassword, 10);
+
+    const adminUser = await prisma.user.create({
       data: {
-        userId: adminUser.id,
-        roleId: adminRole.id,
+        firstName: 'Admin',
+        lastName: 'System',
+        email: 'admin@iris.local',
+        password: hashedAdminPassword,
         active: true,
+        status: 'CONFIRMED',
       },
     });
 
-    console.log(`  ✓ Assigned Admin role to ${adminUser.email}`);
+    if (adminRole) {
+      await prisma.platformStaff.create({
+        data: {
+          userId: adminUser.id,
+          roleId: adminRole.id,
+          active: true,
+        },
+      });
+      console.log(`  ✓ Assigned Admin role to ${adminUser.email}`);
+    }
+    console.log('✅ Initial dev admin created\n');
   }
 
-  console.log('✅ Initial admin user created and configured\n');
+  // 4. Test User Provisioning (ONLY in Development)
+  if (!isProduction()) {
+    console.log('👤 Creating test regular user (Development only)...');
+    const testUserPassword = getTestUserPassword();
+    const hashedTestPassword = await bcrypt.hash(testUserPassword, 10);
 
-  // 5. Create Test Regular User
-  console.log('👤 Creating test regular user...');
-
-  const testUserPassword = getTestUserPassword();
-  const hashedTestPassword = await bcrypt.hash(testUserPassword, 10);
-
-  const testUser = await prisma.user.create({
-    data: {
-      firstName: 'Aki',
-      lastName: 'Hayakawa',
-      email: 'aki@iris.local',
-      password: hashedTestPassword,
-      active: true,
-      status: 'CONFIRMED',
-    },
-  });
-
-  const userRole = await prisma.role.findFirst({
-    where: { name: 'User' },
-  });
-
-  if (userRole) {
-    await prisma.platformStaff.create({
+    const testUser = await prisma.user.create({
       data: {
-        userId: testUser.id,
-        roleId: userRole.id,
+        firstName: 'Aki',
+        lastName: 'Hayakawa',
+        email: 'aki@iris.local',
+        password: hashedTestPassword,
         active: true,
+        status: 'CONFIRMED',
       },
     });
 
-    console.log(`  ✓ Created test user: ${testUser.email} with USER role`);
-  }
+    const userRole = await prisma.role.findFirst({
+      where: { name: 'User' },
+    });
 
-  console.log('✅ Test user created and configured\n');
+    if (userRole) {
+      await prisma.platformStaff.create({
+        data: {
+          userId: testUser.id,
+          roleId: userRole.id,
+          active: true,
+        },
+      });
+      console.log(`  ✓ Created test user: ${testUser.email} with USER role\n`);
+    }
+  } else {
+    console.log('🔒 Production mode: Test users are strictly disabled.\n');
+  }
 
   // 6. Summary
   console.log('═══════════════════════════════════════════════════════════');
   console.log('🎉 Database seeding completed successfully!');
   console.log('═══════════════════════════════════════════════════════════\n');
-  
+
   console.log('📋 Summary:');
   console.log(`   • Environment: ${isProduction() ? 'PRODUCTION' : 'DEVELOPMENT'}`);
   console.log(`   • Permissions: ${allPermissions.length} (${PLATFORM_PERMISSIONS.length} platform + ${EVENT_PERMISSIONS.length} event)`);
   console.log(`   • Roles: ${ROLES.length} (User, Admin, EventManager, Juror, Participant)`);
-  console.log(`   • Admin User: admin@iris.local`);
-  console.log(`   • Test User: user@iris.local\n`);
-  
-  console.log('🔐 Default Credentials (Development):');
+
   if (!isProduction()) {
-    console.log('   • Admin: admin@iris.local');
-    console.log(`     Password: ${adminPassword === DEFAULT_PASSWORDS.admin ? DEFAULT_PASSWORDS.admin : '[Custom/Env Var]'}`);
-    console.log('   • Test User: user@iris.local');
-    console.log(`     Password: ${testUserPassword === DEFAULT_PASSWORDS.testUser ? DEFAULT_PASSWORDS.testUser : '[Env Var]'}\n`);
+    console.log('   • Admin User: admin@iris.local');
+    console.log('   • Test User: aki@iris.local\n');
+    console.log('🔐 Default Credentials (Development only):');
+    console.log(`   • Admin: ${DEFAULT_PASSWORDS.admin}`);
+    console.log(`   • Test User: ${DEFAULT_PASSWORDS.testUser}\n`);
   } else {
-    console.log('   • Credentials set via environment variables\n');
+    console.log('   • Admin User: Provisioned via environment or invitation flow only.');
+    console.log('   • Test Users: Disabled.\n');
   }
 
   if (!isProduction() && !process.env.ADMIN_PASSWORD) {
