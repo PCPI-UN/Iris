@@ -16,6 +16,135 @@ The database is modeled with Prisma on top of PostgreSQL. Physical tables and co
 
 - `db`: uses PostgreSQL and reads the connection string from the `DATABASE_URL` environment variable.
 
+## Entity Relationship Diagram
+
+Columns follow the field order of `apps/event-service/prisma/schema.prisma`. `PK`, `FK` and `UK` mark primary, foreign and unique keys; optional columns carry the `nullable` comment. Names are the Prisma field names (see each model below for the physical `snake_case` column).
+
+```mermaid
+erDiagram
+    Event ||--o{ StaffEventMember : "participants"
+    Event ||--o{ Category : "categories"
+    Event ||--o{ EventInscriptionDetail : "eventInscriptionDetails"
+    Event ||--o{ EventRecap : "eventRecaps"
+    Event ||--o| RankingEvent : "rankingEvent"
+    Category ||--o{ AwardCategoryEvent : "categoryAwards"
+    AwardCategoryEvent ||--o{ AwardWinnerEvent : "awardWinnerEvents"
+
+    Event {
+        Int id PK
+        String name
+        String description
+        String accessCode UK
+        Boolean isPubliclyJoinable
+        DateTime inscriptionDeadline
+        Float inscriptionCost "nullable"
+        Boolean evaluationsOpened
+        DateTime startDate
+        DateTime endDate
+        Boolean active
+        Int createdByUserId
+        String location
+        String locationDetails "nullable"
+        EvaluationType evaluationType "nullable"
+        String inscriptionRequirements "nullable"
+        Int minimumTeamSize "nullable"
+        String aboutOurAllies "nullable"
+        eventType eventType
+        String[] collaborators
+        String[] organizers
+        Float latitude "nullable"
+        Float longitude "nullable"
+        DateTime createdAt
+        DateTime updatedAt
+    }
+
+    EventInscriptionDetail {
+        Int id PK
+        Int eventId FK
+        String title
+        String description "nullable"
+        Int value "nullable"
+        Boolean isRequired
+        DateTime createdAt
+        DateTime updatedAt
+    }
+
+    EventRecap {
+        Int id PK
+        Int eventId FK
+        String headline
+        String summary "nullable"
+        String closingMessage "nullable"
+        String galeryUrl "nullable"
+        Boolean published
+        DateTime createdAt
+        DateTime updatedAt
+    }
+
+    StaffEventMember {
+        Int userId PK
+        Int eventId PK, FK
+        Int roleId
+        Boolean active
+        DateTime createdAt
+        DateTime updatedAt
+    }
+
+    Category {
+        Int id PK
+        Int eventId FK
+        String name
+        String description "nullable"
+        Boolean active
+        DateTime createdAt
+        DateTime updatedAt
+    }
+
+    AwardCategoryEvent {
+        Int id PK
+        Int categoryId FK
+        String title
+        String description "nullable"
+        Float value "nullable"
+        Int position
+        DateTime createdAt
+        DateTime updatedAt
+    }
+
+    AwardWinnerEvent {
+        Int id PK
+        Int awardId FK
+        Int projectId
+        Float grade
+        DateTime createdAt
+        Int assignedByUserId
+    }
+
+    RankingEvent {
+        Int id PK
+        Int eventId FK, UK
+        Boolean visiblePublic
+        Int positions
+        Boolean gradeVisible
+        DateTime createdAt
+        DateTime updatedAt
+    }
+```
+
+### Columns without a foreign key
+
+These columns reference data owned by other services, or by this service by convention only, so the database enforces no constraint on them.
+
+| Column | References |
+| --- | --- |
+| `Event.createdByUserId` | `auth-service.users.id` |
+| `StaffEventMember.userId` | `auth-service.users.id` |
+| `StaffEventMember.roleId` | `auth-service.roles.id` |
+| `AwardWinnerEvent.projectId` | `project-service.projects.id` |
+| `AwardWinnerEvent.assignedByUserId` | `auth-service.users.id` |
+
+`StaffEventMember` has a composite primary key (`userId` + `eventId`); `eventId` is also the foreign key to `Event`. `RankingEvent.eventId` is both a foreign key and unique, which makes the relation with `Event` one-to-one.
+
 ## Enum
 
 ### `eventType`
