@@ -4,15 +4,15 @@ Source of truth: `apps/project-service/prisma/schema.prisma` (PostgreSQL, one da
 
 ## ER diagram
 
-Columns follow the order of `schema.prisma`. `PK`, `FK` and `UK` mark constraints; `"nullable"` marks optional columns.
+Columns follow the order of `schema.prisma`. `PK` and `FK` mark constraints; `"nullable"` marks optional columns. Composite unique constraints are listed below the diagram, not marked on each column.
 
 ```mermaid
 erDiagram
     projects {
         int id PK
-        int event_id UK
+        int event_id
         int course_id
-        string name UK
+        string name
         string project_code "nullable"
         text description "nullable"
         string event_number "nullable"
@@ -49,10 +49,10 @@ erDiagram
 
     pending_project_participants {
         int pendingId PK
-        int project_id FK, UK
+        int project_id FK
         string first_name
         string last_name "nullable"
-        string email UK
+        string email
         string student_code
         string semester
         string career

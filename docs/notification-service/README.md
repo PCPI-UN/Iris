@@ -16,13 +16,12 @@ Sends the platform's transactional emails. Other services ask for an email by te
 
 ## Modules
 
-The service follows the layering described in `LLM_RULES.md` (`domain`, `application`, `infrastructure`, `interface`).
+The service follows the layering described in `LLM_RULES.md`, without a `domain` layer: it has no entities, so it only uses `application`, `infrastructure` and `interface`.
 
 | Area | Responsibility |
 | --- | --- |
 | `interface/grpc` | gRPC controller for sending an email |
-| `application` | Send-email use case and request DTO |
-| `domain` | Email service port |
+| `application` | Send-email use case, request DTO and the email service port (`application/ports`) |
 | `infrastructure/email` | Provider adapter (EmailJS and Azure fallback) and the HTML templates |
 
 ## Templates

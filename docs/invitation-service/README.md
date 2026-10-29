@@ -13,7 +13,7 @@ Owns invitations to the platform, to an event or to a project. It creates the in
 | Store invitations, their target (platform, event or project), status, expiry and the roles to grant | Store users, roles or permissions: it asks `auth-service` |
 | Create a pending user in `auth-service` when the invited email has no account | Decide whether a caller may invite: authorization is the gateway's responsibility |
 | Send the invitation email through `notification-service` | Render or deliver emails itself |
-| On acceptance, activate the account and grant the platform roles, the event membership or the project participation | Store event membership or project participants: those belong to `event-service` and `project-service` |
+| On acceptance, activate the account if it is still pending and grant the platform roles, the event membership or the project participation | Store event membership or project participants: those belong to `event-service` and `project-service` |
 | Resend invitations and list them by event or by invited user | Expire invitations in the background: expiry is checked when the invitation is read |
 
 ## Modules
@@ -24,7 +24,7 @@ The service has a single module, `invitations`, following the layering described
 | --- | --- |
 | Creation | Create or reuse an invitation, create the pending user if needed, send the email |
 | Lookup | Get an invitation by token; list invitations by event or by user |
-| Acceptance | Activate the account and apply the target: platform roles, event membership or project participation |
+| Acceptance | Activate the account if it is pending, then apply the target: platform roles, event membership or project participation |
 | Resend and rejection | Resend pending or expired invitations; reject by token |
 
 ## Target types
@@ -59,9 +59,11 @@ sequenceDiagram
     I->>I: store invitation (PENDING) and its roles
     I->>N: send invitation email with link
 
-    U->>GW: open link, set password, accept
+    U->>GW: open link and accept
     GW->>I: AcceptInvitation (token)
-    I->>A: activate account
+    opt invited user is PENDING
+        I->>A: activate account with the password or Microsoft token
+    end
     alt PLATFORM
         I->>A: assign platform roles
     else EVENT or PROJECT
@@ -70,7 +72,7 @@ sequenceDiagram
     I->>I: mark invitation ACCEPTED
 ```
 
-- The invitation token identifies the invitation. For a new user it is the same account setup token issued by `auth-service`, so one link both sets the password and accepts the invitation.
+- The invitation token identifies the invitation. For a new user (`PENDING`) it is the same account setup token issued by `auth-service`, so one link both activates the account and accepts the invitation. A user who already has an active account is sent to the invitations page of the app and accepts while signed in; the account is not touched.
 - Only one accepted invitation is allowed per email and target. Creating an invitation while a pending one exists returns the existing one.
 
 ## Related

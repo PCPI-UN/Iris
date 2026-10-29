@@ -2,7 +2,7 @@
 
 Owns the projects submitted to an event: their review lifecycle, their documents, their participants and the jurors assigned to evaluate them.
 
-- **Transport**: gRPC (`ProjectService`). The contract is `libs/common/src/protos/project.proto`.
+- **Transport**: gRPC (`ProjectsService`). The contract is `libs/common/src/protos/project.proto`.
 - **Database**: PostgreSQL database `project_service`, managed with Prisma. See [schema.md](./schema.md).
 - **HTTP**: none. Public endpoints live in the gateway (`/projects/*`); see Swagger at `/api/docs`.
 
