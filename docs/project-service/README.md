@@ -54,7 +54,7 @@ sequenceDiagram
     GW->>GW: upload files to Azure Blob Storage
     GW->>P: AddProjectDocumentFromUrl for each file
 
-    Note over S,I: The participant accepts the invitation;<br/>invitation-service calls AddParticipant
+    Note over S,I: The participant accepts the invitation, then invitation-service calls AddParticipant
 
     R->>GW: approve / reject / request changes
     GW->>P: ApproveProject / RejectProject / RequestChangesProject
