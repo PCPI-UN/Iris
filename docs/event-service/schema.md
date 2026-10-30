@@ -28,8 +28,8 @@ erDiagram
         int minimum_team_size "nullable"
         text aboutOurAllies "nullable"
         eventType event_type
-        string[] collaborators
-        string[] organizers
+        string[] collaborators "nullable"
+        string[] organizers "nullable"
         float latitude "nullable"
         float longitude "nullable"
         timestamptz created_at
@@ -151,8 +151,8 @@ erDiagram
 | `minimum_team_size` | `INTEGER` | yes | |
 | `aboutOurAllies` | `TEXT` | yes | |
 | `event_type` | `eventType` | no | |
-| `collaborators` | `VARCHAR(255)[]` | no | |
-| `organizers` | `VARCHAR(255)[]` | no | |
+| `collaborators` | `VARCHAR(255)[]` | yes | |
+| `organizers` | `VARCHAR(255)[]` | yes | |
 | `latitude` | `DOUBLE PRECISION` | yes | |
 | `longitude` | `DOUBLE PRECISION` | yes | |
 | `created_at` | `TIMESTAMPTZ` | no | `now()` |
@@ -288,3 +288,4 @@ Columns that point to other services have no foreign key: `event.created_by_user
 - Besides primary keys, the only indexes are the unique ones on `event.access_code` and `ranking_event.event_id`. Foreign key columns have no index.
 - `inscription_cost`, `category_awards.value` and `award_winners.grade` are floating point, while `event_inscriptions_details.value` is an integer.
 - `collaborators` and `organizers` are plain `VARCHAR(255)[]` arrays, not related tables.
+- `collaborators` and `organizers` are nullable in the database: Prisma does not add `NOT NULL` to list columns. Prisma rejects an explicit `null`, stores `NULL` when the field is omitted, and returns `NULL` as an empty list.
