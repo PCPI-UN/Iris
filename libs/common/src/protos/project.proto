@@ -35,6 +35,7 @@ service ProjectsService {
   rpc ListProjectJurors (ListProjectJurorsRequest) returns (ListProjectJurorsResponse);  
   rpc ListAssignedProjects(ListAssignedProjectsRequest) returns (ListAssignedProjectsResponse);
   rpc GetMyProjectByEvent (GetMyProjectByEventRequest) returns (GetMyProjectByEventResponse);
+  rpc ListUserParticipations (ListUserParticipationsRequest) returns (ListUserParticipationsResponse);
 
   rpc ListProjectsForReview(ListProjectsForReviewRequest) returns (ListProjectsForReviewResponse);
   rpc DeleteProject (DeleteProjectRequest) returns (DeleteProjectResponse);
@@ -366,4 +367,21 @@ message GetMyProjectByEventRequest {
 
 message GetMyProjectByEventResponse {
   ProjectComplete project = 1;
+}
+
+message ListUserParticipationsRequest {
+  int32 userId = 1;
+}
+
+// One confirmed participation of a user. career and semester come from the
+// participant data captured at submission and may be empty.
+message UserParticipation {
+  Project project = 1;
+  string studentCode = 2;
+  optional string career = 3;
+  optional string semester = 4;
+}
+
+message ListUserParticipationsResponse {
+  repeated UserParticipation participations = 1;
 }

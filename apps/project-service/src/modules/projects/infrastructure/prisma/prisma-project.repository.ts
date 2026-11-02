@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../common/prisma/prisma.service';
 import { ProjectRepository } from '../../domain/repositories/project.repository';
 import { PendingProjectParticipant, Project, TypedDocument } from '../../domain/entities/project.entity';
-import { ProjectDocument, ProjectState, JurorKey, ProjectParticipant } from '../../domain/entities/project.entity';
+import { ProjectDocument, ProjectState, JurorKey, ProjectParticipant, UserParticipation } from '../../domain/entities/project.entity';
 
 
 type CreateProjectInput = {
@@ -398,6 +398,35 @@ export class PrismaProjectRepository implements ProjectRepository {
       },
     });
     return project as unknown as Project | null;
+  }
+
+  async listParticipationsByUser(userId: number): Promise<UserParticipation[]> {
+    const participations = await this.prisma.projectParticipant.findMany({
+      where: { userId },
+      include: { project: true },
+      orderBy: { project: { createdAt: 'desc' } },
+    });
+    if (!participations.length) return [];
+
+    // career and semester only exist on the pending participant row captured at
+    // submission; it is linked to the confirmed participant by project and student code
+    const pendings = await this.prisma.pendingProjectParticipant.findMany({
+      where: {
+        OR: participations.map(p => ({ projectId: p.projectId, studentCode: p.studentCode })),
+      },
+      select: { projectId: true, studentCode: true, career: true, semester: true },
+    });
+    const byKey = new Map(pendings.map(p => [`${p.projectId}:${p.studentCode}`, p]));
+
+    return participations.map(p => {
+      const pending = byKey.get(`${p.projectId}:${p.studentCode}`);
+      return {
+        project: p.project as unknown as Project,
+        studentCode: p.studentCode,
+        career: pending?.career ?? null,
+        semester: pending?.semester ?? null,
+      };
+    });
   }
 
 }
