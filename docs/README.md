@@ -4,9 +4,9 @@ This directory contains service-level documentation for the PCPI microservice ar
 
 ## Services
 
-- [Gateway](./gateway/gateway.md)
+- [Gateway](./gateway/README.md)
 - [Auth Service](./auth-service/auth-service.md)
-- [Evaluation Service](./evaluation-service/evaluation-service.md)
+- [Evaluation Service](./evaluation-service/README.md)
 - [Event Service](./event-service/event-service.md)
 - [Invitation Service](./invitation-service/invitation-service.md)
 - [Notification Service](./notification-service/notification-service.md)
