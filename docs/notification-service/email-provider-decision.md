@@ -4,9 +4,9 @@
 | --- | --- |
 | Requerimiento | IRIS-V3-INT-01 (Ref. plan S1-11) |
 | Tarjeta | [CU-86e3vmxat](https://app.clickup.com/t/86e3vmxat) |
-| Estado | **Borrador — pendiente de datos y aprobación** |
+| Estado | **Decidido — mantener EmailJS como proveedor principal** |
 | Fecha límite de aprobación | 3 nov 2026 |
-| Aprobado por | _pendiente_ |
+| Aprobado por | Profesora Giselle (2 nov 2026) |
 
 ## 1. Contexto
 
@@ -178,7 +178,8 @@ Optimizaciones propuestas (tarjetas de seguimiento):
 ## 8. Datos pendientes
 
 - [ ] Volumen esperado de la feria (variables de la §3) y fechas pico.
-- [ ] Estado de la solicitud de licencia a la profesora Giselle: plan, cupo y fecha estimada.
+- [x] Licencia de EmailJS: la profesora Giselle la ampliará.
+- [ ] Plan y fecha de activación de la licencia ampliada.
 - [ ] Servicio de correo conectado en EmailJS (Gmail, Outlook, institucional) y sus límites.
 - [ ] Consumo real de EmailJS en el último mes y en ferias anteriores.
 - [ ] Si el recurso de ACS en producción existe, desde cuándo, y si usa dominio propio o
@@ -188,4 +189,10 @@ Optimizaciones propuestas (tarjetas de seguimiento):
 
 ## 9. Decisión
 
-_Pendiente de aprobación._
+**Se mantiene EmailJS como proveedor principal de correo** (opción B de la §6).
+
+- Azure ACS sigue como respaldo, sin cambios, mientras exista el recurso. No se invierte más en
+  él por su retiro el 30 sep 2028.
+- La profesora Giselle ampliará la licencia de EmailJS. El plan (Personal, Professional o
+  Business) se elige con la regla de la §7 según el volumen esperado de la feria.
+- Las optimizaciones de la §7 quedan como tarjetas de seguimiento.
