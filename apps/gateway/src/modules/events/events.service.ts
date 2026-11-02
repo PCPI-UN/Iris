@@ -146,14 +146,17 @@ import { UpdateRankingEventDTO } from './dto/ranking-event/update-ranking-event.
 import {
   EVALUATION_SERVICE_NAME,
   EvaluationServiceClient,
-  TIE_BREAK_SERVICE_NAME,
-  TieBreakServiceClient,
 } from '@app/common/generated/evaluation';
 import { ProjectComplete } from '@app/common/generated/project';
 import {
   GetRankingReportDto,
   RankingReportFormat,
 } from './dto/ranking-report/get-ranking-report.dto';
+import {
+  assignRankingPositions,
+  filterVisiblePositions,
+  roundRankingGrade,
+} from './ranking/ranking-positions';
 
 type RankingScope = 'admin' | 'public';
 
@@ -171,7 +174,6 @@ interface RankingReportRow {
   evaluationCount: number;
   individualGrades: number[];
   averageGrade: number;
-  tieBreakOrder?: number;
 }
 
 export interface RankingReportResult {
@@ -203,7 +205,6 @@ export class EventService implements OnModuleInit {
   private eventService!: EventServiceClient;
   private authService!: AuthServiceClient;
   private evaluationService!: EvaluationServiceClient;
-  private tieBreakService!: TieBreakServiceClient;
   private statusCache: EventStatusMapping[] | null = null;
   private rolesCache: any[] | null = null;
 
@@ -224,10 +225,6 @@ export class EventService implements OnModuleInit {
     this.evaluationService =
       this.evaluationClient.getService<EvaluationServiceClient>(
         EVALUATION_SERVICE_NAME,
-      );
-    this.tieBreakService =
-      this.evaluationClient.getService<TieBreakServiceClient>(
-        TIE_BREAK_SERVICE_NAME,
       );
   }
 
@@ -292,35 +289,6 @@ export class EventService implements OnModuleInit {
     } while (currentPage <= totalPages);
 
     return projects;
-  }
-
-  /**
-   * Ranking comparator rules:
-   * 1) Higher average first.
-   * 2) Tie-break order from tie-break table (lower order wins).
-   * 3) Stable lexical fallback by project name.
-   * 4) Final numeric fallback by project id.
-   */
-  private compareRankingRows(a: RankingReportRow, b: RankingReportRow): number {
-    if (a.averageGrade !== b.averageGrade) {
-      return b.averageGrade - a.averageGrade;
-    }
-
-    const tieA = a.tieBreakOrder ?? Number.POSITIVE_INFINITY;
-    const tieB = b.tieBreakOrder ?? Number.POSITIVE_INFINITY;
-
-    if (tieA !== tieB) {
-      return tieA - tieB;
-    }
-
-    const nameComparison = a.projectName.localeCompare(b.projectName, 'es', {
-      sensitivity: 'base',
-    });
-    if (nameComparison !== 0) {
-      return nameComparison;
-    }
-
-    return a.projectId - b.projectId;
   }
 
   /**
@@ -415,21 +383,6 @@ export class EventService implements OnModuleInit {
 
     const projects = await this.listAllProjectsByEvent(eventId, query.categoryId);
 
-    const tieBreakResponse = await firstValueFrom(
-      this.tieBreakService.listTieBreaks({
-        eventId,
-        categoryId: query.categoryId,
-      }),
-    );
-
-    const tieBreakByProjectAndCategory = new Map<string, number>();
-    for (const tieBreak of tieBreakResponse.tiebreaks ?? []) {
-      tieBreakByProjectAndCategory.set(
-        `${String(tieBreak.projectId)}:${String(tieBreak.categoryId)}`,
-        tieBreak.tiebreakOrder,
-      );
-    }
-
     const evaluatorProjectGrades = new Map<number, Map<number, number>>();
     const rows: RankingReportRow[] = [];
 
@@ -464,9 +417,6 @@ export class EventService implements OnModuleInit {
       const categoryId = project.courseId;
       const categoryName =
         categoryNameById.get(categoryId) || `Categoria ${String(categoryId)}`;
-      const tieBreakOrder = tieBreakByProjectAndCategory.get(
-        `${String(project.id)}:${String(categoryId)}`,
-      );
 
       rows.push({
         projectId: project.id,
@@ -479,21 +429,17 @@ export class EventService implements OnModuleInit {
         evaluationCount: stats.evaluationCount ?? individualGrades.length,
         individualGrades,
         averageGrade: stats.averageGrade ?? 0,
-        tieBreakOrder,
       });
     }
 
-    // Sorting determines final ranking positions.
-    rows.sort((a, b) => this.compareRankingRows(a, b));
-    rows.forEach((row, index) => {
-      row.position = index + 1;
-    });
+    // Tied averages share the position (co-winners); no tie-break is applied.
+    const rankedRows = assignRankingPositions(rows);
 
-    // Public scope can expose only top-N rows depending on configuration.
-    let visibleRows = rows;
-    if (scope === 'public' && rankingConfig.positions > 0) {
-      visibleRows = rows.slice(0, rankingConfig.positions);
-    }
+    // Public scope exposes only the top-N positions, including every co-winner.
+    const visibleRows =
+      scope === 'public'
+        ? filterVisiblePositions(rankedRows, rankingConfig.positions)
+        : rankedRows;
 
     // In public mode, grade fields are conditional by ranking configuration.
     const showGrades = scope === 'admin' || rankingConfig.gradeVisible;
@@ -555,7 +501,7 @@ export class EventService implements OnModuleInit {
           : '',
         averageGrade:
           item.averageGrade !== undefined
-            ? Number(item.averageGrade.toFixed(2))
+            ? roundRankingGrade(item.averageGrade)
             : '',
       });
     }
