@@ -6,6 +6,8 @@ This service sends notification emails through an email provider adapter. It exp
 
 The current implementation uses an application port for email delivery and an Azure-based infrastructure adapter.
 
+See [email-provider-decision.md](./email-provider-decision.md) for the EmailJS / Azure ACS provider review.
+
 ## Main Components
 
 ### `SendEmailDto`
