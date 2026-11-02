@@ -23,6 +23,7 @@ import { ListCoursesDTO } from './dto/courses/list-course.dto';
 import { ListCoursesForDropdownDTO } from './dto/courses/list-courses-for-dropdown.dto';
 import { UpdateCourseDTO } from './dto/courses/update-course.dto';
 import { ProjectsService } from '../projects/projects.service';
+import { ProjectStateFilter } from '../projects/dto/list-projects-by-event.dto';
 import {
   CreateAwardWinnerDTO,
   CreateCategoryAwardDTO,
@@ -265,11 +266,12 @@ export class EventService implements OnModuleInit {
   }
 
   /**
-   * Paginates through all projects for an event (optionally by category).
+   * Paginates through all projects for an event (optionally by category and state).
    */
   private async listAllProjectsByEvent(
     eventId: number,
     categoryId?: number,
+    state?: ProjectStateFilter,
   ): Promise<ProjectComplete[]> {
     let currentPage = 1;
     const itemsPerPage = 50;
@@ -279,6 +281,7 @@ export class EventService implements OnModuleInit {
     do {
       const response = await this.projectsService.listProjectsByEvent(eventId, {
         courseId: categoryId,
+        state,
         currentPage,
         itemsPerPage,
       });
@@ -381,7 +384,12 @@ export class EventService implements OnModuleInit {
       ]),
     );
 
-    const projects = await this.listAllProjectsByEvent(eventId, query.categoryId);
+    // Only approved projects compete in the ranking.
+    const projects = await this.listAllProjectsByEvent(
+      eventId,
+      query.categoryId,
+      ProjectStateFilter.APPROVED,
+    );
 
     const evaluatorProjectGrades = new Map<number, Map<number, number>>();
     const rows: RankingReportRow[] = [];
@@ -391,6 +399,12 @@ export class EventService implements OnModuleInit {
       const stats = await firstValueFrom(
         this.evaluationService.getProjectStats({ projectId: project.id }),
       );
+
+      // Projects without evaluations have no grade to rank; leaving them in
+      // would tie them all at 0 and push them into the public cut together.
+      if (!stats.evaluationCount) {
+        continue;
+      }
 
       const individualGrades: number[] = [];
       for (const evaluatorId of stats.evaluatorIds ?? []) {
@@ -426,9 +440,11 @@ export class EventService implements OnModuleInit {
         categoryId,
         category: categoryName,
         position: 0,
-        evaluationCount: stats.evaluationCount ?? individualGrades.length,
+        evaluationCount: stats.evaluationCount,
         individualGrades,
-        averageGrade: stats.averageGrade ?? 0,
+        // Rounded with the same rule used for positions, so co-winners always
+        // show the same grade.
+        averageGrade: roundRankingGrade(stats.averageGrade ?? 0),
       });
     }
 
