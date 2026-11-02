@@ -336,7 +336,7 @@ export class ProjectsService implements OnModuleInit {
           })) ?? [],
         documents:
           dto.documents?.map((d) => ({
-            url: d.url,
+            url: this.azureBlobUploadService.toStoredUrl(d.url),
             type: this.mapDocumentTypeToProto(d.type),
           })) ?? [],
       }),
@@ -565,7 +565,7 @@ export class ProjectsService implements OnModuleInit {
       const uploadResult = await this.azureBlobUploadService.uploadFile(file);
       request.url = uploadResult.url;
     } else if (dto.url && dto.url.trim() !== '') {
-      request.url = dto.url.trim();
+      request.url = this.azureBlobUploadService.toStoredUrl(dto.url.trim());
     }
     if (dto.type !== undefined) {
       request.type = this.mapDocumentTypeToProto(dto.type);

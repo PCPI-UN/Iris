@@ -11,6 +11,9 @@ import * as path from 'path';
 
 
 
+/** Lifetime of the read signature added when a document is served */
+const READ_SAS_TTL_SEC = 3600;
+
 export interface AzureBlobUploadResponse {
   blobName: string;
   filename: string;
@@ -75,9 +78,6 @@ export class AzureBlobUploadService {
         blobHTTPHeaders: { blobContentType: file.mimetype },
       });
 
-      // Generate a long-lived SAS URL (1 year)
-      const url = await this.generateReadSasUrl(blobName, 31536000);
-
       this.logger.log(
         `File uploaded successfully: ${file.originalname} -> ${blobName}`,
       );
@@ -87,7 +87,9 @@ export class AzureBlobUploadService {
         filename: file.originalname,
         mimetype: file.mimetype,
         size: file.size,
-        url,
+        // Permanent blob URL without SAS; the read signature is added when
+        // the document is served (see signStoredUrl)
+        url: blockBlobClient.url,
       };
     } catch (error) {
       this.logger.error(
@@ -101,15 +103,57 @@ export class AzureBlobUploadService {
   }
 
   /**
+   * Removes any SAS query from a URL that points to our container, so only the
+   * permanent blob URL is persisted. Other URLs are returned untouched.
+   */
+  toStoredUrl(url: string): string {
+    const blob = this.parseOwnBlobUrl(url);
+    return blob ? blob.baseUrl : url;
+  }
+
+  /**
+   * Returns the URL with a fresh read-only SAS when it points to our
+   * container (including legacy URLs stored with an expired or expiring SAS).
+   * Any other URL is returned untouched.
+   */
+  signStoredUrl(url: string, ttlSec: number = READ_SAS_TTL_SEC): string {
+    const blob = this.parseOwnBlobUrl(url);
+    if (!blob || !this.accountName || !this.accountKey) return url;
+    return this.generateReadSasUrl(blob.blobName, ttlSec);
+  }
+
+  private parseOwnBlobUrl(
+    url: unknown,
+  ): { blobName: string; baseUrl: string } | null {
+    if (typeof url !== 'string' || !this.accountName || !this.containerName) {
+      return null;
+    }
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return null;
+    }
+    const prefix = `/${this.containerName}/`;
+    if (
+      parsed.hostname !== `${this.accountName}.blob.core.windows.net` ||
+      !parsed.pathname.startsWith(prefix)
+    ) {
+      return null;
+    }
+    return {
+      blobName: decodeURIComponent(parsed.pathname.slice(prefix.length)),
+      baseUrl: `${parsed.origin}${parsed.pathname}`,
+    };
+  }
+
+  /**
    * Generates a SAS URL for reading a blob
    * @param blobName - The name of the blob
    * @param ttlSec - Time to live in seconds (default: 900 = 15 minutes)
    * @returns The signed URL with SAS token
    */
-  private async generateReadSasUrl(
-    blobName: string,
-    ttlSec: number = 900,
-  ): Promise<string> {
+  private generateReadSasUrl(blobName: string, ttlSec: number = 900): string {
     if (!this.accountName || !this.accountKey) {
       throw new Error(
         'AZURE_ACCOUNT_NAME and AZURE_ACCOUNT_KEY are required for generating SAS URLs',
@@ -137,9 +181,6 @@ export class AzureBlobUploadService {
       cred,
     ).toString();
 
-    
-
-    const signedUrl = `${containerClient.getBlockBlobClient(blobName).url}?${sas}`;
-    return signedUrl;
+    return `${containerClient.getBlockBlobClient(blobName).url}?${sas}`;
   }
 }
