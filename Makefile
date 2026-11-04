@@ -60,7 +60,7 @@ prod-env-logs: ## Show logs for all production services with .env file
 # Utility targets
 proto-gen: ## Generate protobuf TypeScript files
 	mkdir -p libs/common/src/generated
-	npm run proto:generate
+	pnpm run proto:generate
 
 clean: ## Clean up Docker resources
 	docker compose down -v --remove-orphans
