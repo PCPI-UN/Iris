@@ -45,7 +45,7 @@ Garantiza que si entran varios merges consecutivos sobre la misma rama, los desp
 
 ## 3. Detección de Cambios por Microservicio
 
-El primer job (`search-individual-migration-service-changes`) evalúa las rutas modificadas mediante `dorny/paths-filter@v4`. Si un commit solo modifica archivos dentro de `apps/auth-service/**`, la matriz de despliegue se ejecuta **únicamente** para `auth-service`, ignorando los 6 microservicios restantes.
+El primer job (`detect-changes`) evalúa las rutas modificadas mediante `dorny/paths-filter@v4`. Si un commit solo modifica archivos dentro de `apps/auth-service/**`, la matriz de despliegue se ejecuta **únicamente** para `auth-service`, ignorando los 6 microservicios restantes.
 
 ### Clasificación de Servicios
 

@@ -18,7 +18,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  search-individual-migration-service-changes:
+  detect-changes:
+    name: Detect Changes & Config
     runs-on: ubuntu-24.04
     outputs:
       services: ${{ steps.filter.outputs.changes }}
@@ -69,13 +70,13 @@ jobs:
 
   deploy-services:
     runs-on: ubuntu-24.04-arm
-    needs: search-individual-migration-service-changes
-    if: ${{ needs.search-individual-migration-service-changes.outputs.services != '[]' && needs.search-individual-migration-service-changes.outputs.services != '' }}
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.services != '[]' && needs.detect-changes.outputs.services != '' }}
 
     strategy:
       fail-fast: false
       matrix:
-        service: ${{ fromJSON(needs.search-individual-migration-service-changes.outputs.services) }}
+        service: ${{ fromJSON(needs.detect-changes.outputs.services) }}
 
     steps:
       - name: Set up Docker Buildx
@@ -112,7 +113,7 @@ jobs:
       - name: Post dynamic env values
         id: dynamic-env
         run: |
-          BRANCH="${{ needs.search-individual-migration-service-changes.outputs.branch }}"
+          BRANCH="${{ needs.detect-changes.outputs.branch }}"
           SERVICE="${{ matrix.service }}"
 
           WEBHOOK_APP_URL=$(echo "$COOLIFY_WEBHOOKS_JSON" | jq -r ".\"$BRANCH\".\"$SERVICE\".webhook_app_url // empty")
@@ -143,9 +144,9 @@ jobs:
       - name: Set Coolify Migration Tag
         if: ${{ matrix.service != 'notification-service' && matrix.service != 'gateway' }}
         run: |
-          curl -f "https://${{ needs.search-individual-migration-service-changes.outputs.coolify-url }}/api/v1/applications/${{ steps.dynamic-env.outputs.migration_uuid }}" \
+          curl -f "https://${{ needs.detect-changes.outputs.coolify-url }}/api/v1/applications/${{ steps.dynamic-env.outputs.migration_uuid }}" \
           --request PATCH \
-          --header "Authorization: Bearer ${{ needs.search-individual-migration-service-changes.outputs.coolify-token }}" \
+          --header "Authorization: Bearer ${{ needs.detect-changes.outputs.coolify-token }}" \
           --header "Content-Type: application/json" \
           --data "{
             \"docker_registry_image_name\": \"${{ steps.image_tag.outputs.image }}\",
@@ -158,7 +159,7 @@ jobs:
         run: |
           RESPONSE=$(curl -sS -f \
           --request GET "${{ steps.dynamic-env.outputs.webhook_migration_url }}" \
-          --header "Authorization: Bearer ${{ needs.search-individual-migration-service-changes.outputs.coolify-token }}")
+          --header "Authorization: Bearer ${{ needs.detect-changes.outputs.coolify-token }}")
 
           echo "$RESPONSE"
           DEPLOYMENT_UUID=$(echo "$RESPONSE" | jq -r ".deployments[0].deployment_uuid")
@@ -171,8 +172,8 @@ jobs:
         run: |
           while true; do
             STATUS=$(curl -sS -f \
-              "https://${{ needs.search-individual-migration-service-changes.outputs.coolify-url }}/api/v1/deployments/${{ steps.redeploy-and-deploymentID.outputs.deployment_uuid }}" \
-              -H "Authorization: Bearer ${{ needs.search-individual-migration-service-changes.outputs.coolify-token }}" | jq -r ".status")
+              "https://${{ needs.detect-changes.outputs.coolify-url }}/api/v1/deployments/${{ steps.redeploy-and-deploymentID.outputs.deployment_uuid }}" \
+              -H "Authorization: Bearer ${{ needs.detect-changes.outputs.coolify-token }}" | jq -r ".status")
 
             echo "Estado actual de la migración: $STATUS"  
             if [ "$STATUS" = "finished" ]; then
@@ -190,9 +191,9 @@ jobs:
 
       - name: Set Coolify Application Tag
         run: |
-          curl -f "https://${{ needs.search-individual-migration-service-changes.outputs.coolify-url }}/api/v1/applications/${{ steps.dynamic-env.outputs.app_uuid }}" \
+          curl -f "https://${{ needs.detect-changes.outputs.coolify-url }}/api/v1/applications/${{ steps.dynamic-env.outputs.app_uuid }}" \
           --request PATCH \
-          --header "Authorization: Bearer ${{ needs.search-individual-migration-service-changes.outputs.coolify-token }}" \
+          --header "Authorization: Bearer ${{ needs.detect-changes.outputs.coolify-token }}" \
           --header "Content-Type: application/json" \
           --data "{
             \"docker_registry_image_name\": \"${{ steps.image_tag.outputs.image }}\",
@@ -202,4 +203,4 @@ jobs:
       - name: Redeploy Coolify Application Image
         run: |
           curl -sS -f --request GET "${{ steps.dynamic-env.outputs.webhook_app_url }}" \
-          --header "Authorization: Bearer ${{ needs.search-individual-migration-service-changes.outputs.coolify-token }}"
+          --header "Authorization: Bearer ${{ needs.detect-changes.outputs.coolify-token }}"
