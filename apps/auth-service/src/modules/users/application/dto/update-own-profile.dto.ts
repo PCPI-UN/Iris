@@ -1,33 +1,12 @@
-import {
-  IsInt,
-  IsOptional,
-  IsPhoneNumber,
-  IsString,
-  MaxLength,
-  MinLength,
-} from 'class-validator';
+import { IsInt } from 'class-validator';
+import { OwnProfileFieldsDto } from '@app/common/dtos/own-profile.dto';
 
 /**
- * Fields a user can change on their own account.
- * Restricted fields (email, password, status, active, roles) are not part of
- * this DTO, so the global ValidationPipe (forbidNonWhitelisted) rejects them.
+ * Self-service profile edition request. Only the fields of OwnProfileFieldsDto
+ * can change; restricted fields (email, password, status, active, roles) are not
+ * declared, so the global ValidationPipe (forbidNonWhitelisted) rejects them.
  */
-export class UpdateOwnProfileDto {
+export class UpdateOwnProfileDto extends OwnProfileFieldsDto {
   @IsInt()
   userId: number;
-
-  @IsString()
-  @MinLength(2)
-  @MaxLength(100)
-  @IsOptional()
-  firstName?: string;
-
-  @IsString()
-  @MaxLength(100)
-  @IsOptional()
-  lastName?: string;
-
-  @IsPhoneNumber('CO')
-  @IsOptional()
-  phone?: string;
 }

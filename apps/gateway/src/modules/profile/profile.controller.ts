@@ -3,8 +3,8 @@ import { ApiOperation, ApiResponse, ApiSecurity, ApiTags } from '@nestjs/swagger
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { InvalidateCache } from '../../common/cache/invalidate-cache.decorator';
 import { AppUser } from '../auth/types/app-user.type';
-import { UpdateProfileDto } from './dto/update-profile.dto';
-import { EditableProfileFieldsGuard } from './guards/editable-fields.guard';
+import { ForbidUnknownFields } from '../../common/guards/forbid-unknown-fields.guard';
+import { UpdateOwnProfileDto } from './dto/update-own-profile.dto';
 import { ProfileService } from './profile.service';
 
 /**
@@ -21,7 +21,7 @@ export class ProfileController {
   @ApiOperation({
     summary: 'Get my profile',
     description:
-      'Returns the user data, the academic data derived from the user project participations, and those projects.',
+      'Returns the user data, the academic data derived from the user project participations, and the 10 most recent of those projects.',
   })
   @ApiResponse({ status: 200, description: 'Profile of the authenticated user' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -30,7 +30,7 @@ export class ProfileController {
   }
 
   @Patch('me')
-  @UseGuards(EditableProfileFieldsGuard)
+  @UseGuards(ForbidUnknownFields(UpdateOwnProfileDto))
   @InvalidateCache({ currentUser: true, endpoints: ['/users'] })
   @ApiOperation({
     summary: 'Edit my profile',
@@ -41,7 +41,7 @@ export class ProfileController {
   @ApiResponse({ status: 400, description: 'Invalid value or field that cannot be edited' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 409, description: 'Phone already used by another user' })
-  updateMyProfile(@GetUser() user: AppUser, @Body() dto: UpdateProfileDto) {
+  updateMyProfile(@GetUser() user: AppUser, @Body() dto: UpdateOwnProfileDto) {
     return this.profileService.updateProfile(user, dto);
   }
 }

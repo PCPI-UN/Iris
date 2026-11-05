@@ -81,5 +81,5 @@ export interface ProjectRepository {
   }): Promise<ProjectDocument>;
 
   findByEventIdAndUserId(eventId:number, userId: number): Promise<Project | null>;
-  listParticipationsByUser(userId: number): Promise<UserParticipation[]>;
+  listParticipationsByUser(userId: number, email: string): Promise<UserParticipation[]>;
 }

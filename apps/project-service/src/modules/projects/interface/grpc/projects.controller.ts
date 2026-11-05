@@ -490,9 +490,19 @@ export class ProjectsController {
   }
 
   @GrpcMethod('ProjectsService', 'ListUserParticipations')
-  async listUserParticipationsRpc(req: { userId: number }) {
-    const participations = await this.listUserParticipationsUC.execute({ userId: req.userId });
+  async listUserParticipationsRpc(req: { userId: number; email: string; limit?: number }) {
+    const { participations, academic, total } = await this.listUserParticipationsUC.execute({
+      userId: req.userId,
+      email: req.email,
+      limit: req.limit,
+    });
     return {
+      total,
+      academic: {
+        studentCode: academic.studentCode ?? undefined,
+        career: academic.career ?? undefined,
+        semester: academic.semester ?? undefined,
+      },
       participations: participations.map(p => ({
         project: toProtoProject(p.project),
         studentCode: p.studentCode,

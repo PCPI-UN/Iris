@@ -400,7 +400,7 @@ export class PrismaProjectRepository implements ProjectRepository {
     return project as unknown as Project | null;
   }
 
-  async listParticipationsByUser(userId: number): Promise<UserParticipation[]> {
+  async listParticipationsByUser(userId: number, email: string): Promise<UserParticipation[]> {
     const participations = await this.prisma.projectParticipant.findMany({
       where: { userId },
       include: { project: true },
@@ -409,17 +409,18 @@ export class PrismaProjectRepository implements ProjectRepository {
     if (!participations.length) return [];
 
     // career and semester only exist on the pending participant row captured at
-    // submission; it is linked to the confirmed participant by project and student code
+    // submission. (project_id, email) is unique there, so each project matches at most one row
     const pendings = await this.prisma.pendingProjectParticipant.findMany({
       where: {
-        OR: participations.map(p => ({ projectId: p.projectId, studentCode: p.studentCode })),
+        projectId: { in: participations.map(p => p.projectId) },
+        email: { equals: email.trim(), mode: 'insensitive' },
       },
-      select: { projectId: true, studentCode: true, career: true, semester: true },
+      select: { projectId: true, career: true, semester: true },
     });
-    const byKey = new Map(pendings.map(p => [`${p.projectId}:${p.studentCode}`, p]));
+    const byProject = new Map(pendings.map(p => [p.projectId, p]));
 
     return participations.map(p => {
-      const pending = byKey.get(`${p.projectId}:${p.studentCode}`);
+      const pending = byProject.get(p.projectId);
       return {
         project: p.project as unknown as Project,
         studentCode: p.studentCode,

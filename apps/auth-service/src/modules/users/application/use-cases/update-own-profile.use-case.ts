@@ -4,15 +4,19 @@ import { status } from '@grpc/grpc-js';
 import { UserRepositoryPort } from '@users/domain/repositories/user.repository.port';
 import { User } from '@users/domain/entities/user.entity';
 import { UpdateOwnProfileDto } from '../dto/update-own-profile.dto';
+import { UpdateUserUseCase } from './update-user.use-case';
 
 /**
  * Self-service profile edition. The caller is always the owner of the account
- * (the gateway takes userId from the session), and only the fields declared in
- * UpdateOwnProfileDto can change.
+ * (the gateway takes userId from the session). Only active users can edit their
+ * profile; the update itself is the same as the admin one.
  */
 @Injectable()
 export class UpdateOwnProfileUseCase {
-  constructor(private readonly userRepository: UserRepositoryPort) {}
+  constructor(
+    private readonly userRepository: UserRepositoryPort,
+    private readonly updateUserUseCase: UpdateUserUseCase,
+  ) {}
 
   async execute(dto: UpdateOwnProfileDto): Promise<User> {
     const { userId, firstName, lastName, phone } = dto;
@@ -32,25 +36,6 @@ export class UpdateOwnProfileUseCase {
       });
     }
 
-    if (phone && phone !== user.phone) {
-      const phoneExists = await this.userRepository.existsByPhone(phone);
-      if (phoneExists) {
-        throw new RpcException({
-          code: status.ALREADY_EXISTS,
-          message: 'Another user with this phone number already exists',
-        });
-      }
-      user.phone = phone;
-    }
-
-    if (firstName) {
-      user.firstName = firstName.trim();
-    }
-
-    if (lastName !== undefined) {
-      user.lastName = lastName.trim();
-    }
-
-    return this.userRepository.save(user);
+    return this.updateUserUseCase.execute({ id: userId, firstName, lastName, phone });
   }
 }

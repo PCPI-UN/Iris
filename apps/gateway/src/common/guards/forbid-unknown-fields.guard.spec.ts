@@ -1,14 +1,16 @@
 import { BadRequestException, ExecutionContext } from '@nestjs/common';
-import { EditableProfileFieldsGuard } from './editable-fields.guard';
+import { ForbidUnknownFields } from './forbid-unknown-fields.guard';
+import { OwnProfileFieldsDto } from '@app/common/dtos/own-profile.dto';
 
-describe('EditableProfileFieldsGuard', () => {
-  const guard = new EditableProfileFieldsGuard();
+describe('ForbidUnknownFields', () => {
+  const Guard = ForbidUnknownFields(OwnProfileFieldsDto);
+  const guard = new Guard();
   const contextWithBody = (body: unknown) =>
     ({
       switchToHttp: () => ({ getRequest: () => ({ body }) }),
     }) as unknown as ExecutionContext;
 
-  it('allows a body with only editable fields', () => {
+  it('allows a body with only the DTO fields', () => {
     expect(
       guard.canActivate(contextWithBody({ firstName: 'Laura', lastName: 'Gómez', phone: '3001112233' })),
     ).toBe(true);
@@ -18,15 +20,18 @@ describe('EditableProfileFieldsGuard', () => {
     expect(guard.canActivate(contextWithBody(undefined))).toBe(true);
   });
 
+  it('leaves value validation to the ValidationPipe', () => {
+    expect(guard.canActivate(contextWithBody({ phone: '123' }))).toBe(true);
+  });
+
   it.each([
     [{ email: 'other@test.local' }, 'email'],
     [{ firstName: 'Laura', status: 'CONFIRMED' }, 'status'],
-    [{ id: 99, firstName: 'Laura' }, 'id'],
-    [{ userId: 99 }, 'userId'],
+    [{ id: 99, userId: 99 }, 'id, userId'],
     [{ roleIds: [1] }, 'roleIds'],
     [{ password: 'Secret123@' }, 'password'],
     [{ studentCode: '2021001001', career: 'Sistemas' }, 'studentCode, career'],
-  ])('rejects restricted fields %p', (body, fields) => {
+  ])('rejects fields outside the DTO %p', (body, fields) => {
     expect(() => guard.canActivate(contextWithBody(body))).toThrow(BadRequestException);
     expect(() => guard.canActivate(contextWithBody(body))).toThrow(fields);
   });

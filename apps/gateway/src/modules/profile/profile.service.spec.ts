@@ -1,4 +1,4 @@
-import { of, throwError } from 'rxjs';
+import { status } from '@grpc/grpc-js';
 import { ProfileService } from './profile.service';
 import { AppUser } from '../auth/types/app-user.type';
 
@@ -15,41 +15,26 @@ describe('ProfileService', () => {
     platformPermissions: [],
   };
 
-  const participation = (
-    id: number,
-    studentCode: string,
-    career?: string,
-    semester?: string,
-  ) => ({
+  const participation = (id: number, studentCode: string) => ({
     project: { id, name: `Project ${id}`, eventId: 1, courseId: 3, state: 'APPROVED' },
     studentCode,
-    career,
-    semester,
   });
 
-  const build = (projectsService: any, authService: any = {}) => {
-    const service = new ProfileService(authService, {
-      getService: () => projectsService,
-    } as any);
-    service.onModuleInit();
-    return service;
-  };
+  const build = (projectsService: any, authService: any = {}) =>
+    new ProfileService(authService, projectsService);
 
-  it('derives academic data from the most recent participation', async () => {
+  it('composes the profile with the academic data returned by project-service', async () => {
     const projectsService = {
-      listUserParticipations: jest.fn(() =>
-        of({
-          participations: [
-            participation(5, '2021001001', 'Ingeniería de Sistemas', '8'),
-            participation(2, '2019001001', 'Ingeniería Industrial', '3'),
-          ],
-        }),
-      ),
+      listUserParticipations: jest.fn(async () => ({
+        participations: [participation(5, '2021001001'), participation(2, '2019001001')],
+        academic: { studentCode: '2021001001', career: 'Ingeniería de Sistemas', semester: '8' },
+        total: 12,
+      })),
     };
 
     const profile = await build(projectsService).getProfile(user);
 
-    expect(projectsService.listUserParticipations).toHaveBeenCalledWith({ userId: 10 });
+    expect(projectsService.listUserParticipations).toHaveBeenCalledWith(10, 'laura@test.local', 10);
     expect(profile.academic).toEqual({
       studentCode: '2021001001',
       career: 'Ingeniería de Sistemas',
@@ -57,42 +42,24 @@ describe('ProfileService', () => {
       derived: true,
     });
     expect(profile.projects.map((p) => p.id)).toEqual([5, 2]);
+    expect(profile.totalProjects).toBe(12);
     expect(profile.roles).toEqual(['User']);
   });
 
-  it('skips placeholder values and falls back to older participations', async () => {
-    const projectsService = {
-      listUserParticipations: () =>
-        of({
-          participations: [
-            participation(5, '2021001001', 'N/A', ''),
-            participation(2, '2019001001', 'Ingeniería Industrial', '3'),
-          ],
-        }),
-    };
+  it('returns empty academic data when project-service has none', async () => {
+    const projectsService = { listUserParticipations: async () => ({ participations: [], total: 0 }) };
 
     const profile = await build(projectsService).getProfile(user);
 
-    expect(profile.academic.career).toBe('Ingeniería Industrial');
-    expect(profile.academic.semester).toBe('3');
-    expect(profile.academic.studentCode).toBe('2021001001');
-  });
-
-  it('returns empty academic data when the user has no projects', async () => {
-    const profile = await build({ listUserParticipations: () => of({}) }).getProfile(user);
-
-    expect(profile.academic).toEqual({
-      studentCode: null,
-      career: null,
-      semester: null,
-      derived: true,
-    });
+    expect(profile.academic).toEqual({ studentCode: null, career: null, semester: null, derived: true });
     expect(profile.projects).toEqual([]);
   });
 
-  it('still returns the profile when project-service fails', async () => {
+  it('still returns the profile when project-service is unavailable', async () => {
     const projectsService = {
-      listUserParticipations: () => throwError(() => new Error('UNAVAILABLE')),
+      listUserParticipations: async () => {
+        throw { code: status.UNAVAILABLE, message: 'No connection established' };
+      },
     };
 
     const profile = await build(projectsService).getProfile(user);
@@ -100,6 +67,19 @@ describe('ProfileService', () => {
     expect(profile.email).toBe('laura@test.local');
     expect(profile.projects).toEqual([]);
   });
+
+  it.each([status.INTERNAL, status.UNIMPLEMENTED, status.INVALID_ARGUMENT])(
+    'propagates any other project-service error (code %p)',
+    async (code) => {
+      const projectsService = {
+        listUserParticipations: async () => {
+          throw { code, message: 'boom' };
+        },
+      };
+
+      await expect(build(projectsService).getProfile(user)).rejects.toMatchObject({ code });
+    },
+  );
 
   it('updates only the caller and only the editable fields', async () => {
     const authService = {
@@ -112,7 +92,7 @@ describe('ProfileService', () => {
     };
 
     const profile = await build(
-      { listUserParticipations: () => of({ participations: [] }) },
+      { listUserParticipations: async () => ({ participations: [], total: 0 }) },
       authService,
     ).updateProfile(user, { firstName: 'Laura María', phone: '3009998877' });
 
@@ -123,7 +103,6 @@ describe('ProfileService', () => {
       phone: '3009998877',
     });
     expect(profile.firstName).toBe('Laura María');
-    expect(profile.phone).toBe('3009998877');
     expect(profile.email).toBe('laura@test.local');
   });
 });

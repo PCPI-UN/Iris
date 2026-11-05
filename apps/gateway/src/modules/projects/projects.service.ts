@@ -29,6 +29,7 @@ import {
   ListAssignedProjectsResponse,
   GetMyProjectByEventRequest,
   GetMyProjectByEventResponse,
+  ListUserParticipationsResponse,
   AddPendingParticipantRequest,
   JurorKey,
 } from '@app/common/generated/project';
@@ -926,5 +927,15 @@ export class ProjectsService implements OnModuleInit {
       eventId,
     };
     return lastValueFrom(this.projectsService.getMyProjectByEvent(request));
+  }
+
+  async listUserParticipations(
+    userId: number,
+    email: string,
+    limit?: number,
+  ): Promise<ListUserParticipationsResponse> {
+    return lastValueFrom(
+      this.projectsService.listUserParticipations({ userId, email, limit }),
+    );
   }
 }

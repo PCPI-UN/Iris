@@ -1,20 +1,12 @@
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { ClientGrpc } from '@nestjs/microservices';
-import { firstValueFrom } from 'rxjs';
-import {
-  PROJECTS_SERVICE_NAME,
-  ProjectsServiceClient,
-  UserParticipation,
-} from '@app/common/generated/project';
+import { Injectable, Logger } from '@nestjs/common';
+import { status } from '@grpc/grpc-js';
+import { ListUserParticipationsResponse } from '@app/common/generated/project';
 import { AuthService } from '../auth/auth.service';
 import { AppUser } from '../auth/types/app-user.type';
-import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ProjectsService } from '../projects/projects.service';
+import { UpdateOwnProfileDto } from './dto/update-own-profile.dto';
 
-// Values used to backfill legacy rows when career/semester were added; they carry no information
-const PLACEHOLDER_VALUES = new Set(['', 'N/A']);
-
-const meaningful = (value?: string | null): string | null =>
-  value && !PLACEHOLDER_VALUES.has(value.trim()) ? value.trim() : null;
+const PROFILE_PROJECTS_LIMIT = 10;
 
 export interface ProfileProject {
   id: number;
@@ -25,14 +17,6 @@ export interface ProfileProject {
   studentCode: string;
 }
 
-export interface AcademicInfo {
-  studentCode: string | null;
-  career: string | null;
-  semester: string | null;
-  // Derived from the user's project participations; not stored on the user
-  derived: true;
-}
-
 export interface Profile {
   id: number;
   firstName: string;
@@ -41,27 +25,29 @@ export interface Profile {
   phone: string;
   status: string;
   roles: string[];
-  academic: AcademicInfo;
+  // Derived by project-service from the user's participations; not stored on the user
+  academic: {
+    studentCode: string | null;
+    career: string | null;
+    semester: string | null;
+    derived: true;
+  };
   projects: ProfileProject[];
+  totalProjects: number;
 }
 
+/** Composes the profile from auth (the session user) and project-service. */
 @Injectable()
-export class ProfileService implements OnModuleInit {
+export class ProfileService {
   private readonly logger = new Logger(ProfileService.name);
-  private projectsService: ProjectsServiceClient;
 
   constructor(
     private readonly authService: AuthService,
-    @Inject(PROJECTS_SERVICE_NAME) private readonly projectsClient: ClientGrpc,
+    private readonly projectsService: ProjectsService,
   ) {}
 
-  onModuleInit() {
-    this.projectsService =
-      this.projectsClient.getService<ProjectsServiceClient>(PROJECTS_SERVICE_NAME);
-  }
-
   async getProfile(user: AppUser): Promise<Profile> {
-    const participations = await this.listParticipations(user.id);
+    const { participations = [], academic, total = 0 } = await this.listParticipations(user);
 
     return {
       id: user.id,
@@ -71,19 +57,27 @@ export class ProfileService implements OnModuleInit {
       phone: user.phone,
       status: user.status,
       roles: (user.platformRoles ?? []).map((role) => role.name),
-      academic: this.deriveAcademicInfo(participations),
-      projects: participations.map((p) => ({
-        id: p.project!.id,
-        name: p.project!.name,
-        eventId: p.project!.eventId,
-        courseId: p.project!.courseId,
-        state: String(p.project!.state),
-        studentCode: p.studentCode,
-      })),
+      academic: {
+        studentCode: academic?.studentCode || null,
+        career: academic?.career || null,
+        semester: academic?.semester || null,
+        derived: true,
+      },
+      projects: participations
+        .filter((p) => p.project)
+        .map((p) => ({
+          id: p.project!.id,
+          name: p.project!.name,
+          eventId: p.project!.eventId,
+          courseId: p.project!.courseId,
+          state: String(p.project!.state),
+          studentCode: p.studentCode,
+        })),
+      totalProjects: total,
     };
   }
 
-  async updateProfile(user: AppUser, dto: UpdateProfileDto): Promise<Profile> {
+  async updateProfile(user: AppUser, dto: UpdateOwnProfileDto): Promise<Profile> {
     const updated = await this.authService.updateOwnProfile({
       userId: user.id,
       firstName: dto.firstName,
@@ -99,35 +93,20 @@ export class ProfileService implements OnModuleInit {
     });
   }
 
-  /**
-   * Participations come ordered from the most recent project. Each academic
-   * field takes the most recent meaningful value, so a newer submission with
-   * an updated career or semester wins over older ones.
-   */
-  private deriveAcademicInfo(participations: UserParticipation[]): AcademicInfo {
-    const firstOf = (pick: (p: UserParticipation) => string | null | undefined) =>
-      participations.map((p) => meaningful(pick(p))).find((v) => v !== null) ?? null;
-
-    return {
-      studentCode: firstOf((p) => p.studentCode),
-      career: firstOf((p) => p.career),
-      semester: firstOf((p) => p.semester),
-      derived: true,
-    };
-  }
-
-  // The profile must still load (and save) when project-service is unavailable
-  private async listParticipations(userId: number): Promise<UserParticipation[]> {
+  // Only an unreachable project-service degrades to "no projects"; any other error is real
+  private async listParticipations(user: AppUser): Promise<Partial<ListUserParticipationsResponse>> {
     try {
-      const response = await firstValueFrom(
-        this.projectsService.listUserParticipations({ userId }),
+      return await this.projectsService.listUserParticipations(
+        user.id,
+        user.email,
+        PROFILE_PROJECTS_LIMIT,
       );
-      return (response.participations ?? []).filter((p) => p.project);
     } catch (error) {
-      this.logger.warn(
-        `Could not load project participations for user ${userId}: ${error?.message}`,
-      );
-      return [];
+      if (error?.code !== status.UNAVAILABLE) {
+        throw error;
+      }
+      this.logger.warn(`project-service unavailable; profile of user ${user.id} without projects`);
+      return {};
     }
   }
 }
