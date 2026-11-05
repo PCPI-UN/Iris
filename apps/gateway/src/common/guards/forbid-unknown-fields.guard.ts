@@ -1,4 +1,11 @@
-import { BadRequestException, CanActivate, ExecutionContext, Injectable, Type, mixin } from '@nestjs/common';
+import {
+  BadRequestException,
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  Type,
+  mixin,
+} from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 
@@ -14,7 +21,8 @@ export function ForbidUnknownFields(dto: Type<object>): Type<CanActivate> {
   @Injectable()
   class ForbidUnknownFieldsGuard implements CanActivate {
     canActivate(context: ExecutionContext): boolean {
-      const body = context.switchToHttp().getRequest().body ?? {};
+      const body =
+        context.switchToHttp().getRequest<{ body?: object }>().body ?? {};
       const rejected = validateSync(plainToInstance(dto, body), {
         whitelist: true,
         forbidNonWhitelisted: true,
@@ -23,7 +31,9 @@ export function ForbidUnknownFields(dto: Type<object>): Type<CanActivate> {
         .map((error) => error.property);
 
       if (rejected.length > 0) {
-        throw new BadRequestException(`These fields cannot be edited: ${rejected.join(', ')}`);
+        throw new BadRequestException(
+          `These fields cannot be edited: ${rejected.join(', ')}`,
+        );
       }
       return true;
     }

@@ -1,5 +1,10 @@
 import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiSecurity, ApiTags } from '@nestjs/swagger';
+import {
+  ApiOperation,
+  ApiResponse,
+  ApiSecurity,
+  ApiTags,
+} from '@nestjs/swagger';
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { InvalidateCache } from '../../common/cache/invalidate-cache.decorator';
 import { AppUser } from '../auth/types/app-user.type';
@@ -23,7 +28,10 @@ export class ProfileController {
     description:
       'Returns the user data, the academic data derived from the user project participations, and the 10 most recent of those projects.',
   })
-  @ApiResponse({ status: 200, description: 'Profile of the authenticated user' })
+  @ApiResponse({
+    status: 200,
+    description: 'Profile of the authenticated user',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   getMyProfile(@GetUser() user: AppUser) {
     return this.profileService.getProfile(user);
@@ -38,9 +46,15 @@ export class ProfileController {
       'Only firstName, lastName and phone can be edited. Any other field (email, password, status, roles, academic data) returns 400.',
   })
   @ApiResponse({ status: 200, description: 'Profile updated' })
-  @ApiResponse({ status: 400, description: 'Invalid value or field that cannot be edited' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid value or field that cannot be edited',
+  })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 409, description: 'Phone already used by another user' })
+  @ApiResponse({
+    status: 409,
+    description: 'Phone already used by another user',
+  })
   updateMyProfile(@GetUser() user: AppUser, @Body() dto: UpdateOwnProfileDto) {
     return this.profileService.updateProfile(user, dto);
   }

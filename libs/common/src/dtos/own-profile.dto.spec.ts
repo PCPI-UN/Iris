@@ -9,10 +9,18 @@ describe('OwnProfileFieldsDto', () => {
   };
 
   it('trims values before validating them', () => {
-    const { dto, errors } = check({ firstName: '  Laura  ', lastName: ' Gómez ', phone: ' 3001234567 ' });
+    const { dto, errors } = check({
+      firstName: '  Laura  ',
+      lastName: ' Gómez ',
+      phone: ' 3001234567 ',
+    });
 
     expect(errors).toEqual([]);
-    expect(dto).toMatchObject({ firstName: 'Laura', lastName: 'Gómez', phone: '3001234567' });
+    expect(dto).toMatchObject({
+      firstName: 'Laura',
+      lastName: 'Gómez',
+      phone: '3001234567',
+    });
   });
 
   it('rejects a first name made only of spaces', () => {

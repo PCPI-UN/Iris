@@ -47,7 +47,11 @@ export class ProfileService {
   ) {}
 
   async getProfile(user: AppUser): Promise<Profile> {
-    const { participations = [], academic, total = 0 } = await this.listParticipations(user);
+    const {
+      participations = [],
+      academic,
+      total = 0,
+    } = await this.listParticipations(user);
 
     return {
       id: user.id,
@@ -77,7 +81,10 @@ export class ProfileService {
     };
   }
 
-  async updateProfile(user: AppUser, dto: UpdateOwnProfileDto): Promise<Profile> {
+  async updateProfile(
+    user: AppUser,
+    dto: UpdateOwnProfileDto,
+  ): Promise<Profile> {
     const updated = await this.authService.updateOwnProfile({
       userId: user.id,
       firstName: dto.firstName,
@@ -94,18 +101,22 @@ export class ProfileService {
   }
 
   // Only an unreachable project-service degrades to "no projects"; any other error is real
-  private async listParticipations(user: AppUser): Promise<Partial<ListUserParticipationsResponse>> {
+  private async listParticipations(
+    user: AppUser,
+  ): Promise<Partial<ListUserParticipationsResponse>> {
     try {
       return await this.projectsService.listUserParticipations(
         user.id,
         user.email,
         PROFILE_PROJECTS_LIMIT,
       );
-    } catch (error) {
-      if (error?.code !== status.UNAVAILABLE) {
+    } catch (error: unknown) {
+      if ((error as { code?: number } | null)?.code !== status.UNAVAILABLE) {
         throw error;
       }
-      this.logger.warn(`project-service unavailable; profile of user ${user.id} without projects`);
+      this.logger.warn(
+        `project-service unavailable; profile of user ${user.id} without projects`,
+      );
       return {};
     }
   }

@@ -21,9 +21,14 @@ const informative = (value?: string | null): string | null => {
  * most recent project. Each field takes the most recent informative value, so a
  * newer submission wins over older ones.
  */
-export function deriveAcademicProfile(participations: UserParticipation[]): AcademicProfile {
-  const mostRecent = (pick: (p: UserParticipation) => string | null | undefined) =>
-    participations.map((p) => informative(pick(p))).find((v) => v !== null) ?? null;
+export function deriveAcademicProfile(
+  participations: UserParticipation[],
+): AcademicProfile {
+  const mostRecent = (
+    pick: (p: UserParticipation) => string | null | undefined,
+  ) =>
+    participations.map((p) => informative(pick(p))).find((v) => v !== null) ??
+    null;
 
   return {
     studentCode: mostRecent((p) => p.studentCode),

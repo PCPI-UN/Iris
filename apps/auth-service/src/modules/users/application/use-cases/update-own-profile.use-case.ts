@@ -36,6 +36,11 @@ export class UpdateOwnProfileUseCase {
       });
     }
 
-    return this.updateUserUseCase.execute({ id: userId, firstName, lastName, phone });
+    return this.updateUserUseCase.execute({
+      id: userId,
+      firstName,
+      lastName,
+      phone,
+    });
   }
 }

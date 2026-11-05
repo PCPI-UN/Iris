@@ -1,5 +1,6 @@
 import { ListUserParticipationsUC } from './list-user-participations.uc';
 import { UserParticipation } from '../../domain/entities/project.entity';
+import { ProjectRepository } from '../../domain/repositories/project.repository';
 
 describe('ListUserParticipationsUC', () => {
   const participation = (
@@ -8,15 +9,24 @@ describe('ListUserParticipationsUC', () => {
     career: string | null,
     semester: string | null,
   ): UserParticipation => ({
-    project: { id, eventId: 1, courseId: 1, name: `Project ${id}`, state: 'APPROVED' },
+    project: {
+      id,
+      eventId: 1,
+      courseId: 1,
+      name: `Project ${id}`,
+      state: 'APPROVED',
+    },
     studentCode,
     career,
     semester,
   });
 
   const build = (rows: UserParticipation[]) => {
-    const repo = { listParticipationsByUser: jest.fn(async () => rows) };
-    return { uc: new ListUserParticipationsUC(repo as any), repo };
+    const listParticipationsByUser = jest.fn().mockResolvedValue(rows);
+    const uc = new ListUserParticipationsUC({
+      listParticipationsByUser,
+    } as unknown as ProjectRepository);
+    return { uc, repo: { listParticipationsByUser } };
   };
 
   it('looks the participations up by user and email', async () => {
@@ -24,7 +34,10 @@ describe('ListUserParticipationsUC', () => {
 
     await uc.execute({ userId: 7, email: 'laura@test.local' });
 
-    expect(repo.listParticipationsByUser).toHaveBeenCalledWith(7, 'laura@test.local');
+    expect(repo.listParticipationsByUser).toHaveBeenCalledWith(
+      7,
+      'laura@test.local',
+    );
   });
 
   it('derives each academic field from the most recent informative value', async () => {
@@ -47,15 +60,25 @@ describe('ListUserParticipationsUC', () => {
 
     const result = await uc.execute({ userId: 7, email: 'laura@test.local' });
 
-    expect(result.academic).toEqual({ studentCode: '2021001001', career: null, semester: null });
+    expect(result.academic).toEqual({
+      studentCode: '2021001001',
+      career: null,
+      semester: null,
+    });
   });
 
   it('limits the participations but derives from all of them and reports the total', async () => {
-    const rows = Array.from({ length: 4 }, (_, i) => participation(10 - i, `C${i}`, null, null));
+    const rows = Array.from({ length: 4 }, (_, i) =>
+      participation(10 - i, `C${i}`, null, null),
+    );
     rows[3].career = 'Ingeniería de Sistemas';
     const { uc } = build(rows);
 
-    const result = await uc.execute({ userId: 7, email: 'laura@test.local', limit: 2 });
+    const result = await uc.execute({
+      userId: 7,
+      email: 'laura@test.local',
+      limit: 2,
+    });
 
     expect(result.participations.map((p) => p.project.id)).toEqual([10, 9]);
     expect(result.total).toBe(4);
@@ -67,10 +90,16 @@ describe('ListUserParticipationsUC', () => {
     [0, 10],
     [500, 50],
   ])('applies limit %p as %p', async (limit, expected) => {
-    const rows = Array.from({ length: 60 }, (_, i) => participation(i + 1, `C${i}`, null, null));
+    const rows = Array.from({ length: 60 }, (_, i) =>
+      participation(i + 1, `C${i}`, null, null),
+    );
     const { uc } = build(rows);
 
-    const result = await uc.execute({ userId: 7, email: 'laura@test.local', limit });
+    const result = await uc.execute({
+      userId: 7,
+      email: 'laura@test.local',
+      limit,
+    });
 
     expect(result.participations).toHaveLength(expected);
   });

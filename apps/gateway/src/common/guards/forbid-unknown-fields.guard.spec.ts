@@ -12,7 +12,13 @@ describe('ForbidUnknownFields', () => {
 
   it('allows a body with only the DTO fields', () => {
     expect(
-      guard.canActivate(contextWithBody({ firstName: 'Laura', lastName: 'Gómez', phone: '3001112233' })),
+      guard.canActivate(
+        contextWithBody({
+          firstName: 'Laura',
+          lastName: 'Gómez',
+          phone: '3001112233',
+        }),
+      ),
     ).toBe(true);
   });
 
@@ -32,7 +38,9 @@ describe('ForbidUnknownFields', () => {
     [{ password: 'Secret123@' }, 'password'],
     [{ studentCode: '2021001001', career: 'Sistemas' }, 'studentCode, career'],
   ])('rejects fields outside the DTO %p', (body, fields) => {
-    expect(() => guard.canActivate(contextWithBody(body))).toThrow(BadRequestException);
+    expect(() => guard.canActivate(contextWithBody(body))).toThrow(
+      BadRequestException,
+    );
     expect(() => guard.canActivate(contextWithBody(body))).toThrow(fields);
   });
 });
