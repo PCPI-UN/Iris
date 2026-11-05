@@ -2,6 +2,10 @@
 
 This directory contains service-level documentation for the PCPI microservice architecture.
 
+## Operations & CI/CD
+
+- [CI/CD Pipeline & Coolify Deployments](./cicd.md)
+
 ## Services
 
 - [Gateway](./gateway/gateway.md)
