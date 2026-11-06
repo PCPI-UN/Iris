@@ -11,10 +11,10 @@ This directory contains service-level documentation for the PCPI microservice ar
 - [Gateway](./gateway/gateway.md)
 - [Auth Service](./auth-service/README.md)
 - [Evaluation Service](./evaluation-service/evaluation-service.md)
-- [Event Service](./event-service/README.md)
-- [Invitation Service](./invitation-service/invitation-service.md)
-- [Notification Service](./notification-service/notification-service.md)
-- [Project Service](./project-service/project-service.md)
+- [Event Service](./event-service/event-service.md)
+- [Invitation Service](./invitation-service/README.md)
+- [Notification Service](./notification-service/README.md)
+- [Project Service](./project-service/README.md)
 
 ## Shared Contracts
 
