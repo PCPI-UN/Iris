@@ -211,6 +211,17 @@ describe('Criteria and components CRUD - rules', () => {
     });
 
     describe('updating criteria', () => {
+        it('keeps the current courses when the gateway sends an empty course list', async () => {
+            criterionRepository.findById.mockResolvedValue(buildCriterion());
+            criterionRepository.getCriterionCourses.mockResolvedValue([{ criterion_id: 1, course_id: 10 }] as any);
+
+            const useCase = new UpdateCriterionUseCase(criterionRepository, eventService);
+            const result = await useCase.execute({ id: 1, name: 'Renamed', courseIds: [] });
+
+            expect(criterionRepository.removeAllCourseAssociations).not.toHaveBeenCalled();
+            expect(result.courseIds).toEqual([10]);
+        });
+
         it('keeps the gRPC code of domain errors instead of masking them as INTERNAL', async () => {
             criterionRepository.findById.mockResolvedValue(buildCriterion());
             criterionRepository.update.mockRejectedValue(

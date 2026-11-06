@@ -54,7 +54,7 @@ The rubric of a project is the set of active criteria associated with the projec
 grade = round2(sum(mappedScore * criterion.weight))
 ```
 
-Project averages returned by `getProjectStats` and `getTopProjectsByCourse` are also rounded to 2 decimals, so the ranking, the tiebreak detection and the Excel report compare and show the same value.
+Project averages returned by `getProjectStats` and `getTopProjectsByCourse` are also rounded to 2 decimals, using the same half-up rule as the gateway ranking (`roundRankingGrade`), so the ranking positions, the co-winner detection and the Excel report compare and show the same value.
 
 ### Components And Weights
 

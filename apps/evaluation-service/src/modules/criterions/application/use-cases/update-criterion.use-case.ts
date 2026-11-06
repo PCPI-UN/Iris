@@ -21,7 +21,10 @@ export class UpdateCriterionUseCase {
     courseIds: number[];
     component?: Component;
   }> {
-    const { id, eventId, name, description, weight, active, courseIds, category, componentId } = updateCriterionDto;
+    const { id, eventId, name, description, weight, active, category, componentId } = updateCriterionDto;
+    // A repeated proto field cannot be "unset": the gateway sends [] when the client did not send courses,
+    // and a criterion always needs at least one course, so an empty list means "keep the current courses".
+    const courseIds = updateCriterionDto.courseIds?.length ? updateCriterionDto.courseIds : undefined;
 
     const existingCriterion = await this.criterionRepository.findById(id);
     if (!existingCriterion) {
