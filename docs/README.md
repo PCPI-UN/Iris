@@ -2,15 +2,19 @@
 
 This directory contains service-level documentation for the PCPI microservice architecture.
 
+## Operations & CI/CD
+
+- [CI/CD Pipeline & Coolify Deployments](./cicd.md)
+
 ## Services
 
 - [Gateway](./gateway/gateway.md)
-- [Auth Service](./auth-service/auth-service.md)
+- [Auth Service](./auth-service/README.md)
 - [Evaluation Service](./evaluation-service/evaluation-service.md)
 - [Event Service](./event-service/event-service.md)
-- [Invitation Service](./invitation-service/invitation-service.md)
-- [Notification Service](./notification-service/notification-service.md)
-- [Project Service](./project-service/project-service.md)
+- [Invitation Service](./invitation-service/README.md)
+- [Notification Service](./notification-service/README.md)
+- [Project Service](./project-service/README.md)
 
 ## Shared Contracts
 
