@@ -10,6 +10,7 @@ import {
 } from '@evaluations/domain/repositories/evaluation.repository.port';
 import { Evaluation } from '@evaluations/domain/entities/evaluation.entity';
 import { EvaluationDetail } from '@evaluations/domain/entities/evaluation-detail.entity';
+import { roundGrade } from '../../../../common/utils/grade.utils';
 
 @Injectable()
 export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
@@ -50,7 +51,6 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
     }
 
     async findById(id: number): Promise<Evaluation | null> {
-        console.log('EvaluationPrismaRepository findById with id:', id);
         const result = await this.prisma.evaluation.findUnique({
             where: { id },
             include: {
@@ -252,8 +252,8 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
             },
         });
 
-        // Group scores by category, tracking unique criterions
-        const categoryScoresMap = new Map<string, { scores: number[]; weight: number; criterionIds: Set<number> }>();
+        // Group scores by category, tracking the weight of each unique criterion
+        const categoryScoresMap = new Map<string, { scores: number[]; criterionWeights: Map<number, number> }>();
 
         for (const detail of evaluationDetails) {
             const category = detail.criterion.category || 'Uncategorized';
@@ -261,34 +261,28 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
             if (!categoryScoresMap.has(category)) {
                 categoryScoresMap.set(category, {
                     scores: [],
-                    weight: 0,
-                    criterionIds: new Set(),
+                    criterionWeights: new Map(),
                 });
             }
 
             const categoryData = categoryScoresMap.get(category)!;
             categoryData.scores.push(detail.score);
-            categoryData.criterionIds.add(detail.criterion.id);
-            // Store the weight from the first criterion in this category
-            if (categoryData.weight === 0) {
-                categoryData.weight = detail.criterion.weight;
-            }
+            categoryData.criterionWeights.set(detail.criterion.id, detail.criterion.weight);
         }
 
-        // Calculate average per category and reverse the weight calculation
-        // Since each criterion has distributed weight (e.g., 0.06 for category with 30% / 5 criterions)
-        // We need to multiply back by the number of UNIQUE criterions to get the category weight
+        // The category weight is the sum of the weights of its unique criteria
+        // (criteria may have different weights, e.g. 0.1 + 0.09 + 0.09)
         const categoryStats: CategoryStats[] = [];
 
         for (const [category, data] of categoryScoresMap.entries()) {
             const averageScore = data.scores.reduce((sum, score) => sum + score, 0) / data.scores.length;
             
-            // Calculate the category weight by multiplying the distributed weight by number of UNIQUE criterions
-            const categoryWeight = data.weight * data.criterionIds.size;
-            
+            const categoryWeight = Array.from(data.criterionWeights.values())
+                .reduce((sum, weight) => sum + weight, 0);
+
             categoryStats.push({
                 category,
-                averageScore,
+                averageScore: roundGrade(averageScore),
                 weight: categoryWeight,
             });
         }
@@ -302,7 +296,8 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
         const evaluatorIds = Array.from(new Set(evaluators.map(e => e.memberUserId)));
 
         return {
-            averageGrade: gradeStats._avg.grade || 0,
+            // Rounded here so ranking, top projects and reports compare and show the same value
+            averageGrade: roundGrade(gradeStats._avg.grade || 0),
             evaluationCount: gradeStats._count,
             categoryStats,
             evaluatorIds,
@@ -364,7 +359,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
 
         return projectGrades.map((pg: any) => ({
             projectId: pg.projectId,
-            averageGrade: pg._avg.grade || 0,
+            averageGrade: roundGrade(pg._avg.grade || 0),
             evaluationCount: pg._count.id,
         }));
     }

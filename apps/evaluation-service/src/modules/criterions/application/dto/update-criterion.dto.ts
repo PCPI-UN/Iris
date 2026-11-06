@@ -30,7 +30,7 @@ export class UpdateCriterionDto {
   @IsNumber()
   @IsOptional()
   @Min(0)
-  @Max(100)
+  @Max(1)
   weight?: number;
 
   @IsBoolean()

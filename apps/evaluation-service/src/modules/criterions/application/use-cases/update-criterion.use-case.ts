@@ -7,6 +7,7 @@ import { Criterion } from '@criterions/domain/entities/criterion.entity';
 import { Component } from '@criterions/domain/entities/component.entity';
 import { CriterionCourse } from '@criterions/domain/entities/criterion-courses.entity';
 import { EventServicePort } from '../../infrastructure/ports/event.service.port';
+import { WEIGHT_SUM_TOLERANCE } from '../../../../common/utils/grade.utils';
 
 @Injectable()
 export class UpdateCriterionUseCase {
@@ -30,13 +31,6 @@ export class UpdateCriterionUseCase {
       });
     }
 
-    if (weight !== undefined && (weight <= 0 || weight > 1)) {
-      throw new RpcException({
-        code: status.INVALID_ARGUMENT,
-        message: 'Weight must be between 0 and 1',
-      });
-    }
-
     if (name !== undefined && (!name || name.trim().length === 0)) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
@@ -44,8 +38,38 @@ export class UpdateCriterionUseCase {
       });
     }
 
-
     const finalEventId = eventId ?? existingCriterion.eventId;
+    const finalComponentId = componentId !== undefined ? (componentId || null) : existingCriterion.componentId;
+
+    // Only the texts can change once the event has evaluations; anything else alters the rubric used to grade.
+    // Clients usually resend the whole form, so unchanged values must not count as a change.
+    const currentCourseIds = (await this.criterionRepository.getCriterionCourses(id))
+      .map((cc: CriterionCourse) => cc.course_id);
+    const coursesChange =
+      courseIds !== undefined &&
+      (courseIds.length !== currentCourseIds.length ||
+        courseIds.some((courseId) => !currentCourseIds.includes(courseId)));
+    // Inside a component the weight is derived, so a weight sent by the client is ignored
+    const weightChanges = !finalComponentId && weight !== undefined && weight !== existingCriterion.weight;
+
+    const changesRubric =
+      weightChanges ||
+      coursesChange ||
+      (active !== undefined && active !== existingCriterion.active) ||
+      finalEventId !== existingCriterion.eventId ||
+      finalComponentId !== existingCriterion.componentId;
+
+    if (changesRubric) {
+      const eventIds = new Set([existingCriterion.eventId, finalEventId]);
+      for (const affectedEventId of eventIds) {
+        if (await this.criterionRepository.hasEvaluationsForEvent(affectedEventId)) {
+          throw new RpcException({
+            code: status.FAILED_PRECONDITION,
+            message: `Event ${affectedEventId} already has evaluations; its criteria cannot be modified`,
+          });
+        }
+      }
+    }
 
     // If eventId is being updated, validate new event exists
     if (eventId !== undefined && eventId !== existingCriterion.eventId) {
@@ -57,6 +81,30 @@ export class UpdateCriterionUseCase {
           message: `Event with ID ${eventId} not found`,
         });
       }
+    }
+
+    // A criterion inside a component gets its weight from the component (split in equal parts)
+    let component: Component | undefined;
+    if (finalComponentId) {
+      const found = await this.criterionRepository.findComponentById(finalComponentId);
+      if (!found) {
+        throw new RpcException({
+          code: status.NOT_FOUND,
+          message: `Component with ID ${finalComponentId} not found`,
+        });
+      }
+      if (found.eventId !== null && found.eventId !== finalEventId) {
+        throw new RpcException({
+          code: status.INVALID_ARGUMENT,
+          message: `Component ${finalComponentId} does not belong to event ${finalEventId}`,
+        });
+      }
+      component = found;
+    } else if (weight !== undefined && (weight <= 0 || weight > 1)) {
+      throw new RpcException({
+        code: status.INVALID_ARGUMENT,
+        message: 'Weight must be between 0 and 1',
+      });
     }
 
     let coursesToValidate: number[] | undefined = courseIds;
@@ -77,15 +125,14 @@ export class UpdateCriterionUseCase {
 
       coursesToValidate = courseIds;
     } else if (courseIds === undefined) {
-      // If courses are not being updated, get existing courses for weight validation
-      const existingCourses = await this.criterionRepository.getCriterionCourses(id);
-      coursesToValidate = existingCourses.map((cc: CriterionCourse) => cc.course_id);
+      // If courses are not being updated, use existing courses for weight validation
+      coursesToValidate = currentCourseIds;
     }
 
-    const finalWeight = weight ?? existingCriterion.weight;
+    const finalWeight = component ? existingCriterion.weight : (weight ?? existingCriterion.weight);
 
-    // Validate weight constraint if weight is changing or courses are being updated
-    if (coursesToValidate && coursesToValidate.length > 0 && (weight !== undefined || courseIds !== undefined)) {
+    // Criteria without component carry their own weight: validate the course total if weight or courses change
+    if (!component && coursesToValidate && coursesToValidate.length > 0 && (weight !== undefined || courseIds !== undefined)) {
       for (const courseId of coursesToValidate) {
         // Get all criteria for this course EXCLUDING current criterion
         const otherCriteria = (await this.criterionRepository.findByCourseId(courseId))
@@ -94,7 +141,7 @@ export class UpdateCriterionUseCase {
         const otherWeight = otherCriteria.reduce((sum: number, c: Criterion) => sum + c.weight, 0);
 
         // Check if updated weight would exceed 100%
-        if (otherWeight + finalWeight > 1.0) {
+        if (otherWeight + finalWeight > 1 + WEIGHT_SUM_TOLERANCE) {
           throw new RpcException({
             code: status.INVALID_ARGUMENT,
             message: `Updated weight for course ${courseId} would exceed 100%. Other criteria: ${(otherWeight * 100).toFixed(2)}%, Requested: ${(finalWeight * 100).toFixed(2)}%, Total: ${((otherWeight + finalWeight) * 100).toFixed(2)}%`,
@@ -111,7 +158,7 @@ export class UpdateCriterionUseCase {
       finalWeight,
       active ?? existingCriterion.active,
       category !== undefined ? (category || null) : existingCriterion.category,
-      componentId !== undefined ? (componentId || null) : existingCriterion.componentId,
+      finalComponentId,
       existingCriterion.createdAt,
       new Date(),
     );
@@ -132,21 +179,13 @@ export class UpdateCriterionUseCase {
         ? courseIds
         : (await this.criterionRepository.getCriterionCourses(id)).map((cc: CriterionCourse) => cc.course_id);
 
-      let component: Component | undefined;
-      const finalComponentId = componentId !== undefined ? componentId : existingCriterion.componentId;
-      if (finalComponentId) {
-        const found = await this.criterionRepository.findComponentById(finalComponentId);
-        if (found) {
-          component = found;
-        }
-      }
-
       return {
         criterion: savedCriterion,
         courseIds: finalCourseIds,
         ...(component && { component }),
       };
     } catch (error) {
+      if (error instanceof RpcException) throw error;
       throw new RpcException({
         code: status.INTERNAL,
         message: 'Failed to update criterion. Please try again later.',

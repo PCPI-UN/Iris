@@ -31,4 +31,10 @@ export abstract class CriterionRepositoryPort {
   abstract findAllComponents(): Promise<Component[]>;
   abstract updateComponent(component: Component): Promise<Component>;
   abstract deleteComponent(id: number): Promise<void>;
+  abstract countActiveCriteriaInComponent(componentId: number): Promise<number>;
+  abstract sumComponentWeightsByEvent(eventId: number, excludeComponentId?: number): Promise<number>;
+
+  // Una rúbrica con evaluaciones registradas no se puede modificar
+  abstract hasEvaluationsForEvent(eventId: number): Promise<boolean>;
+  abstract hasEvaluationsForComponent(componentId: number): Promise<boolean>;
 }

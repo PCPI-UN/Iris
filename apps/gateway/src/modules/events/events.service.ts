@@ -457,7 +457,8 @@ export class EventService implements OnModuleInit {
 
         const grade = evaluatorProjectGrades.get(evaluatorId)?.get(project.id);
         if (grade !== undefined) {
-          individualGrades.push(grade);
+          // Historical grades were stored without rounding; show them with the same 2 decimals as the average
+          individualGrades.push(Number(grade.toFixed(2)));
         }
       }
 

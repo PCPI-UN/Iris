@@ -23,6 +23,21 @@ export class DeleteComponentUseCase {
       });
     }
 
+    if (await this.criterionRepository.hasEvaluationsForComponent(id)) {
+      throw new RpcException({
+        code: status.FAILED_PRECONDITION,
+        message: `Component ${id} is already used in evaluations and cannot be deleted`,
+      });
+    }
+
+    const activeCriteria = await this.criterionRepository.countActiveCriteriaInComponent(id);
+    if (activeCriteria > 0) {
+      throw new RpcException({
+        code: status.FAILED_PRECONDITION,
+        message: `Component ${id} still has ${activeCriteria} active criteria; remove or move them first`,
+      });
+    }
+
     await this.criterionRepository.deleteComponent(id);
   }
 }
