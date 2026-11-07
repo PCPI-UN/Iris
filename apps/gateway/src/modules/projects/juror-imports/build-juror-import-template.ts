@@ -28,6 +28,10 @@ const AUTO_FILL = 'FFE7E6E6';
 const AUTO_FONT = 'FF404040';
 const ERROR_FONT = 'FFC00000';
 const GRID = 'FFBFBFBF';
+const SUBTITLE_FONT = 'FF595959';
+
+/** The original template uses Arial 10 everywhere, including the empty cells to fill */
+const FONT: Partial<ExcelJS.Font> = { name: 'Arial', size: 10 };
 
 const label = (field: JurorImportField) =>
   JUROR_IMPORT_COLUMNS.find((c) => c.field === field)!.label;
@@ -53,7 +57,7 @@ const PROJECT_HEADERS = [
   'Llave (auto)',
 ];
 
-const INSTRUCTIONS: { text: string; heading?: boolean }[] = [
+const INSTRUCTIONS: { text: string; heading?: boolean; fill?: string }[] = [
   { text: 'Qué diligencia decanatura', heading: true },
   {
     text: `Solo la hoja '${JUROR_IMPORT_SHEET}': una fila por cada jurado de cada proyecto, con Departamento, Número del proyecto, nombre y correo del jurado. Un proyecto con 3 jurados ocupa 3 filas. Máximo ${JUROR_IMPORT_MAX_ROWS} filas.`,
@@ -73,13 +77,18 @@ const INSTRUCTIONS: { text: string; heading?: boolean }[] = [
     text: '4. Al confirmar, crea las asignaciones e invita a los jurados que aún no están en el evento.',
   },
   { text: '' },
-  { text: 'Hojas y colores', heading: true },
+  { text: 'Colores', heading: true },
+  { text: 'Amarillo: lo que diligencia decanatura.', fill: INPUT_FILL },
   {
-    text: `${PROJECTS_SHEET}: los proyectos aprobados del evento al momento de descargar la plantilla. No se edita. Un proyecto sin Número debe numerarse en IRIS antes de asignarle jurados.`,
+    text: 'Gris: lo genera IRIS o se calcula solo. No se edita.',
+    fill: AUTO_FILL,
   },
-  { text: 'Amarillo: lo que diligencia decanatura.' },
+  { text: '' },
   {
-    text: 'Gris: se calcula solo como ayuda. La validación que cuenta es la de IRIS al cargar el archivo.',
+    text: `La hoja '${PROJECTS_SHEET}' trae los proyectos aprobados del evento al momento de descargar la plantilla. Un proyecto sin Número debe numerarse en IRIS antes de asignarle jurados.`,
+  },
+  {
+    text: `Las columnas grises de '${JUROR_IMPORT_SHEET}' son una ayuda: la validación que cuenta es la de IRIS al cargar el archivo.`,
   },
   { text: '' },
   {
@@ -136,18 +145,21 @@ const fill = (argb: string): ExcelJS.Fill => ({
   fgColor: { argb },
 });
 
+/** Column widths with Arial 10 as the style of every cell of the column, typed later or not */
+const columns = (widths: number[]): Partial<ExcelJS.Column>[] =>
+  widths.map((width) => ({ width, style: { font: FONT } }));
+
 function styleHeader(row: ExcelJS.Row) {
-  row.height = 20;
+  row.height = 30;
   row.eachCell((cell) => {
-    cell.font = {
-      name: 'Arial',
-      size: 10,
-      bold: true,
-      color: { argb: 'FFFFFFFF' },
-    };
+    cell.font = { ...FONT, bold: true, color: { argb: 'FFFFFFFF' } };
     cell.fill = fill(NAVY);
     cell.border = border;
-    cell.alignment = { vertical: 'middle', wrapText: true };
+    cell.alignment = {
+      horizontal: 'center',
+      vertical: 'middle',
+      wrapText: true,
+    };
   });
 }
 
@@ -157,19 +169,32 @@ const codeCell = (code: string): string | number =>
 
 function addInstructions(wb: ExcelJS.Workbook, eventName: string) {
   const ws = wb.addWorksheet('Instrucciones');
-  ws.columns = [{ width: 4 }, { width: 110 }];
-  const title = ws.getCell('B1');
-  title.value = 'IRIS · Plantilla de asignación de jurados';
-  title.font = { name: 'Arial', size: 14, bold: true, color: { argb: NAVY } };
-  ws.getCell('B2').value = `Evento: ${eventName}`;
-  ws.getCell('B2').font = { name: 'Arial', size: 10, italic: true };
-  INSTRUCTIONS.forEach(({ text, heading }, i) => {
-    const cell = ws.getCell(i + 4, 2);
-    cell.value = text;
+  ws.columns = columns([4, 110]);
+  const text = (row: number, value: string, font: Partial<ExcelJS.Font>) => {
+    const cell = ws.getCell(row, 2);
+    cell.value = value;
+    cell.font = font;
     cell.alignment = { wrapText: true, vertical: 'top' };
-    cell.font = heading
-      ? { name: 'Arial', size: 11, bold: true, color: { argb: NAVY } }
-      : { name: 'Arial', size: 10 };
+    return cell;
+  };
+  text(1, 'IRIS · Plantilla de asignación de jurados', {
+    ...FONT,
+    size: 14,
+    bold: true,
+    color: { argb: NAVY },
+  });
+  text(2, `Evento: ${eventName}`, {
+    ...FONT,
+    italic: true,
+    color: { argb: SUBTITLE_FONT },
+  });
+  INSTRUCTIONS.forEach(({ text: value, heading, fill: legend }, i) => {
+    const cell = text(
+      i + 4,
+      value,
+      heading ? { ...FONT, size: 11, bold: true, color: { argb: NAVY } } : FONT,
+    );
+    if (legend) cell.fill = fill(legend);
   });
 }
 
@@ -177,7 +202,7 @@ function addAssignments(wb: ExcelJS.Workbook, departmentCount: number) {
   const ws = wb.addWorksheet(JUROR_IMPORT_SHEET, {
     views: [{ state: 'frozen', ySplit: 1 }],
   });
-  ws.columns = ASSIGNMENT_COLUMNS.map(({ width }) => ({ width }));
+  ws.columns = columns(ASSIGNMENT_COLUMNS.map(({ width }) => width));
   styleHeader(ws.addRow(ASSIGNMENT_COLUMNS.map(({ header }) => header)));
 
   const departmentList =
@@ -190,7 +215,7 @@ function addAssignments(wb: ExcelJS.Workbook, departmentCount: number) {
       const cell = row.getCell(i + 1);
       cell.fill = fill(input ? INPUT_FILL : AUTO_FILL);
       cell.border = border;
-      if (!input) cell.font = { color: { argb: AUTO_FONT } };
+      cell.font = input ? FONT : { ...FONT, color: { argb: AUTO_FONT } };
     });
     row.getCell(3).value = {
       formula: `IF(OR(A${r}="",B${r}=""),"",IFERROR(INDEX(${PROJECTS_SHEET}!$D:$D,MATCH(A${r}&"|"&B${r},${PROJECTS_SHEET}!$F:$F,0)),"No existe en el evento"))`,
@@ -239,7 +264,7 @@ function addProjects(
   const ws = wb.addWorksheet(PROJECTS_SHEET, {
     views: [{ state: 'frozen', ySplit: 1 }],
   });
-  ws.columns = [38, 10, 12, 70, 14, 40].map((width) => ({ width }));
+  ws.columns = columns([38, 10, 12, 70, 14, 40]);
   styleHeader(ws.addRow(PROJECT_HEADERS));
   projects.forEach((project, i) => {
     const r = i + 2;
@@ -253,21 +278,27 @@ function addProjects(
       },
       { formula: `A${r}&"|"&B${r}` },
     ]);
-    row.eachCell({ includeEmpty: true }, (cell) => {
+    row.eachCell({ includeEmpty: true }, (cell, col) => {
+      cell.font = FONT;
       cell.fill = fill(AUTO_FILL);
       cell.border = border;
+      cell.alignment =
+        col === 5
+          ? { horizontal: 'center', vertical: 'top' }
+          : { vertical: 'top', wrapText: true };
     });
   });
 }
 
 function addRules(wb: ExcelJS.Workbook) {
   const ws = wb.addWorksheet('Validaciones');
-  ws.columns = [5, 70, 70].map((width) => ({ width }));
+  ws.columns = columns([5, 70, 70]);
   styleHeader(
     ws.addRow(['#', 'Qué valida IRIS al cargar', 'Ejemplo de mensaje']),
   );
   RULES.forEach(([rule, example], i) => {
     ws.addRow([i + 1, rule, example]).eachCell((cell) => {
+      cell.font = FONT;
       cell.alignment = { wrapText: true, vertical: 'top' };
       cell.border = border;
     });
@@ -276,6 +307,7 @@ function addRules(wb: ExcelJS.Workbook) {
 
 function addLists(wb: ExcelJS.Workbook, departments: string[]) {
   const ws = wb.addWorksheet(LISTS_SHEET, { state: 'hidden' });
+  ws.columns = columns([40]);
   ws.addRow(['Departamento']);
   departments.forEach((department) => ws.addRow([department]));
 }
