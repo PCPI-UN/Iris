@@ -9,6 +9,7 @@ import {
   Min,
   Max,
   ArrayMinSize,
+  ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -38,16 +39,21 @@ export class CreateCriterionDto {
   description?: string;
 
   @ApiProperty({
-    description: 'Weight of the criterion in the evaluation (0-1)',
+    description:
+      'Weight of the criterion in the evaluation (0-1). Required only for criteria without component: ' +
+      'inside a component the weight is the component weight split in equal parts among its criteria, ' +
+      'and any value sent here is ignored.',
     example: 0.25,
     minimum: 0,
     maximum: 1,
+    required: false,
   })
+  @ValidateIf((dto: CreateCriterionDto) => dto.componentId === undefined || dto.weight !== undefined)
   @IsNumber()
   @Min(0)
   @Max(1)
   @Type(() => Number)
-  weight: number;
+  weight?: number;
 
   @ApiProperty({
     description: 'Array of course IDs to associate with this criterion',

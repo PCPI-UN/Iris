@@ -14,6 +14,7 @@ import { EvaluationType as EventEvaluationType } from '@app/common/generated/eve
 import { ScoreMapperFactory } from '../mappers/score-mapper.factory';
 import { ScoreValidatorFactory } from '../validators/score-validator.factory';
 import { Role } from '@app/common/generated/auth';
+import { isFullWeight, roundGrade } from '../../../../common/utils/grade.utils';
 
 @Injectable()
 export class EvaluateProjectUseCase {
@@ -139,9 +140,37 @@ export class EvaluateProjectUseCase {
             });
         }
 
-        // 4. Calculate Grade
+        // 4. Load the rubric the juror must fill: active criteria of the project's course in this event
+        if (!scores || scores.length === 0) {
+            throw new RpcException({
+                code: status.INVALID_ARGUMENT,
+                message: 'At least one score is required',
+            });
+        }
+
+        const rubric = (await this.criterionRepository.findByCourseId(project.courseId))
+            .filter((criterion) => criterion.eventId === memberEventId);
+
+        if (rubric.length === 0) {
+            throw new RpcException({
+                code: status.FAILED_PRECONDITION,
+                message: 'No evaluation criteria are configured for this project',
+            });
+        }
+
+        const rubricWeight = rubric.reduce((sum, criterion) => sum + criterion.weight, 0);
+        if (!isFullWeight(rubricWeight)) {
+            throw new RpcException({
+                code: status.FAILED_PRECONDITION,
+                message: `Evaluation criteria weights must add up to 100% (current: ${(rubricWeight * 100).toFixed(2)}%)`,
+            });
+        }
+
+        // 5. Calculate Grade
         let totalGrade = 0;
         const evaluationDetails: EvaluationDetail[] = [];
+        const rubricById = new Map(rubric.map((criterion) => [criterion.id, criterion]));
+        const scoredCriterionIds = new Set<number>();
 
         // Resolve score validation and mapping from the event evaluation type
         const evaluationType = this.resolveEvaluationType(event.evaluationType);
@@ -149,18 +178,30 @@ export class EvaluateProjectUseCase {
         const scoreMapper = ScoreMapperFactory.create(evaluationType);
 
         for (const scoreItem of scores) {
-            const criterion = await this.criterionRepository.findById(scoreItem.criterionId);
-
-            if (!criterion) {
+            if (scoredCriterionIds.has(scoreItem.criterionId)) {
                 throw new RpcException({
-                    code: status.NOT_FOUND,
-                    message: `Criterion ${scoreItem.criterionId} not found`,
+                    code: status.INVALID_ARGUMENT,
+                    message: `Criterion ${scoreItem.criterionId} was scored more than once`,
                 });
             }
 
-            const numericScore = Math.round(scoreItem.score);
+            const criterion = rubricById.get(scoreItem.criterionId);
 
-            const validation = scoreValidator.validate(numericScore, evaluationType);
+            if (!criterion) {
+                throw new RpcException({
+                    code: status.INVALID_ARGUMENT,
+                    message: `Criterion ${scoreItem.criterionId} not found in the evaluation rubric of this project`,
+                });
+            }
+
+            if (!Number.isInteger(scoreItem.score)) {
+                throw new RpcException({
+                    code: status.INVALID_ARGUMENT,
+                    message: `Score for criterion ${scoreItem.criterionId} must be an integer level`,
+                });
+            }
+
+            const validation = scoreValidator.validate(scoreItem.score, evaluationType);
 
             if (!validation.valid) {
                 throw new RpcException({
@@ -169,33 +210,41 @@ export class EvaluateProjectUseCase {
                 });
             }
 
-            const mappedValue = scoreMapper.map(numericScore, evaluationType);
+            const mappedValue = scoreMapper.map(scoreItem.score, evaluationType);
 
-
-            // Calculate weighted score
-            // Assumption: criterion.weight is the distributed weight (e.g. 0.06)
+            // criterion.weight is the share of the component weight assigned to this criterion (e.g. 0.4 / 7)
             totalGrade += mappedValue * criterion.weight;
+            scoredCriterionIds.add(scoreItem.criterionId);
 
-            const detail = new EvaluationDetail(0, scoreItem.criterionId, mappedValue);
-
-            evaluationDetails.push(detail);
+            evaluationDetails.push(new EvaluationDetail(0, scoreItem.criterionId, mappedValue));
         }
 
-        // 5. Create Evaluation
+        const missingCriterionIds = rubric
+            .filter((criterion) => !scoredCriterionIds.has(criterion.id))
+            .map((criterion) => criterion.id);
+
+        if (missingCriterionIds.length > 0) {
+            throw new RpcException({
+                code: status.INVALID_ARGUMENT,
+                message: `All criteria must be scored. Missing criteria: ${missingCriterionIds.join(', ')}`,
+            });
+        }
+
+        // 6. Create Evaluation
         const evaluation = new Evaluation(
             0,
             projectId,
             memberUserId,
             memberEventId,
             memberRoleId,
-            totalGrade,
+            roundGrade(totalGrade),
             comments ?? null,
             new Date()
         );
 
         const savedEvaluation = await this.evaluationRepository.save(evaluation, evaluationDetails);
 
-        // 6. Return evaluation with scores in the expected format
+        // 7. Return evaluation with scores in the expected format
         const scoresResponse: EvaluationDetail[] = evaluationDetails.map(detail => ({
             evaluationId: savedEvaluation.id,
             criterionId: detail.criterionId,

@@ -38,7 +38,13 @@ export class CriterionsService implements OnModuleInit {
   async createCriterion(
     request: CreateCriterionDto,
   ): Promise<CriterionProto> {
-    return firstValueFrom(this.criterionsService.createCriterion(request));
+    // weight is not a proto optional field; criteria inside a component get theirs from the component
+    return firstValueFrom(
+      this.criterionsService.createCriterion({
+        ...request,
+        weight: request.weight ?? 0,
+      }),
+    );
   }
 
   async updateCriterion(

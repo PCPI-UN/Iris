@@ -21,11 +21,19 @@ export class DeleteCriterionUseCase {
       });
     }
 
+    if (await this.criterionRepository.hasEvaluationsForEvent(existingCriterion.eventId)) {
+      throw new RpcException({
+        code: status.FAILED_PRECONDITION,
+        message: `Event ${existingCriterion.eventId} already has evaluations; its criteria cannot be modified`,
+      });
+    }
+
     try {
       await this.criterionRepository.removeAllCourseAssociations(id);
-      
+
       await this.criterionRepository.delete(id);
     } catch (error) {
+      if (error instanceof RpcException) throw error;
       throw new RpcException({
         code: status.INTERNAL,
         message: 'Failed to delete criterion. Please try again later.',

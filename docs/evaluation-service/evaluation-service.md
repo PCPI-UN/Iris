@@ -29,33 +29,41 @@ The shared proto enum currently exposes:
 - `ZERO_TO_FIVE`
 - `ZERO_TO_HUNDRED`
 
-The evaluation service currently implements the behavior for `FINAL_PROJECTS`.
+Evaluators always submit one of four integer levels (`1`–`4`). The rubric labels them 5/4/3/2 (Excelente, Bueno, Aceptable, Insuficiente); that difference is only a label in the UI. Non-integer levels are rejected, not rounded.
 
-`ZERO_TO_FIVE` and `ZERO_TO_HUNDRED` are recognized by the factories, but their concrete validation and mapping behavior is intentionally not implemented in this refactor. They return a controlled "not implemented yet" error until their dedicated cards are implemented.
+The level is mapped before persistence and grade calculation. Each evaluation type uses its own scheme:
 
-### `FINAL_PROJECTS` Rules
+| Level | Rubric label | `FINAL_PROJECTS` (range midpoint) | `ZERO_TO_FIVE` (rubric value) | `ZERO_TO_HUNDRED` (range top) |
+| --- | --- | --- | --- | --- |
+| `1` | Insuficiente | `25` | `2` | `40` |
+| `2` | Aceptable | `55` | `3` | `60` |
+| `3` | Bueno | `75` | `4` | `80` |
+| `4` | Excelente | `90` | `5` | `100` |
 
-For `FINAL_PROJECTS`, raw scores submitted by evaluators must be one of:
+`ZERO_TO_FIVE` stored `1.5` for level `1` before it was aligned with the rubric. Historical evaluations keep that value and can still be read back.
 
-- `1`
-- `2`
-- `3`
-- `4`
+### Rubric And Grade Rules
 
-The raw score is mapped before persistence and grade calculation:
+The rubric of a project is the set of active criteria associated with the project's course in the project's event. When a juror submits an evaluation:
 
-| Raw score | Stored/mapped score |
-| --- | --- |
-| `1` | `25` |
-| `2` | `55` |
-| `3` | `75` |
-| `4` | `90` |
-
-The final `grade` calculation did not change. It remains a weighted sum:
+1. The rubric weights must add up to 100% (tolerance `1e-6`). Otherwise the evaluation is rejected with `FAILED_PRECONDITION`.
+2. Every criterion of the rubric must be scored exactly once. Missing, repeated or foreign criteria are rejected with `INVALID_ARGUMENT`.
+3. The grade is a weighted sum, stored rounded to 2 decimals:
 
 ```txt
-grade = sum(mappedScore * criterion.weight)
+grade = round2(sum(mappedScore * criterion.weight))
 ```
+
+Project averages returned by `getProjectStats` and `getTopProjectsByCourse` are also rounded to 2 decimals, using the same half-up rule as the gateway ranking (`roundRankingGrade`), so the ranking positions, the co-winner detection and the Excel report compare and show the same value.
+
+### Components And Weights
+
+A component (e.g. Comunicación Escrita 30%, Descripción del Diseño 40%, Comunicación Oral 30%) has a configured weight. That weight is split in equal parts among its active criteria (`component.weight / activeCriteria`), and recalculated whenever a criterion is added, moved, deactivated or the component weight changes. A weight sent for a criterion inside a component is ignored. Criteria without a component keep their own weight.
+
+- The component weights of an event cannot exceed 100%.
+- Once an event has evaluations, its rubric is locked: criteria cannot be created, deleted, deactivated, moved between components or courses, or change weight, and components cannot change weight or be deleted. Names and descriptions can still be edited.
+- A component with active criteria cannot be deleted.
+- Historical grades are never recalculated.
 
 Only score validation and score mapping depend on `evaluationType`.
 
