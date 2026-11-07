@@ -7,10 +7,23 @@ interface EventServiceGrpc {
   getEvent(data: { id: number }): Observable<any>;
   getCourse(data: { id: number }): Observable<any>;
   getJurorMembership(data: { userId: number; eventId: number }): Observable<any>;
+  getEventMember(data: {
+    eventId: number;
+    userId: number;
+  }): Observable<GetEventMemberResponse>;
+  listCategoriesByEvent(data: {
+    eventId: number;
+    page: number;
+    limit: number;
+  }): Observable<ListCategoriesResponse>;
   // si luego quieres: listCoursesByEvent ...
 }
 
-import { EVENT_SERVICE_NAME } from '@app/common/generated/event';
+import {
+  EVENT_SERVICE_NAME,
+  GetEventMemberResponse,
+  ListCategoriesResponse,
+} from '@app/common/generated/event';
 
 @Injectable()
 export class EventGrpcClient implements OnModuleInit {
@@ -36,5 +49,15 @@ export class EventGrpcClient implements OnModuleInit {
 
   async getJurorMembership(userId: number, eventId: number) {
     return firstValueFrom(this.svc.getJurorMembership({ userId, eventId }));
+  }
+
+  async getEventMember(userId: number, eventId: number) {
+    return firstValueFrom(this.svc.getEventMember({ eventId, userId }));
+  }
+
+  async listCategoriesByEvent(eventId: number, page: number, limit: number) {
+    return firstValueFrom(
+      this.svc.listCategoriesByEvent({ eventId, page, limit }),
+    );
   }
 }
