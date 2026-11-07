@@ -6,6 +6,7 @@ import { ActivateUserWithMicrosoftDto } from '../dto/activate-user-with-microsof
 import { ActivateUserResponse } from '@app/common/generated/auth';
 import { UserStatus } from '../../domain/entities/user.entity';
 import { UserTokenRepositoryPort } from '../../domain/repositories/user-token.repository.port';
+import { normalizeEmail } from '@app/common/utils/email.util';
 
 @Injectable()
 export class ActivateUserWithMicrosoftUseCase {
@@ -35,7 +36,7 @@ export class ActivateUserWithMicrosoftUseCase {
         }
 
         // Security check: Ensure the Microsoft email matches the invited user's email
-        if (user.email !== email) {
+        if (normalizeEmail(user.email) !== normalizeEmail(email)) {
             throw new RpcException({
                 code: status.PERMISSION_DENIED,
                 message: 'Microsoft account email does not match the invited email',
