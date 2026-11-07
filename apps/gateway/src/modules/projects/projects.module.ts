@@ -15,6 +15,8 @@ import { EnrichProjectsWithJurorsUseCase } from './use-cases/enrich-projects-wit
 import { ValidateJurorHasNotEvaluatedUseCase } from './use-cases/validate-juror-has-not-evaluated.use-case';
 import { RemoveJurorFromProjectUseCase } from './use-cases/remove-juror-from-project.use-case';
 import { UpdateProjectCodeUseCase } from './use-cases/update-project-code.use-case';
+import { JurorImportsController } from './juror-imports/juror-imports.controller';
+import { JurorImportsService } from './juror-imports/juror-imports.service';
 
 import {
   EVENT_SERVICE_NAME,
@@ -106,7 +108,7 @@ import { AuthModule } from '../auth/auth.module';
       },
     ]),
   ],
-  controllers: [ProjectsController],
+  controllers: [ProjectsController, JurorImportsController],
   providers: [
     ProjectsService,
     AzureBlobUploadService,
@@ -116,6 +118,7 @@ import { AuthModule } from '../auth/auth.module';
     ValidateJurorHasNotEvaluatedUseCase,
     RemoveJurorFromProjectUseCase,
     UpdateProjectCodeUseCase,
+    JurorImportsService,
   ],
   exports: [ProjectsService],
 })
