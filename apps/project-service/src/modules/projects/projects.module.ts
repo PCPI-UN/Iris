@@ -36,6 +36,7 @@ import { ListProjectsForReviewUC } from './application/use-cases/list-projects-f
 import { UpdateProjectDocumentUC } from './application/use-cases/update-document.uc';
 import { CheckActiveSubmissionByEmailsUC } from './application/use-cases/check-active-submission-by-emails.uc';
 import { AuthServiceModule } from './auth-service.module';
+import { PreviewJurorImportUC } from './application/use-cases/preview-juror-import.uc';
 import { AUTH_SERVICE_PORT } from './application/ports/auth-service.port';
 import { AuthServiceAdapter } from './infrastructure/grpc-client/auth-service.adapter';
 
@@ -82,6 +83,7 @@ import { AuthServiceAdapter } from './infrastructure/grpc-client/auth-service.ad
     CheckActiveSubmissionByEmailsUC,
     ChangeToUnderReviewProjectUC,
     ChangeToUnderReviewProjectUC,
+    PreviewJurorImportUC,
     {
       provide: NOTIFICATION_SERVICE_PORT,
       useExisting: NotificationServiceAdapter,

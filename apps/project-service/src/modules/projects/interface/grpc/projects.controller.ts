@@ -17,6 +17,7 @@ import {
   protoToTypedDocument,
   toProtoProjectComplete,
   protoToDocumentStatus,
+  toPreviewJurorImportResponse,
 } from './mappers';
 import { UpdateProjectUC } from '../../application/use-cases/update-project.uc';
 import { ApproveProjectUC } from '../../application/use-cases/approve-project.uc';
@@ -43,6 +44,8 @@ import { ClientGrpc } from '@nestjs/microservices';
 import { INVITATION_SERVICE_NAME } from '@app/common/generated/invitation';
 import { lastValueFrom } from 'rxjs';
 import { status } from '@grpc/grpc-js';
+import { PreviewJurorImportRequest } from '@app/common/generated/project';
+import { PreviewJurorImportUC } from '../../application/use-cases/preview-juror-import.uc';
 
 interface InvitationGrpcService {
   CreateInvitation(data: {
@@ -89,6 +92,7 @@ export class ProjectsController {
     private readonly getMyProjectByEventUC: GetMyProjectByEventUC,
     private readonly checkActiveSubmissionByEmailsUC: CheckActiveSubmissionByEmailsUC,
     private readonly changeToUnderReviewProjectUC: ChangeToUnderReviewProjectUC,
+    private readonly previewJurorImportUC: PreviewJurorImportUC,
     @Inject(INVITATION_SERVICE_NAME) private readonly client: ClientGrpc,
   ) {}
 
@@ -485,5 +489,14 @@ export class ProjectsController {
       userId: req.userId,
     });
     return { project: toProtoProjectComplete(project) };
+  }
+
+  @GrpcMethod('ProjectsService', 'PreviewJurorImport')
+  async previewJurorImportRpc(req: PreviewJurorImportRequest) {
+    const preview = await this.previewJurorImportUC.execute({
+      eventId: req.eventId,
+      rows: req.rows ?? [],
+    });
+    return toPreviewJurorImportResponse(preview);
   }
 }

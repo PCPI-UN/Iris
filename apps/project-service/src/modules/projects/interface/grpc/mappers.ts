@@ -1,4 +1,14 @@
 import { TypedDocument ,ProjectState, ProjectDocument, Project, JurorKey, Status } from '../../domain/entities/project.entity';
+import {
+  JurorImportOutcome as ProtoJurorImportOutcome,
+  JurorImportUserStatus as ProtoJurorImportUserStatus,
+  PreviewJurorImportResponse,
+} from '@app/common/generated/project';
+import {
+  JurorImportOutcome,
+  JurorImportPreview,
+  JurorImportUserStatus,
+} from '../../application/use-cases/preview-juror-import.uc';
 
 // Mapear enum de dominio a enum del proto (numérico)
 const stateToProto = (s: ProjectState): number => {
@@ -136,4 +146,42 @@ export const toProtoProjectComplete = (p: any) => ({
   participants: (p.participants ?? []).map(toProtoParticipant),
   documents: (p.documents ?? []).map(toProtoDocument),
   pendingParticipants: (p.pendingParticipants ?? []).map(toProtoPendingParticipant),
+});
+
+const jurorImportOutcomeToProto: Record<
+  JurorImportOutcome,
+  ProtoJurorImportOutcome
+> = {
+  ASSIGN: ProtoJurorImportOutcome.ASSIGN,
+  SKIP: ProtoJurorImportOutcome.SKIP,
+  ERROR: ProtoJurorImportOutcome.ERROR,
+};
+
+const jurorImportUserStatusToProto: Record<
+  JurorImportUserStatus,
+  ProtoJurorImportUserStatus
+> = {
+  NEW_USER: ProtoJurorImportUserStatus.NEW_USER,
+  EVENT_JUROR: ProtoJurorImportUserStatus.EVENT_JUROR,
+  INVITE_TO_EVENT: ProtoJurorImportUserStatus.INVITE_TO_EVENT,
+};
+
+export const toPreviewJurorImportResponse = (
+  preview: JurorImportPreview,
+): PreviewJurorImportResponse => ({
+  rows: preview.rows.map((row) => ({
+    rowNumber: row.rowNumber,
+    outcome: jurorImportOutcomeToProto[row.outcome],
+    userStatus: row.userStatus
+      ? jurorImportUserStatusToProto[row.userStatus]
+      : ProtoJurorImportUserStatus.JUROR_IMPORT_USER_STATUS_UNSPECIFIED,
+    message: row.message,
+    email: row.email,
+    projectId: row.projectId,
+    projectName: row.projectName,
+    userId: row.userId,
+  })),
+  totals: preview.totals,
+  eventWarnings: preview.eventWarnings,
+  canConfirm: preview.canConfirm,
 });
