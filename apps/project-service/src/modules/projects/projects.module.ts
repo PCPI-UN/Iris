@@ -35,6 +35,9 @@ import { NotificateStudentUC } from './application/use-cases/notificate-student.
 import { ListProjectsForReviewUC } from './application/use-cases/list-projects-for-review.uc';
 import { UpdateProjectDocumentUC } from './application/use-cases/update-document.uc';
 import { CheckActiveSubmissionByEmailsUC } from './application/use-cases/check-active-submission-by-emails.uc';
+import { AuthServiceModule } from './auth-service.module';
+import { AUTH_SERVICE_PORT } from './application/ports/auth-service.port';
+import { AuthServiceAdapter } from './infrastructure/grpc-client/auth-service.adapter';
 
 @Module({
   controllers: [ProjectsController],
@@ -42,6 +45,7 @@ import { CheckActiveSubmissionByEmailsUC } from './application/use-cases/check-a
     InvitationClientModule,
     EventServiceModule,
     NotificationServiceModule,
+    AuthServiceModule,
   ],
   providers: [
     PrismaService,
@@ -81,6 +85,10 @@ import { CheckActiveSubmissionByEmailsUC } from './application/use-cases/check-a
     {
       provide: NOTIFICATION_SERVICE_PORT,
       useExisting: NotificationServiceAdapter,
+    },
+    {
+      provide: AUTH_SERVICE_PORT,
+      useExisting: AuthServiceAdapter,
     },
   ],
   exports: [ApproveProjectUC, CreateProjectUC, NotificateStudentUC],

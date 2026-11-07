@@ -190,6 +190,7 @@ services:
       - DATABASE_URL=postgresql://project_user:${PROJECT_DB_PASSWORD:-postgres}@postgres:5432/project_service
       - GRPC_HOST=${GRPC_HOST:-0.0.0.0}
       - GRPC_PORT=${GRPC_PORT:-50055}
+      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-auth-service:50051}
       - EVENT_SERVICE_URL=${EVENT_SERVICE_URL:-event-service:50053}
       - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL:-notification-service:50056}
       - INVITATION_SERVICE_URL=${INVITATION_SERVICE_URL:-invitation-service:50054}
