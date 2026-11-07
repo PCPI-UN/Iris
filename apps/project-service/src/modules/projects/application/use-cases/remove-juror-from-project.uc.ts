@@ -1,7 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { ProjectRepository } from '../../domain/repositories/project.repository';
 import { NotFoundError } from '../../domain/errors';
-import { JurorKey } from '../../domain/entities/project.entity';
+import { JurorKey, JUROR_ROLE_ID } from '../../domain/entities/project.entity';
 import { RemoveJurorFromProjectDTO } from '../dto/remove-juror-from-project.dto';
 
 @Injectable()
@@ -22,7 +22,7 @@ export class RemoveJurorFromProjectUC {
     const juror: JurorKey = {
       memberUserId: userId,
       memberEventId: project.eventId,
-      memberRoleId: 4,
+      memberRoleId: JUROR_ROLE_ID,
     };
 
     const removed = await this.repo.removeAssignment(projectId, juror);

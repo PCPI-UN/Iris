@@ -2,7 +2,7 @@ import { Injectable, Inject } from '@nestjs/common';
 import { ProjectRepository } from '../../domain/repositories/project.repository';
 import { ReassignProjectDTO } from '../dto/reassign-project.dto';
 import { NotFoundError } from '../../domain/errors';
-import { JurorKey } from '../../domain/entities/project.entity';
+import { JurorKey, JUROR_ROLE_ID } from '../../domain/entities/project.entity';
 
 @Injectable()
 export class ReassignProjectJurorUC {
@@ -27,17 +27,17 @@ export class ReassignProjectJurorUC {
       return { ok: true, changed: false };
     }
 
-    // 3. Construimos los JurorKey igual que en assign
+    // 3. Construimos los JurorKey con el mismo rol que usa assign
     const fromJuror: JurorKey = {
       memberUserId: fromUserId,
       memberEventId: eventId,
-      memberRoleId: 0,
+      memberRoleId: JUROR_ROLE_ID,
     };
 
     const toJuror: JurorKey = {
       memberUserId: toUserId,
       memberEventId: eventId,
-      memberRoleId: 0,
+      memberRoleId: JUROR_ROLE_ID,
     };
 
     // 4. Quitamos el jurado anterior y asignamos el nuevo
