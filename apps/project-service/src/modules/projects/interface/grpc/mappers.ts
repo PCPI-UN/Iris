@@ -3,12 +3,14 @@ import {
   JurorImportOutcome as ProtoJurorImportOutcome,
   JurorImportUserStatus as ProtoJurorImportUserStatus,
   PreviewJurorImportResponse,
+  GetJurorImportTemplateResponse,
 } from '@app/common/generated/project';
 import {
   JurorImportOutcome,
   JurorImportPreview,
   JurorImportUserStatus,
 } from '../../application/use-cases/preview-juror-import.uc';
+import { JurorImportTemplate } from '../../application/use-cases/get-juror-import-template.uc';
 
 // Mapear enum de dominio a enum del proto (numérico)
 const stateToProto = (s: ProjectState): number => {
@@ -184,4 +186,12 @@ export const toPreviewJurorImportResponse = (
   totals: preview.totals,
   eventWarnings: preview.eventWarnings,
   canConfirm: preview.canConfirm,
+});
+
+export const toGetJurorImportTemplateResponse = (
+  template: JurorImportTemplate,
+): GetJurorImportTemplateResponse => ({
+  eventName: template.eventName,
+  departments: template.departments,
+  projects: template.projects,
 });

@@ -41,6 +41,8 @@ service ProjectsService {
 
   // Juror import from the PF spreadsheet: validates every row, writes nothing
   rpc PreviewJurorImport (PreviewJurorImportRequest) returns (PreviewJurorImportResponse);
+  // Data to build the downloadable template: departments and approved projects of the event
+  rpc GetJurorImportTemplate (GetJurorImportTemplateRequest) returns (GetJurorImportTemplateResponse);
 
 }
 
@@ -426,4 +428,21 @@ message PreviewJurorImportResponse {
   JurorImportTotals totals = 2;
   repeated string eventWarnings = 3;  // event-level problems; any of them blocks the confirmation
   bool canConfirm = 4;                // no row errors and no event warnings
+}
+
+message GetJurorImportTemplateRequest {
+  int32 eventId = 1;
+}
+
+message JurorImportTemplateProject {
+  int32 projectId = 1;
+  string department = 2;   // category name; empty if the project has no category of the event
+  string projectCode = 3;  // empty if the project has no number yet
+  string name = 4;
+}
+
+message GetJurorImportTemplateResponse {
+  string eventName = 1;
+  repeated string departments = 2;                 // every category of the event, sorted by name
+  repeated JurorImportTemplateProject projects = 3;  // approved projects, by department and number
 }

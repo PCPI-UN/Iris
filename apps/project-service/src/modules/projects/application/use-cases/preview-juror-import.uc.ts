@@ -1,5 +1,4 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { status } from '@grpc/grpc-js';
 import { normalizeEmail } from '@app/common/utils/email.util';
 import { ProjectRepository } from '../../domain/repositories/project.repository';
 import {
@@ -7,7 +6,8 @@ import {
   ProjectState,
   ProjectWithJurorIds,
 } from '../../domain/entities/project.entity';
-import { NotFoundError, ValidationError } from '../../domain/errors';
+import { ValidationError } from '../../domain/errors';
+import { getJurorImportEvent, JurorImportEvent } from './juror-import-event';
 import {
   EVENT_SERVICE_PORT,
   EventCategory,
@@ -149,9 +149,6 @@ export class PreviewJurorImportUC {
     rows: JurorImportRowInput[];
   }): Promise<JurorImportPreview> {
     const { eventId, rows } = input;
-    if (!Number.isInteger(eventId) || eventId <= 0) {
-      throw new ValidationError('eventId must be a positive integer');
-    }
     if (!rows?.length) {
       throw new ValidationError('El archivo no tiene filas con datos.');
     }
@@ -161,7 +158,7 @@ export class PreviewJurorImportUC {
       );
     }
 
-    const event = await this.getEvent(eventId);
+    const event = await getJurorImportEvent(this.events, eventId);
     const eventWarnings = this.eventWarnings(event);
 
     const [categories, projects] = await Promise.all([
@@ -210,24 +207,8 @@ export class PreviewJurorImportUC {
     };
   }
 
-  private async getEvent(eventId: number) {
-    try {
-      const event = (await this.events.getEventById(eventId)) as {
-        active?: boolean;
-        endDate?: string;
-      } | null;
-      if (!event) throw new NotFoundError(`El evento ${eventId} no existe.`);
-      return event;
-    } catch (error) {
-      if ((error as { code?: number })?.code === status.NOT_FOUND) {
-        throw new NotFoundError(`El evento ${eventId} no existe.`);
-      }
-      throw error;
-    }
-  }
-
   /** Same conditions CreateEventMember checks when an invitation is accepted */
-  private eventWarnings(event: { active?: boolean; endDate?: string }) {
+  private eventWarnings(event: JurorImportEvent) {
     const warnings: string[] = [];
     if (!event.active) {
       warnings.push('El evento está inactivo.');
