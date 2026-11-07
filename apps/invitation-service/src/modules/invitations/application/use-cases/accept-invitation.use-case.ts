@@ -8,6 +8,7 @@ import { AuthServicePort } from '../../infrastructure/ports/auth-service.port';
 import { EventServicePort } from '../../infrastructure/ports/event-service.port';
 import { ProjectServicePort } from '../../infrastructure/ports/project-service.port';
 import { AcceptInvitationResponse } from '@app/common/generated/invitation';
+import { normalizeEmail } from '@app/common/utils/email.util';
 import { InvitationTargetType } from '../../domain/entities/invitation.entity';
 
 @Injectable()
@@ -107,8 +108,8 @@ export class AcceptInvitationUseCase {
 
           const studentCode = pendingParticipants.find(
             (participant) =>
-              participant.email.trim().toLowerCase() ===
-              invitation.email.trim().toLowerCase(),
+              normalizeEmail(participant.email) ===
+              normalizeEmail(invitation.email),
           )?.studentCode?.trim();
 
           if (!studentCode) {

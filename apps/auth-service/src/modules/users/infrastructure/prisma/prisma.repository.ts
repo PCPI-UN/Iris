@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { User } from '@users/domain/entities/user.entity';
+import { normalizeEmail } from '@app/common/utils/email.util';
 import {
   PaginatedUsersResult,
   UserRepositoryPort,
@@ -25,9 +26,11 @@ export class PrismaUserRepository implements UserRepositoryPort {
       return UserMapper.toDomain(updatedPrismaUser);
     }
 
+    // Only new users are normalized: an update rewrites the email already
+    // stored, and normalizing it there could collide with a case-only duplicate.
     const { id, ...createData } = persistenceData;
     const newPrismaUser = await prisma.user.create({
-      data: createData,
+      data: { ...createData, email: normalizeEmail(createData.email) },
     });
     return UserMapper.toDomain(newPrismaUser);
   }
@@ -97,7 +100,9 @@ export class PrismaUserRepository implements UserRepositoryPort {
   }
 
   async existsByEmail(email: string): Promise<boolean> {
-    const count = await this.prisma.user.count({ where: { email } });
+    const count = await this.prisma.user.count({
+      where: { email: this.emailMatches(email) },
+    });
     return count > 0;
   }
 
@@ -108,10 +113,19 @@ export class PrismaUserRepository implements UserRepositoryPort {
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    const prismaUser = await this.prisma.user.findUnique({ where: { email } });
+    // Case-insensitive: emails stored before normalization may differ only in
+    // case. If such duplicates exist, the oldest user wins.
+    const prismaUser = await this.prisma.user.findFirst({
+      where: { email: this.emailMatches(email) },
+      orderBy: { id: 'asc' },
+    });
     if (!prismaUser) {
       return null;
     }
     return UserMapper.toDomain(prismaUser);
+  }
+
+  private emailMatches(email: string) {
+    return { equals: normalizeEmail(email), mode: 'insensitive' as const };
   }
 }
