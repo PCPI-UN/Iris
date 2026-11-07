@@ -16,6 +16,7 @@ import { NotificationServicePort } from '../../infrastructure/ports/notification
 import { ProjectServicePort } from '../../infrastructure/ports/project-service.port';
 import { AuthServicePort } from '../../infrastructure/ports/auth-service.port';
 import { EventServicePort } from '../../infrastructure/ports/event-service.port';
+import { normalizeEmail } from '@app/common/utils/email.util';
 
 @Injectable()
 export class CreateInvitationUseCase {
@@ -30,7 +31,15 @@ export class CreateInvitationUseCase {
   ) { }
 
   async execute(dto: CreateInvitationDto): Promise<{ invitation: Invitation; invitationRoles: InvitationRole[] }> {
-    const { email, eventType, firstName, lastName, roleIds, ...rest } = dto;
+    const {
+      email: rawEmail,
+      eventType,
+      firstName,
+      lastName,
+      roleIds,
+      ...rest
+    } = dto;
+    const email = normalizeEmail(rawEmail);
     // Step 1: Check for existing accepted invitation
     const acceptedInvitation = await this.invitationRepository.findAcceptedByEmailAndTargetType(
       email,
