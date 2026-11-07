@@ -42,28 +42,37 @@ The level is mapped before persistence and grade calculation. Each evaluation ty
 
 `ZERO_TO_FIVE` stored `1.5` for level `1` before it was aligned with the rubric. Historical evaluations keep that value and can still be read back.
 
+### Components And Weights
+
+An event has a single rubric shared by all its categories (courses):
+
+- **Components** belong to one event and carry a weight, a fraction of the grade (e.g. Comunicación Escrita `0.3`, Descripción del Diseño `0.4`, Comunicación Oral `0.3`). The components of an event cannot exceed 100% when they are configured, and must add up to exactly 100% before the event can be evaluated.
+- **Criteria** belong to one component of their event and to one or more categories. Their `weight` is **relative** to the other criteria of the same component in the same category (`1` by default) and is never rewritten by the service.
+- The **effective weight** of a criterion in the grade is computed when evaluating and stored with each evaluation detail:
+
+```txt
+effectiveWeight = component.weight × criterion.weight ÷ Σ criterion.weight (same component, same category)
+```
+
+Example: Comunicación Oral `0.3` with relative weights `10 / 9 / 9` gives the first criterion `0.3 × 10 ÷ 28 = 0.1071`.
+
+A category is **ready** to be evaluated when the event components add up to 100% and every component has at least one active criterion of that category. `GetRubricReadiness` (gateway `GET /criterions/readiness?eventId=&courseId=`) reports it per category.
+
+Once an event has evaluations, its rubric is locked: criteria cannot be created, deleted, deactivated, moved between components or courses, or change weight, and components cannot be created, deleted or change weight. Such requests are rejected with `FAILED_PRECONDITION`. Names and descriptions can still be edited. A component never changes its event, and a component with active criteria cannot be deleted. Historical grades are never recalculated.
+
 ### Rubric And Grade Rules
 
 The rubric of a project is the set of active criteria associated with the project's course in the project's event. When a juror submits an evaluation:
 
-1. The rubric weights must add up to 100% (tolerance `1e-6`). Otherwise the evaluation is rejected with `FAILED_PRECONDITION`.
+1. The rubric must be ready (see above). Otherwise the evaluation is rejected with `FAILED_PRECONDITION`, listing what is missing.
 2. Every criterion of the rubric must be scored exactly once. Missing, repeated or foreign criteria are rejected with `INVALID_ARGUMENT`.
-3. The grade is a weighted sum, stored rounded to 2 decimals:
+3. The grade is a weighted sum, stored rounded to 2 decimals, and each detail keeps the effective weight it was graded with:
 
 ```txt
-grade = round2(sum(mappedScore * criterion.weight))
+grade = round2(sum(mappedScore × effectiveWeight))
 ```
 
-Project averages returned by `getProjectStats` and `getTopProjectsByCourse` are also rounded to 2 decimals, using the same half-up rule as the gateway ranking (`roundRankingGrade`), so the ranking positions, the co-winner detection and the Excel report compare and show the same value.
-
-### Components And Weights
-
-A component (e.g. Comunicación Escrita 30%, Descripción del Diseño 40%, Comunicación Oral 30%) has a configured weight. That weight is split in equal parts among its active criteria (`component.weight / activeCriteria`), and recalculated whenever a criterion is added, moved, deactivated or the component weight changes. A weight sent for a criterion inside a component is ignored. Criteria without a component keep their own weight.
-
-- The component weights of an event cannot exceed 100%.
-- Once an event has evaluations, its rubric is locked: criteria cannot be created, deleted, deactivated, moved between components or courses, or change weight, and components cannot change weight or be deleted. Names and descriptions can still be edited.
-- A component with active criteria cannot be deleted.
-- Historical grades are never recalculated.
+The project grade is the plain average of its jurors' grades, rounded to 2 decimals. `getProjectStats` and `getTopProjectsByCourse` return it with the same half-up rule the gateway ranking uses (`roundGrade` in `libs/common/src/utils/grade-rounding.ts`), so the ranking positions, the co-winner detection and the Excel report compare and show the same value. The category weights in `getProjectStats` come from the effective weights stored with the evaluations.
 
 Only score validation and score mapping depend on `evaluationType`.
 
@@ -137,6 +146,7 @@ This model stores the score assigned to a specific criterion within an evaluatio
 - `evaluationId`: reference to the evaluation.
 - `criterionId`: reference to the criterion.
 - `score`: mapped score obtained for the criterion. For `FINAL_PROJECTS`, this is one of `25`, `55`, `75`, or `90`, not the raw evaluator input `1` through `4`.
+- `weight`: effective weight the criterion had in the grade when it was evaluated (see Components And Weights). Rubric changes never alter it.
 
 #### Relationships
 
@@ -161,9 +171,10 @@ Defines the criteria used to evaluate projects inside an event.
 - `eventId`: identifier of the event that owns the criterion.
 - `name`: criterion name.
 - `description`: optional criterion description.
-- `weight`: numeric weight of the criterion in the evaluation process.
+- `weight`: relative weight of the criterion inside its component and category (`1` by default).
 - `active`: indicates whether the criterion is currently active.
 - `category`: optional grouping label for the criterion.
+- `componentId`: component of the same event the criterion belongs to.
 - `createdAt`: creation timestamp.
 - `updatedAt`: update timestamp.
 
@@ -175,10 +186,30 @@ Defines the criteria used to evaluate projects inside an event.
 
 - One `Criterion` has many `EvaluationDetail` records.
 - One `Criterion` has many `CriterionCategory` records.
+- Belongs to one `Component`.
 
 #### Physical table
 
 - Stored in `criterions`.
+
+### `Component`
+
+Groups the criteria of an event and holds the share of the grade they split.
+
+#### Main fields
+
+- `id`: unique auto-incremented identifier.
+- `name`: component name (e.g. Comunicación Oral).
+- `weight`: fraction of the grade (`0`–`1`); the components of an event add up to `1`.
+- `eventId`: identifier of the event that owns the component. Required and never changed.
+
+#### Relationships
+
+- One `Component` has many `Criterion` records.
+
+#### Physical table
+
+- Stored in `Component`.
 
 ### `CriterionCategory`
 

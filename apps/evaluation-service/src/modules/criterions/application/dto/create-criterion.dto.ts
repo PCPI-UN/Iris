@@ -5,8 +5,7 @@ import {
   IsOptional,
   IsNumber,
   IsArray,
-  Min,
-  Max,
+  IsPositive,
 } from 'class-validator';
 
 export class CreateCriterionDto {
@@ -22,11 +21,11 @@ export class CreateCriterionDto {
   @IsOptional()
   description?: string;
 
+  // Relative weight inside its component and category (1 by default)
   @IsNumber()
-  @IsNotEmpty()
-  @Min(0)
-  @Max(1)
-  weight: number;
+  @IsOptional()
+  @IsPositive()
+  weight?: number;
 
   @IsArray()
   @IsInt({ each: true })
@@ -37,6 +36,6 @@ export class CreateCriterionDto {
   category?: string;
 
   @IsInt()
-  @IsOptional()
-  componentId?: number;
+  @IsNotEmpty()
+  componentId: number;
 }

@@ -6,10 +6,8 @@ import {
   IsBoolean,
   IsArray,
   IsOptional,
-  Min,
-  Max,
+  IsPositive,
   ArrayMinSize,
-  ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -40,18 +38,16 @@ export class CreateCriterionDto {
 
   @ApiProperty({
     description:
-      'Weight of the criterion in the evaluation (0-1). Required only for criteria without component: ' +
-      'inside a component the weight is the component weight split in equal parts among its criteria, ' +
-      'and any value sent here is ignored.',
-    example: 0.25,
-    minimum: 0,
-    maximum: 1,
+      'Relative weight of the criterion inside its component and category (1 by default). ' +
+      'The effective weight in the grade is componentWeight × weight ÷ sum of the weights of the component ' +
+      'criteria in that category; e.g. 10 / 9 / 9 in a 0.3 component gives 0.107 / 0.096 / 0.096.',
+    example: 1,
     required: false,
+    default: 1,
   })
-  @ValidateIf((dto: CreateCriterionDto) => dto.componentId === undefined || dto.weight !== undefined)
+  @IsOptional()
   @IsNumber()
-  @Min(0)
-  @Max(1)
+  @IsPositive()
   @Type(() => Number)
   weight?: number;
 
@@ -67,11 +63,11 @@ export class CreateCriterionDto {
   courseIds: number[];
 
   @ApiProperty({
-    description: 'Component ID to associate with this criterion (optional)',
+    description: 'Component of the event the criterion belongs to',
     example: 1,
     type: Number,
   })
   @IsInt()
-  @IsOptional()
-  componentId?: number;
+  @Type(() => Number)
+  componentId: number;
 }

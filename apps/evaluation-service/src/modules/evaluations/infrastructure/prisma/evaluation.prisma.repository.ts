@@ -30,6 +30,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
                     create: scores.map(score => ({
                         criterionId: score.criterionId,
                         score: score.score,
+                        weight: score.weight,
                     })),
                 },
             },
@@ -223,6 +224,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
             result.evaluationId,
             result.criterionId,
             result.score,
+            result.weight,
         ));
     }
 
@@ -246,13 +248,13 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
                     select: {
                         id: true,
                         category: true,
-                        weight: true,
                     },
                 },
             },
         });
 
-        // Group scores by category, tracking the weight of each unique criterion
+        // Group scores by category, tracking the weight each unique criterion had when it was evaluated.
+        // One rubric per event, so every evaluation of the project used the same effective weight.
         const categoryScoresMap = new Map<string, { scores: number[]; criterionWeights: Map<number, number> }>();
 
         for (const detail of evaluationDetails) {
@@ -267,7 +269,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
 
             const categoryData = categoryScoresMap.get(category)!;
             categoryData.scores.push(detail.score);
-            categoryData.criterionWeights.set(detail.criterion.id, detail.criterion.weight);
+            categoryData.criterionWeights.set(detail.criterion.id, detail.weight);
         }
 
         // The category weight is the sum of the weights of its unique criteria
@@ -335,7 +337,8 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
                 new EvaluationDetail(
                     evaluation.id,
                     score.criterionId,
-                    score.score
+                    score.score,
+                    score.weight,
                 )
             ),
         }));

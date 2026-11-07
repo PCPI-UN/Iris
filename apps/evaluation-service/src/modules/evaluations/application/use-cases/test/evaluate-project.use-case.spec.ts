@@ -27,6 +27,7 @@ describe('EvaluateProjectUseCase', () => {
 
     const mockCriterionRepository = {
         findByCourseId: jest.fn(),
+        findComponentsByEvent: jest.fn(),
     };
 
     const mockAuthService = {
@@ -41,18 +42,25 @@ describe('EvaluateProjectUseCase', () => {
         evaluationType,
     });
 
-    // Rubric of the project's course: weights split from components 30% / 40% / 30%
-    const rubricWeights = [
-        ...Array(5).fill(0.3 / 5),
-        ...Array(7).fill(0.4 / 7),
-        ...Array(3).fill(0.3 / 3),
+    // Poster rubric: components Escrita 0.3 (5 criteria), Diseño 0.4 (7), Oral 0.3 (3), relative weight 1 each
+    const posterComponents = [
+        { id: 11, eventId: 1, weight: 0.3 },
+        { id: 12, eventId: 1, weight: 0.4 },
+        { id: 13, eventId: 1, weight: 0.3 },
     ];
-    const posterRubric = rubricWeights.map((weight, index) => ({ id: index + 1, eventId: 1, weight }));
+    const posterRubric = [
+        ...Array(5).fill(11),
+        ...Array(7).fill(12),
+        ...Array(3).fill(13),
+    ].map((componentId, index) => ({ id: index + 1, eventId: 1, weight: 1, componentId }));
 
-    const withRubric = (criteria: Array<{ id: number; weight: number }>) =>
+    // A single component holding the whole grade: the relative weights are the effective ones
+    const withRubric = (criteria: Array<{ id: number; weight: number }>) => {
+        mockCriterionRepository.findComponentsByEvent.mockResolvedValue([{ id: 1, eventId: 1, weight: 1 }]);
         mockCriterionRepository.findByCourseId.mockResolvedValue(
-            criteria.map((criterion) => ({ eventId: 1, ...criterion })),
+            criteria.map((criterion) => ({ eventId: 1, componentId: 1, ...criterion })),
         );
+    };
 
     beforeEach(async () => {
         const module: TestingModule = await Test.createTestingModule({
@@ -86,6 +94,7 @@ describe('EvaluateProjectUseCase', () => {
             Promise.resolve({ ...evalObj, id: 1 })
         );
         mockCriterionRepository.findByCourseId.mockResolvedValue(posterRubric);
+        mockCriterionRepository.findComponentsByEvent.mockResolvedValue(posterComponents);
     });
 
     it('should be defined', () => {
@@ -115,6 +124,7 @@ describe('EvaluateProjectUseCase', () => {
         expect(mockProjectService.getProject).toHaveBeenCalledWith(1);
         expect(mockEventService.getEvent).toHaveBeenCalledWith(1);
         expect(mockCriterionRepository.findByCourseId).toHaveBeenCalledWith(10);
+        expect(mockCriterionRepository.findComponentsByEvent).toHaveBeenCalledWith(1);
     });
 
     it('should calculate grade correctly', async () => {

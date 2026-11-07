@@ -23,10 +23,11 @@ export class DeleteComponentUseCase {
       });
     }
 
-    if (await this.criterionRepository.hasEvaluationsForComponent(id)) {
+    // Removing a component changes the total weight of the event rubric
+    if (await this.criterionRepository.hasEvaluationsForEvent(component.eventId)) {
       throw new RpcException({
         code: status.FAILED_PRECONDITION,
-        message: `Component ${id} is already used in evaluations and cannot be deleted`,
+        message: `Event ${component.eventId} already has evaluations; its components cannot be deleted`,
       });
     }
 

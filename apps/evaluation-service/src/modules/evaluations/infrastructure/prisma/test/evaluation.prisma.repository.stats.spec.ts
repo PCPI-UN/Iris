@@ -22,7 +22,9 @@ describe('EvaluationPrismaRepository - project statistics', () => {
                 findMany: jest.fn().mockResolvedValue(
                     details.map((d) => ({
                         score: d.score,
-                        criterion: { id: d.criterionId, category: d.category, weight: d.weight },
+                        // Effective weight stored with the evaluation detail
+                        weight: d.weight,
+                        criterion: { id: d.criterionId, category: d.category },
                     })),
                 ),
             },
@@ -32,7 +34,7 @@ describe('EvaluationPrismaRepository - project statistics', () => {
     };
 
     describe('getProjectStats', () => {
-        it('computes the category weight as the sum of its criteria weights, even when they differ', async () => {
+        it('computes the category weight as the sum of the stored criterion weights, even when they differ', async () => {
             // Comunicación Oral in the approved report: 0.1 + 0.09 + 0.09 = 0.28
             const repository = buildRepository([90], [
                 { criterionId: 13, category: 'Comunicación Oral', weight: 0.1, score: 90 },

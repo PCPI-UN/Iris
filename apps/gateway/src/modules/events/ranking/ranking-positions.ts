@@ -1,3 +1,5 @@
+import { roundGrade } from '@app/common/utils/grade-rounding';
+
 /**
  * Ranking position rules (decision of the 27 Oct meeting: no tie-break,
  * tied projects are co-winners).
@@ -17,12 +19,11 @@ export interface RankableRow {
 }
 
 /**
- * Rounds half up to 2 decimals. The intermediate toFixed(6) drops floating
- * point noise first, so 11.685 and 11.684999999999999 (same sum in a
- * different order) both round to 11.69.
+ * Rounds half up to 2 decimals with the same rule evaluation-service uses for
+ * stored grades and averages (see libs/common/src/utils/grade-rounding.ts).
  */
 export function roundRankingGrade(grade: number): number {
-  return Math.round(Number((grade * 100).toFixed(6))) / 100;
+  return roundGrade(grade);
 }
 
 /**

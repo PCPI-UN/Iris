@@ -22,23 +22,35 @@ export class CreateComponentUseCase {
       });
     }
 
-    if (weight < 0 || weight > 1) {
+    if (!eventId) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: 'Weight must be between 0 and 1',
+        message: 'A component must belong to an event',
       });
     }
 
-    if (eventId) {
-      const otherWeight = await this.criterionRepository.sumComponentWeightsByEvent(eventId);
-      if (otherWeight + weight > 1 + WEIGHT_SUM_TOLERANCE) {
-        throw new RpcException({
-          code: status.INVALID_ARGUMENT,
-          message: `Total component weight for event ${eventId} would exceed 100%. Current: ${(otherWeight * 100).toFixed(2)}%, Requested: ${(weight * 100).toFixed(2)}%`,
-        });
-      }
+    if (!(weight > 0) || weight > 1) {
+      throw new RpcException({
+        code: status.INVALID_ARGUMENT,
+        message: 'Weight must be greater than 0 and at most 1',
+      });
     }
 
-    return await this.criterionRepository.createComponent(name, weight, eventId);
+    if (await this.criterionRepository.hasEvaluationsForEvent(eventId)) {
+      throw new RpcException({
+        code: status.FAILED_PRECONDITION,
+        message: `Event ${eventId} already has evaluations; its components cannot be modified`,
+      });
+    }
+
+    const otherWeight = await this.criterionRepository.sumComponentWeightsByEvent(eventId);
+    if (otherWeight + weight > 1 + WEIGHT_SUM_TOLERANCE) {
+      throw new RpcException({
+        code: status.INVALID_ARGUMENT,
+        message: `Total component weight for event ${eventId} would exceed 100%. Current: ${(otherWeight * 100).toFixed(2)}%, Requested: ${(weight * 100).toFixed(2)}%`,
+      });
+    }
+
+    return await this.criterionRepository.createComponent(name.trim(), weight, eventId);
   }
 }

@@ -20,6 +20,7 @@ import {
   ListCriterionsResponse,
   FindCriterionsByCourseResponse,
   DeleteCriterionResponse,
+  GetRubricReadinessResponse,
 } from '@app/common/generated/evaluation';
 
 @Injectable()
@@ -38,13 +39,7 @@ export class CriterionsService implements OnModuleInit {
   async createCriterion(
     request: CreateCriterionDto,
   ): Promise<CriterionProto> {
-    // weight is not a proto optional field; criteria inside a component get theirs from the component
-    return firstValueFrom(
-      this.criterionsService.createCriterion({
-        ...request,
-        weight: request.weight ?? 0,
-      }),
-    );
+    return firstValueFrom(this.criterionsService.createCriterion(request));
   }
 
   async updateCriterion(
@@ -85,6 +80,18 @@ export class CriterionsService implements OnModuleInit {
   async deleteCriterion(id: number): Promise<DeleteCriterionResponse> {
     return firstValueFrom(
       this.criterionsService.deleteCriterion({ id } as DeleteCriterionRequest),
+    );
+  }
+
+  async getRubricReadiness(
+    eventId: number,
+    courseId?: number,
+  ): Promise<GetRubricReadinessResponse> {
+    return firstValueFrom(
+      this.criterionsService.getRubricReadiness({
+        eventId,
+        ...(courseId !== undefined && { courseId }),
+      }),
     );
   }
 

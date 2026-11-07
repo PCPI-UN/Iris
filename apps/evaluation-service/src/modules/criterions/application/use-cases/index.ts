@@ -8,3 +8,4 @@ export { GetComponentUseCase } from './get-component.use-case';
 export { ListComponentsUseCase } from './list-components.use-case';
 export { UpdateComponentUseCase } from './update-component.use-case';
 export { DeleteComponentUseCase } from './delete-component.use-case';
+export { GetRubricReadinessUseCase } from './get-rubric-readiness.use-case';

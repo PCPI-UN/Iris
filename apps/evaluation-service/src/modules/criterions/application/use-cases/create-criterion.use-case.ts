@@ -6,7 +6,8 @@ import { CreateCriterionDto } from '../dto/create-criterion.dto';
 import { Criterion } from '@criterions/domain/entities/criterion.entity';
 import { Component } from '@criterions/domain/entities/component.entity';
 import { EventServicePort } from '../../infrastructure/ports/event.service.port';
-import { WEIGHT_SUM_TOLERANCE } from '../../../../common/utils/grade.utils';
+
+const DEFAULT_RELATIVE_WEIGHT = 1;
 
 @Injectable()
 export class CreateCriterionUseCase {
@@ -20,7 +21,9 @@ export class CreateCriterionUseCase {
     courseIds: number[];
     component?: Component;
   }> {
-    const { eventId, name, description, weight, courseIds, category, componentId } = createCriterionDto;
+    const { eventId, name, description, category, componentId } = createCriterionDto;
+    const weight = createCriterionDto.weight ?? DEFAULT_RELATIVE_WEIGHT;
+    const courseIds = Array.from(new Set(createCriterionDto.courseIds ?? []));
 
     // Validate name is not empty
     if (!name || name.trim().length === 0) {
@@ -30,10 +33,17 @@ export class CreateCriterionUseCase {
       });
     }
 
+    // The weight is relative to the other criteria of the same component and category
+    if (!(weight > 0)) {
+      throw new RpcException({
+        code: status.INVALID_ARGUMENT,
+        message: 'Weight must be greater than 0',
+      });
+    }
+
     try {
       await this.eventService.getEvent(eventId);
-    } catch (error) {
-      console.log('Error fetching event:', error);
+    } catch {
       throw new RpcException({
         code: status.NOT_FOUND,
         message: `Event with ID ${eventId} not found`,
@@ -47,31 +57,21 @@ export class CreateCriterionUseCase {
       });
     }
 
-    // A criterion inside a component gets its weight from the component (split in equal parts)
-    let component: Component | undefined;
-    if (componentId) {
-      const found = await this.criterionRepository.findComponentById(componentId);
-      if (!found) {
-        throw new RpcException({
-          code: status.NOT_FOUND,
-          message: `Component with ID ${componentId} not found`,
-        });
-      }
-      if (found.eventId !== null && found.eventId !== eventId) {
-        throw new RpcException({
-          code: status.INVALID_ARGUMENT,
-          message: `Component ${componentId} does not belong to event ${eventId}`,
-        });
-      }
-      component = found;
-    } else if (weight <= 0 || weight > 1) {
+    const component = await this.criterionRepository.findComponentById(componentId);
+    if (!component) {
+      throw new RpcException({
+        code: status.NOT_FOUND,
+        message: `Component with ID ${componentId} not found`,
+      });
+    }
+    if (component.eventId !== eventId) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: 'Weight must be between 0 and 1',
+        message: `Component ${componentId} does not belong to event ${eventId}`,
       });
     }
 
-    if (courseIds && courseIds.length > 0) {
+    if (courseIds.length > 0) {
       // Validate courses belong to the event
       const { valid, invalidCourses } = await this.eventService.validateCoursesBelongToEvent(
         courseIds,
@@ -84,26 +84,6 @@ export class CreateCriterionUseCase {
           message: `Courses [${invalidCourses.join(', ')}] do not belong to event ${eventId}`,
         });
       }
-
-      // Criteria without component carry their own weight: validate that total weight per course doesn't exceed 100%
-      if (!component) {
-        for (const courseId of courseIds) {
-          const existingCriteria = await this.criterionRepository.findByCourseId(courseId);
-
-          // Calculate total weight of active criteria
-          const totalWeight = existingCriteria
-            .filter((c: Criterion) => c.active)
-            .reduce((sum: number, c: Criterion) => sum + c.weight, 0);
-
-          // Check if adding new criterion would exceed 100%
-          if (totalWeight + weight > 1 + WEIGHT_SUM_TOLERANCE) {
-            throw new RpcException({
-              code: status.INVALID_ARGUMENT,
-              message: `Total weight for course ${courseId} would exceed 100%. Current: ${(totalWeight * 100).toFixed(2)}%, Requested: ${(weight * 100).toFixed(2)}%, Total: ${((totalWeight + weight) * 100).toFixed(2)}%`,
-            });
-          }
-        }
-      }
     }
 
     const criterion = new Criterion(
@@ -111,10 +91,10 @@ export class CreateCriterionUseCase {
       eventId,
       name.trim(),
       description?.trim() || null,
-      component ? 0 : weight,
+      weight,
       true,
       category || null,
-      componentId || null,
+      componentId,
       new Date(),
       new Date(),
     );
@@ -122,14 +102,14 @@ export class CreateCriterionUseCase {
     try {
       const savedCriterion = await this.criterionRepository.create(criterion);
 
-      if (courseIds && courseIds.length > 0) {
+      if (courseIds.length > 0) {
         await this.criterionRepository.associateCourses(savedCriterion.id, courseIds);
       }
 
       return {
         criterion: savedCriterion,
-        courseIds: courseIds || [],
-        ...(component && { component }),
+        courseIds,
+        component,
       };
     } catch (error) {
       if (error instanceof RpcException) throw error;

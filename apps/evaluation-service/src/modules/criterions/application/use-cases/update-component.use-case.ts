@@ -34,40 +34,39 @@ export class UpdateComponentUseCase {
     }
 
     // Validate weight if provided
-    if (weight !== undefined && (weight < 0 || weight > 1)) {
+    if (weight !== undefined && (!(weight > 0) || weight > 1)) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: 'Weight must be between 0 and 1',
+        message: 'Weight must be greater than 0 and at most 1',
       });
     }
 
     const finalWeight = weight ?? existingComponent.weight;
-    const finalEventId = 'eventId' in updateComponentDto ? updateComponentDto.eventId ?? null : existingComponent.eventId;
 
-    // The weight is split among the criteria, so changing it (or the event) alters the rubric used to grade
-    const changesRubric = finalWeight !== existingComponent.weight || finalEventId !== existingComponent.eventId;
-    if (changesRubric && await this.criterionRepository.hasEvaluationsForComponent(id)) {
-      throw new RpcException({
-        code: status.FAILED_PRECONDITION,
-        message: `Component ${id} is already used in evaluations; its weight cannot be modified`,
-      });
-    }
+    // The weight is part of every criterion's effective weight, so changing it alters the rubric used to grade
+    if (finalWeight !== existingComponent.weight) {
+      if (await this.criterionRepository.hasEvaluationsForEvent(existingComponent.eventId)) {
+        throw new RpcException({
+          code: status.FAILED_PRECONDITION,
+          message: `Event ${existingComponent.eventId} already has evaluations; component weights cannot be modified`,
+        });
+      }
 
-    if (finalEventId && changesRubric) {
-      const otherWeight = await this.criterionRepository.sumComponentWeightsByEvent(finalEventId, id);
+      const otherWeight = await this.criterionRepository.sumComponentWeightsByEvent(existingComponent.eventId, id);
       if (otherWeight + finalWeight > 1 + WEIGHT_SUM_TOLERANCE) {
         throw new RpcException({
           code: status.INVALID_ARGUMENT,
-          message: `Total component weight for event ${finalEventId} would exceed 100%. Other components: ${(otherWeight * 100).toFixed(2)}%, Requested: ${(finalWeight * 100).toFixed(2)}%`,
+          message: `Total component weight for event ${existingComponent.eventId} would exceed 100%. Other components: ${(otherWeight * 100).toFixed(2)}%, Requested: ${(finalWeight * 100).toFixed(2)}%`,
         });
       }
     }
 
+    // The event of a component never changes
     const updatedComponent = new Component(
       id,
-      name ?? existingComponent.name,
+      name?.trim() ?? existingComponent.name,
       finalWeight,
-      finalEventId,
+      existingComponent.eventId,
     );
 
     return await this.criterionRepository.updateComponent(updatedComponent);

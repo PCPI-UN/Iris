@@ -11,6 +11,7 @@ import { GetComponentUseCase } from './application/use-cases/get-component.use-c
 import { ListComponentsUseCase } from './application/use-cases/list-components.use-case';
 import { UpdateComponentUseCase } from './application/use-cases/update-component.use-case';
 import { DeleteComponentUseCase } from './application/use-cases/delete-component.use-case';
+import { GetRubricReadinessUseCase } from './application/use-cases/get-rubric-readiness.use-case';
 import { PrismaCriterionRepository } from './infrastructure/prisma/prisma-criterion.repository';
 import { CriterionRepositoryPort } from './domain/repositories/criterion.repository.port';
 import { PrismaModule } from '@common/prisma/prisma.module';
@@ -32,6 +33,7 @@ import { EventServiceAdapter } from './infrastructure/adapters/event.service.ada
     ListComponentsUseCase,
     UpdateComponentUseCase,
     DeleteComponentUseCase,
+    GetRubricReadinessUseCase,
     {
       provide: CriterionRepositoryPort,
       useClass: PrismaCriterionRepository,

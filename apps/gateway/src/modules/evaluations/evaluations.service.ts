@@ -4,11 +4,8 @@ import { lastValueFrom } from 'rxjs';
 import {
   EVALUATION_SERVICE_NAME,
   CRITERIONS_SERVICE_NAME,
-  TIE_BREAK_SERVICE_NAME,
   EvaluationServiceClient,
   CriterionsServiceClient,
-  TieBreakServiceClient,
-  TieBreakProto,
   FindEvaluationsByEvaluatorResponse,
   FindCriterionsByCourseResponse,
   GetProjectStatsRequest,
@@ -22,19 +19,23 @@ import {
   ProjectsServiceClient,
   ListAssignedProjectsResponse,
   Project,
+  ProjectState,
 } from '@app/common/generated/project';
+import {
+  assignRankingPositions,
+  filterVisiblePositions,
+  roundRankingGrade,
+} from '../events/ranking/ranking-positions';
 
 @Injectable()
 export class EvaluationsService implements OnModuleInit {
   private evaluationService: EvaluationServiceClient;
   private criterionsService: CriterionsServiceClient;
-  private tieBreakService: TieBreakServiceClient;
   private projectsService: ProjectsServiceClient;
 
   constructor(
     @Inject(EVALUATION_SERVICE_NAME) private evaluationClient: ClientGrpc,
     @Inject(CRITERIONS_SERVICE_NAME) private criterionsClient: ClientGrpc,
-    @Inject(TIE_BREAK_SERVICE_NAME) private tieBreakClient: ClientGrpc,
     @Inject(PROJECTS_SERVICE_NAME) private projectsClient: ClientGrpc,
   ) {}
 
@@ -46,10 +47,6 @@ export class EvaluationsService implements OnModuleInit {
     this.criterionsService =
       this.criterionsClient.getService<CriterionsServiceClient>(
         CRITERIONS_SERVICE_NAME,
-      );
-    this.tieBreakService =
-      this.tieBreakClient.getService<TieBreakServiceClient>(
-        TIE_BREAK_SERVICE_NAME,
       );
     this.projectsService =
       this.projectsClient.getService<ProjectsServiceClient>(
@@ -166,16 +163,24 @@ export class EvaluationsService implements OnModuleInit {
     return await lastValueFrom(this.evaluationService.evaluateProject(request));
   }
 
+  /**
+   * Top projects of a course, with the same rules as the event ranking
+   * (EventService.generateRankingReport): only approved projects with
+   * evaluations compete, averages are compared rounded to 2 decimals, tied
+   * projects are co-winners sharing the position (no tie-break), and the cut
+   * keeps every project tied at the last visible position.
+   */
   async getTopProjectsByCourse(
     courseId: number,
     eventId: number,
     limit: number = 5,
   ) {
-    // 1. Fetch all project IDs for the course and event from project service
+    // 1. Fetch the approved projects of the course and event from project service
     const projectsResponse = await lastValueFrom(
       this.projectsService.listProjectsByEvent({
         eventId,
         courseId,
+        state: ProjectState.APPROVED,
         currentPage: 1,
         itemsPerPage: 1000, // Fetch all projects for the course
       }),
@@ -187,131 +192,68 @@ export class EvaluationsService implements OnModuleInit {
       return { items: [], courseId, eventId };
     }
 
-    const projectIds = allProjects.map((p) => p.id);
-
     // 2. Get evaluation statistics for these projects from evaluation service
     const response: GetTopProjectsByCourseResponse = await lastValueFrom(
-      this.evaluationService.getTopProjectsByCourse({ projectIds }),
+      this.evaluationService.getTopProjectsByCourse({
+        projectIds: allProjects.map((p) => p.id),
+      }),
     );
 
-    const projectStats = response.topProjects;
+    const rankable = (response.topProjects ?? [])
+      .filter((stats) => stats.evaluationCount > 0)
+      .map((stats) => ({
+        projectId: stats.projectId,
+        averageGrade: roundRankingGrade(stats.averageGrade),
+        evaluationCount: stats.evaluationCount,
+        position: 0,
+      }));
 
-    if (projectStats === undefined || projectStats.length === 0) {
+    if (rankable.length === 0) {
       return { items: [], courseId, eventId };
     }
 
-    // 3. Sort by averageGrade descending, applying tiebreak order if there are ties
-    const sorted = projectStats.sort((a, b) => b.averageGrade - a.averageGrade);
-
-    const hasTies = sorted.some(
-      (p, i, arr) => i > 0 && arr[i - 1].averageGrade === p.averageGrade,
+    // 3. Dense positions for co-winners, then the top-N cut (0 shows every project)
+    const topProjects = filterVisiblePositions(
+      assignRankingPositions(rankable),
+      limit,
     );
 
-    let appliedTiebreaks: TieBreakProto[] = [];
-
-    if (hasTies) {
-      const tiebreaksResponse = await lastValueFrom(
-        this.tieBreakService.listTieBreaks({ eventId, categoryId: courseId }),
-      );
-      appliedTiebreaks = tiebreaksResponse.tiebreaks ?? [];
-      const tiebreakMap = new Map<number, number>(
-        appliedTiebreaks.map((tb) => [tb.projectId, tb.tiebreakOrder]),
-      );
-      sorted.sort((a, b) => {
-        if (b.averageGrade !== a.averageGrade)
-          return b.averageGrade - a.averageGrade;
-        const orderA = tiebreakMap.get(a.projectId) ?? Infinity;
-        const orderB = tiebreakMap.get(b.projectId) ?? Infinity;
-        if (orderA === Infinity && orderB === Infinity) return 0;
-        return orderA - orderB;
-      });
-    }
-
-    const tiebreakProjectIds = new Set(
-      appliedTiebreaks.map((tb) => tb.projectId),
+    // 4. Fetch full project details for the top projects in parallel
+    const projectsResponses = await Promise.all(
+      topProjects.map((tp) =>
+        lastValueFrom(
+          this.projectsService.getProjectComplete({ id: tp.projectId }),
+        ).catch(() => null),
+      ),
     );
-    const sizeReal = limit || sorted.length;
-    const topProjects = sorted.slice(0, sizeReal);
-
-    // Detect disputed: projects outside the limit tied with the last position and without a tiebreak record
-    const disputedStats =
-      topProjects.length > 0
-        ? sorted
-            .slice(sizeReal)
-            .filter(
-              (p) =>
-                p.averageGrade ===
-                  topProjects[topProjects.length - 1].averageGrade &&
-                !tiebreakProjectIds.has(p.projectId),
-            )
-        : [];
-
-    // 4. Fetch full project details for the top N and disputed projects in parallel
-    const topProjectIds = topProjects.map((tp) => tp.projectId);
-    const disputedProjectIds = disputedStats.map((dp) => dp.projectId);
-
-    const [projectsResponses, disputedResponses] = await Promise.all([
-      Promise.all(
-        topProjectIds.map((id) =>
-          lastValueFrom(this.projectsService.getProjectComplete({ id })).catch(
-            () => null,
-          ),
-        ),
-      ),
-      Promise.all(
-        disputedProjectIds.map((id) =>
-          lastValueFrom(this.projectsService.getProjectComplete({ id })).catch(
-            () => null,
-          ),
-        ),
-      ),
-    ]);
-
-    const buildEnrichedProject = (
-      tp: { projectId: number; averageGrade: number; evaluationCount: number },
-      response: any,
-    ) => {
-      if (!response || !response.items || response.items.length === 0)
-        return null;
-      const project = response.items[0];
-      return {
-        id: project.id,
-        eventId: project.eventId,
-        name: project.name,
-        description: project.description,
-        eventNumber: project.eventNumber,
-        createdAt: project.createdAt,
-        updatedAt: project.updatedAt,
-        courseId: project.courseId,
-        state: project.state,
-        reason: project.reason,
-        participants: project.participants,
-        documents: project.documents,
-        pendingParticipants: project.pendingParticipants,
-        averageGrade: tp.averageGrade,
-        evaluationCount: tp.evaluationCount,
-      };
-    };
 
     // 5. Merge data
-    const enrichedProjects = topProjects
-      .map((tp, idx) => buildEnrichedProject(tp, projectsResponses[idx]))
-      .filter((p) => p !== null);
-    const disputedProjects = disputedStats
-      .map((dp, idx) => buildEnrichedProject(dp, disputedResponses[idx]))
+    const items = topProjects
+      .map((tp, idx) => {
+        const projectResponse: any = projectsResponses[idx];
+        if (!projectResponse?.items?.length) return null;
+        const project = projectResponse.items[0];
+        return {
+          id: project.id,
+          eventId: project.eventId,
+          name: project.name,
+          description: project.description,
+          eventNumber: project.eventNumber,
+          createdAt: project.createdAt,
+          updatedAt: project.updatedAt,
+          courseId: project.courseId,
+          state: project.state,
+          reason: project.reason,
+          participants: project.participants,
+          documents: project.documents,
+          pendingParticipants: project.pendingParticipants,
+          position: tp.position,
+          averageGrade: tp.averageGrade,
+          evaluationCount: tp.evaluationCount,
+        };
+      })
       .filter((p) => p !== null);
 
-    const enrichedProjectIds = new Set(enrichedProjects.map((p) => p.id));
-    const relevantTiebreaks = appliedTiebreaks.filter((tb) =>
-      enrichedProjectIds.has(tb.projectId),
-    );
-
-    return {
-      items: enrichedProjects,
-      courseId,
-      eventId,
-      ...(relevantTiebreaks.length > 0 && { tiebreaks: relevantTiebreaks }),
-      ...(disputedProjects.length > 0 && { disputedProjects }),
-    };
+    return { items, courseId, eventId };
   }
 }

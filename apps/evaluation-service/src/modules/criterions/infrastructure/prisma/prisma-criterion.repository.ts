@@ -11,30 +11,8 @@ import { CriterionMapper } from './mappers/criterion.mapper';
 export class PrismaCriterionRepository implements CriterionRepositoryPort {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * The component weight is configured by the administrator and split in equal
-   * parts among its active criteria (e.g. 0.4 / 7 for each design criterion).
-   */
-  private async syncCriteriaWeights(componentId: number): Promise<void> {
-    const component = await this.prisma.component.findUnique({
-      where: { id: componentId },
-      select: { weight: true },
-    });
-
-    if (!component) return;
-
-    const activeCriteria = await this.prisma.criterion.count({
-      where: { componentId, active: true },
-    });
-
-    if (activeCriteria === 0) return;
-
-    await this.prisma.criterion.updateMany({
-      where: { componentId, active: true },
-      data: { weight: component.weight / activeCriteria },
-    });
-  }
-
+  // Criterion weights are relative and never rewritten: the effective weight
+  // is computed when evaluating (see domain/services/rubric.ts).
   async create(criterion: Criterion): Promise<Criterion> {
     const persistenceData = CriterionMapper.toPersistence(criterion);
 
@@ -44,30 +22,12 @@ export class PrismaCriterionRepository implements CriterionRepositoryPort {
       data: createData,
     });
 
-    if (!newPrismaCriterion.componentId) {
-      return CriterionMapper.toDomain(newPrismaCriterion);
-    }
-
-    await this.syncCriteriaWeights(newPrismaCriterion.componentId);
-
-    const syncedCriterion = await this.prisma.criterion.findUniqueOrThrow({
-      where: { id: newPrismaCriterion.id },
-    });
-
-    return CriterionMapper.toDomain(syncedCriterion);
+    return CriterionMapper.toDomain(newPrismaCriterion);
   }
 
   async hasEvaluationsForEvent(eventId: number): Promise<boolean> {
     const count = await this.prisma.evaluation.count({
       where: { memberEventId: eventId },
-    });
-
-    return count > 0;
-  }
-
-  async hasEvaluationsForComponent(componentId: number): Promise<boolean> {
-    const count = await this.prisma.evaluationDetail.count({
-      where: { criterion: { componentId } },
     });
 
     return count > 0;
@@ -135,54 +95,31 @@ export class PrismaCriterionRepository implements CriterionRepositoryPort {
   async update(criterion: Criterion): Promise<Criterion> {
     const persistenceData = CriterionMapper.toPersistence(criterion);
 
-    const previousCriterion = await this.prisma.criterion.findUnique({
-      where: { id: criterion.id },
-      select: {
-        componentId: true,
-      },
-    });
-    
     const updatedPrismaCriterion = await this.prisma.criterion.update({
       where: { id: criterion.id },
       data: persistenceData,
     });
 
-    const affectedComponentIds = new Set<number>([
-      previousCriterion?.componentId,
-      updatedPrismaCriterion.componentId,
-    ].filter((componentId): componentId is number => typeof componentId === 'number'));
-
-    if (affectedComponentIds.size === 0) {
-      return CriterionMapper.toDomain(updatedPrismaCriterion);
-    }
-
-    await Promise.all(
-      Array.from(affectedComponentIds).map((componentId) => this.syncCriteriaWeights(componentId)),
-    );
-
-    const syncedCriterion = await this.prisma.criterion.findUniqueOrThrow({
-      where: { id: criterion.id },
-    });
-
-    return CriterionMapper.toDomain(syncedCriterion);
+    return CriterionMapper.toDomain(updatedPrismaCriterion);
   }
 
   async delete(id: number): Promise<void> {
-    const existingCriterion = await this.prisma.criterion.findUnique({
-      where: { id },
-      select: {
-        componentId: true,
-      },
-    });
-
     await this.prisma.criterion.update({
       where: { id },
       data: { active: false },
     });
+  }
 
-    if (existingCriterion?.componentId) {
-      await this.syncCriteriaWeights(existingCriterion.componentId);
-    }
+  async findActiveByEventWithCourses(eventId: number): Promise<Array<{ criterion: Criterion; courseIds: number[] }>> {
+    const prismaCriterions = await this.prisma.criterion.findMany({
+      where: { eventId, active: true },
+      include: { criterionsCourses: { select: { courseId: true } } },
+    });
+
+    return prismaCriterions.map(({ criterionsCourses, ...criterion }) => ({
+      criterion: CriterionMapper.toDomain(criterion),
+      courseIds: criterionsCourses.map((cc) => cc.courseId),
+    }));
   }
 
   async associateCourses(criterionId: number, courseIds: number[]): Promise<void> {
@@ -268,12 +205,12 @@ export class PrismaCriterionRepository implements CriterionRepositoryPort {
   }
 
   // Component methods
-  async createComponent(name: string, weight: number, eventId?: number | null): Promise<Component> {
+  async createComponent(name: string, weight: number, eventId: number): Promise<Component> {
     const prismaComponent = await this.prisma.component.create({
       data: {
         name,
         weight,
-        eventId: eventId ?? null,
+        eventId,
       },
     });
 
@@ -296,18 +233,22 @@ export class PrismaCriterionRepository implements CriterionRepositoryPort {
     );
   }
 
-  async updateComponent(component: Component): Promise<Component> {
-    const updateData: any = { name: component.name, weight: component.weight };
-    if (component.eventId !== undefined) {
-      updateData.eventId = component.eventId;
-    }
+  async findComponentsByEvent(eventId: number): Promise<Component[]> {
+    const prismaComponents = await this.prisma.component.findMany({
+      where: { eventId },
+      orderBy: { id: 'asc' },
+    });
+    return prismaComponents.map(
+      (c) => new Component(c.id, c.name, c.weight, c.eventId)
+    );
+  }
 
+  // The event of a component never changes
+  async updateComponent(component: Component): Promise<Component> {
     const prismaComponent = await this.prisma.component.update({
       where: { id: component.id },
-      data: updateData,
+      data: { name: component.name, weight: component.weight },
     });
-
-    await this.syncCriteriaWeights(prismaComponent.id);
 
     return new Component(prismaComponent.id, prismaComponent.name, prismaComponent.weight, prismaComponent.eventId);
   }

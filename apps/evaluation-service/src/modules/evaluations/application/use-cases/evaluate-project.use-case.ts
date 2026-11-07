@@ -15,6 +15,7 @@ import { ScoreMapperFactory } from '../mappers/score-mapper.factory';
 import { ScoreValidatorFactory } from '../validators/score-validator.factory';
 import { Role } from '@app/common/generated/auth';
 import { isFullWeight, roundGrade } from '../../../../common/utils/grade.utils';
+import { buildRubric } from '../../../criterions/domain/services/rubric';
 
 @Injectable()
 export class EvaluateProjectUseCase {
@@ -148,8 +149,11 @@ export class EvaluateProjectUseCase {
             });
         }
 
-        const rubric = (await this.criterionRepository.findByCourseId(project.courseId))
-            .filter((criterion) => criterion.eventId === memberEventId);
+        const [courseCriteria, components] = await Promise.all([
+            this.criterionRepository.findByCourseId(project.courseId),
+            this.criterionRepository.findComponentsByEvent(memberEventId),
+        ]);
+        const rubric = courseCriteria.filter((criterion) => criterion.eventId === memberEventId);
 
         if (rubric.length === 0) {
             throw new RpcException({
@@ -158,11 +162,24 @@ export class EvaluateProjectUseCase {
             });
         }
 
-        const rubricWeight = rubric.reduce((sum, criterion) => sum + criterion.weight, 0);
-        if (!isFullWeight(rubricWeight)) {
+        // Effective weight = component weight × relative weight ÷ Σ relative weights of the component in this course
+        const { ready, componentsWeight, missingComponentIds, criteriaWithoutComponent, effectiveWeights } =
+            buildRubric(components, rubric);
+
+        if (!ready) {
+            const problems: string[] = [];
+            if (!isFullWeight(componentsWeight)) {
+                problems.push(`component weights must add up to 100% (current: ${(componentsWeight * 100).toFixed(2)}%)`);
+            }
+            if (missingComponentIds.length > 0) {
+                problems.push(`components without criteria for this category: ${missingComponentIds.join(', ')}`);
+            }
+            if (criteriaWithoutComponent.length > 0) {
+                problems.push(`criteria without a component of the event: ${criteriaWithoutComponent.join(', ')}`);
+            }
             throw new RpcException({
                 code: status.FAILED_PRECONDITION,
-                message: `Evaluation criteria weights must add up to 100% (current: ${(rubricWeight * 100).toFixed(2)}%)`,
+                message: `The evaluation rubric of this project is not ready: ${problems.join('; ')}`,
             });
         }
 
@@ -212,11 +229,12 @@ export class EvaluateProjectUseCase {
 
             const mappedValue = scoreMapper.map(scoreItem.score, evaluationType);
 
-            // criterion.weight is the share of the component weight assigned to this criterion (e.g. 0.4 / 7)
-            totalGrade += mappedValue * criterion.weight;
+            const effectiveWeight = effectiveWeights.get(criterion.id)!;
+            totalGrade += mappedValue * effectiveWeight;
             scoredCriterionIds.add(scoreItem.criterionId);
 
-            evaluationDetails.push(new EvaluationDetail(0, scoreItem.criterionId, mappedValue));
+            // The effective weight is stored so later rubric changes never alter how this evaluation was graded
+            evaluationDetails.push(new EvaluationDetail(0, scoreItem.criterionId, mappedValue, effectiveWeight));
         }
 
         const missingCriterionIds = rubric
@@ -249,6 +267,7 @@ export class EvaluateProjectUseCase {
             evaluationId: savedEvaluation.id,
             criterionId: detail.criterionId,
             score: detail.score,
+            weight: detail.weight,
         }));
 
         return {
