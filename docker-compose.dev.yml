@@ -92,7 +92,7 @@ services:
         condition: service_healthy
     networks:
       - iris-network
-    command: sh -c "mkdir -p libs/common/src/generated && npm run proto:generate && pnpm exec prisma generate --schema=./apps/auth-service/prisma/schema.prisma && pnpm exec prisma migrate deploy --schema=./apps/auth-service/prisma/schema.prisma && pnpm exec prisma db seed && pnpm exec nest start auth-service --watch"
+    command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec prisma generate --schema=./apps/auth-service/prisma/schema.prisma && pnpm exec prisma migrate deploy --schema=./apps/auth-service/prisma/schema.prisma && pnpm exec prisma db seed && pnpm exec nest start auth-service --watch"
 
   evaluation-service:
     profiles: ["eval", "all"]
@@ -118,7 +118,7 @@ services:
         condition: service_healthy
     networks:
       - iris-network
-    command: sh -c "mkdir -p libs/common/src/generated && npm run proto:generate && pnpm exec prisma db push --schema=./apps/evaluation-service/prisma/schema.prisma --accept-data-loss && pnpm exec nest start evaluation-service --watch"
+    command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec prisma db push --schema=./apps/evaluation-service/prisma/schema.prisma --accept-data-loss && pnpm exec nest start evaluation-service --watch"
 
   event-service:
     profiles: ["events", "all"]
@@ -143,7 +143,7 @@ services:
         condition: service_healthy
     networks:
       - iris-network
-    command: sh -c "mkdir -p libs/common/src/generated && npm run proto:generate && pnpm exec prisma db push --schema=./apps/event-service/prisma/schema.prisma --accept-data-loss && pnpm exec nest start event-service --watch"
+    command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec prisma db push --schema=./apps/event-service/prisma/schema.prisma --accept-data-loss && pnpm exec nest start event-service --watch"
 
   invitation-service:
     profiles: ["events", "all"]
@@ -171,7 +171,7 @@ services:
         condition: service_healthy
     networks:
       - iris-network
-    command: sh -c "mkdir -p libs/common/src/generated && npm run proto:generate && pnpm exec prisma db push --schema=./apps/invitation-service/prisma/schema.prisma --accept-data-loss && pnpm exec nest start invitation-service --watch"
+    command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec prisma db push --schema=./apps/invitation-service/prisma/schema.prisma --accept-data-loss && pnpm exec nest start invitation-service --watch"
 
   project-service:
     profiles: ["eval", "all"]
@@ -197,7 +197,7 @@ services:
         condition: service_healthy
     networks:
       - iris-network
-    command: sh -c "mkdir -p libs/common/src/generated && npm run proto:generate && pnpm exec prisma db push --schema=./apps/project-service/prisma/schema.prisma --accept-data-loss && pnpm exec nest start project-service --watch"
+    command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec prisma db push --schema=./apps/project-service/prisma/schema.prisma --accept-data-loss && pnpm exec nest start project-service --watch"
 
   gateway:
     profiles: ["core", "all"]
@@ -242,7 +242,7 @@ services:
       - redis
     networks:
       - iris-network
-    command: sh -c "mkdir -p libs/common/src/generated && npm run proto:generate && pnpm exec nest start gateway --watch"
+    command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec nest start gateway --watch"
 
   notification-service:
     profiles: ["notifications", "all"]
@@ -267,7 +267,7 @@ services:
     volumes: *dev-volumes
     networks:
       - iris-network
-    command: sh -c "mkdir -p libs/common/src/generated && npm run proto:generate && pnpm exec nest start notification-service --watch"
+    command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec nest start notification-service --watch"
 
 networks:
   iris-network:
