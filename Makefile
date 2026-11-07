@@ -1,26 +1,38 @@
-.PHONY: help dev-up dev-down dev-build dev-rebuild dev-logs prod-up prod-down prod-build prod-rebuild prod-logs prod-restart prod-env-up prod-env-down prod-env-build prod-env-rebuild prod-env-logs proto-gen clean clean-all
+.PHONY: help dev-up dev-down dev-build dev-rebuild dev-logs dev-core dev-events dev-eval dev-notifications prod-up prod-down prod-build prod-rebuild prod-logs prod-restart prod-env-up prod-env-down prod-env-build prod-env-rebuild prod-env-logs proto-gen clean clean-all
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
 	@echo ''
 	@echo 'Available targets:'
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \\033[36m%-15s\\033[0m %s\\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \\033[36m%-18s\\033[0m %s\\n", $$1, $$2}'
 
 # Development targets
 dev-up: ## Start all services in development mode with .env file
-	docker compose -f docker-compose.dev.yml --env-file .env up
+	docker compose -f docker-compose.dev.yml --profile all --env-file .env up
+
+dev-core: ## Start core services (postgres, redis, auth, gateway)
+	docker compose -f docker-compose.dev.yml --profile core --env-file .env up
+
+dev-events: ## Start event services (postgres, redis, events, invitations)
+	docker compose -f docker-compose.dev.yml --profile events --env-file .env up
+
+dev-eval: ## Start evaluation services (postgres, redis, evaluation, project)
+	docker compose -f docker-compose.dev.yml --profile eval --env-file .env up
+
+dev-notifications: ## Start notification service
+	docker compose -f docker-compose.dev.yml --profile notifications --env-file .env up
 
 dev-down: ## Stop all development services
-	docker compose -f docker-compose.dev.yml --env-file .env down
+	docker compose -f docker-compose.dev.yml --profile all --env-file .env down
 
 dev-build: ## Build all development services with .env file
-	docker compose -f docker-compose.dev.yml --env-file .env build
+	docker compose -f docker-compose.dev.yml --profile all --env-file .env build
 
 dev-rebuild: ## Rebuild all development services with .env file (no cache)
-	docker compose -f docker-compose.dev.yml --env-file .env build --no-cache
+	docker compose -f docker-compose.dev.yml --profile all --env-file .env build --no-cache
 
 dev-logs: ## Show logs for all development services
-	docker compose -f docker-compose.dev.yml --env-file .env logs -f
+	docker compose -f docker-compose.dev.yml --profile all --env-file .env logs -f
 
 # Production targets
 prod-up: ## Start all services in production mode
