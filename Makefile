@@ -1,83 +1,113 @@
+PROFILES ?= all
+DEV_PROFILE_FLAGS = $(foreach profile,$(PROFILES),--profile $(profile))
+DEV_COMPOSE = docker compose -f docker-compose.dev.yml --env-file .env $(DEV_PROFILE_FLAGS)
+
 .PHONY: help dev-up dev-down dev-build dev-rebuild dev-logs dev-core dev-events dev-eval dev-notifications prod-up prod-down prod-build prod-rebuild prod-logs prod-restart prod-env-up prod-env-down prod-env-build prod-env-rebuild prod-env-logs proto-gen clean clean-all
 
-help: ## Show this help message
-	@echo 'Usage: make [target]'
-	@echo ''
-	@echo 'Available targets:'
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \\033[36m%-18s\\033[0m %s\\n", $$1, $$2}'
+help:
+	@printf "Usage: make [target] [PROFILES=\"all|core|events|eval|notifications\"]\n\n"
+	@printf "Development profiles (PROFILES ?= all):\n"
+	@printf "  %-18s %s\n" \
+		"all" "All 7 microservices plus postgres and redis (default)" \
+		"core" "postgres, redis, auth-service, gateway" \
+		"events" "postgres, redis, event-service, invitation-service" \
+		"eval" "postgres, redis, evaluation-service, project-service" \
+		"notifications" "postgres, redis, notification-service"
+	@printf "\nAvailable targets:\n"
+	@printf "  %-18s %s\n" \
+		"clean" "Clean up Docker resources" \
+		"clean-all" "Clean up all Docker resources including images" \
+		"dev-build" "Build development services with .env file (uses PROFILES)" \
+		"dev-core" "Start core services in background (PROFILES=core)" \
+		"dev-down" "Stop development services (uses PROFILES)" \
+		"dev-eval" "Start evaluation services in background (PROFILES=eval)" \
+		"dev-events" "Start event services in background (PROFILES=events)" \
+		"dev-logs" "Follow logs for development services (uses PROFILES)" \
+		"dev-notifications" "Start notification service in background (PROFILES=notifications)" \
+		"dev-rebuild" "Rebuild development services with .env file (no cache, uses PROFILES)" \
+		"dev-up" "Start development services in background with .env file (uses PROFILES)" \
+		"help" "Show this help message" \
+		"prod-build" "Build all production services" \
+		"prod-down" "Stop all production services" \
+		"prod-env-build" "Build all production services with .env file" \
+		"prod-env-down" "Stop all production services with .env file" \
+		"prod-env-logs" "Show logs for all production services with .env file" \
+		"prod-env-rebuild" "Rebuild all production services with .env file (no cache)" \
+		"prod-env-up" "Start all services in production mode with .env file" \
+		"prod-logs" "Show logs for all production services" \
+		"prod-rebuild" "Rebuild all production services (no cache)" \
+		"prod-restart" "Restart all production services" \
+		"prod-up" "Start all services in production mode" \
+		"proto-gen" "Generate protobuf TypeScript files"
 
-# Development targets
-dev-up: ## Start all services in development mode with .env file
-	docker compose -f docker-compose.dev.yml --profile all --env-file .env up
+dev-up:
+	$(DEV_COMPOSE) up -d
 
-dev-core: ## Start core services (postgres, redis, auth, gateway)
-	docker compose -f docker-compose.dev.yml --profile core --env-file .env up
+dev-core:
+	$(MAKE) dev-up PROFILES=core
 
-dev-events: ## Start event services (postgres, redis, events, invitations)
-	docker compose -f docker-compose.dev.yml --profile events --env-file .env up
+dev-events:
+	$(MAKE) dev-up PROFILES=events
 
-dev-eval: ## Start evaluation services (postgres, redis, evaluation, project)
-	docker compose -f docker-compose.dev.yml --profile eval --env-file .env up
+dev-eval:
+	$(MAKE) dev-up PROFILES=eval
 
-dev-notifications: ## Start notification service
-	docker compose -f docker-compose.dev.yml --profile notifications --env-file .env up
+dev-notifications:
+	$(MAKE) dev-up PROFILES=notifications
 
-dev-down: ## Stop all development services
-	docker compose -f docker-compose.dev.yml --profile all --env-file .env down
+dev-down:
+	$(DEV_COMPOSE) down
 
-dev-build: ## Build all development services with .env file
-	docker compose -f docker-compose.dev.yml --profile all --env-file .env build
+dev-build:
+	$(DEV_COMPOSE) build
 
-dev-rebuild: ## Rebuild all development services with .env file (no cache)
-	docker compose -f docker-compose.dev.yml --profile all --env-file .env build --no-cache
+dev-rebuild:
+	$(DEV_COMPOSE) build --no-cache
 
-dev-logs: ## Show logs for all development services
-	docker compose -f docker-compose.dev.yml --profile all --env-file .env logs -f
+dev-logs:
+	$(DEV_COMPOSE) logs -f
 
-# Production targets
-prod-up: ## Start all services in production mode
+prod-up:
 	docker compose up -d
 
-prod-down: ## Stop all production services
+prod-down:
 	docker compose down
 
-prod-build: ## Build all production services
+prod-build:
 	docker compose build
 
-prod-rebuild: ## Rebuild all production services (no cache)
+prod-rebuild:
 	docker compose build --no-cache
 
-prod-logs: ## Show logs for all production services
+prod-logs:
 	docker compose logs -f
 
-prod-restart: ## Restart all production services
+prod-restart:
 	docker compose restart
 
-# Production targets with explicit .env file
-prod-env-up: ## Start all services in production mode with .env file
+prod-env-up:
 	docker compose --env-file .env up -d
 
-prod-env-down: ## Stop all production services with .env file
+prod-env-down:
 	docker compose --env-file .env down
 
-prod-env-build: ## Build all production services with .env file
+prod-env-build:
 	docker compose --env-file .env build
 
-prod-env-rebuild: ## Rebuild all production services with .env file (no cache)
+prod-env-rebuild:
 	docker compose --env-file .env build --no-cache
 
-prod-env-logs: ## Show logs for all production services with .env file
+prod-env-logs:
 	docker compose --env-file .env logs -f
 
-# Utility targets
-proto-gen: ## Generate protobuf TypeScript files
+proto-gen:
 	mkdir -p libs/common/src/generated
 	pnpm run proto:generate
 
-clean: ## Clean up Docker resources
+clean:
 	docker compose down -v --remove-orphans
 	docker system prune -f
 
-clean-all: ## Clean up all Docker resources including images
+clean-all:
 	docker compose down -v --remove-orphans
 	docker system prune -af
