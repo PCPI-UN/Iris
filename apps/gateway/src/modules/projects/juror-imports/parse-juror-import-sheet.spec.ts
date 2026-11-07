@@ -1,9 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
-import {
-  JUROR_IMPORT_MAX_ROWS,
-  parseJurorImportSheet,
-} from './parse-juror-import-sheet';
+import { JUROR_IMPORT_MAX_ROWS } from './juror-import-format';
+import { parseJurorImportSheet } from './parse-juror-import-sheet';
 
 const TEMPLATE_HEADERS = [
   'Departamento*',

@@ -1,38 +1,19 @@
 import { BadRequestException } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
+import {
+  JUROR_IMPORT_COLUMNS,
+  JUROR_IMPORT_MAX_ROWS,
+  JUROR_IMPORT_SHEET,
+  JurorImportField,
+  JurorImportSheetRow,
+  normalizeHeader,
+} from './juror-import-format';
 
-export const JUROR_IMPORT_SHEET = 'Asignaciones';
-export const JUROR_IMPORT_MAX_ROWS = 2000;
-export const JUROR_IMPORT_MAX_BYTES = 2 * 1024 * 1024;
-
-/** One data row of the sheet, ready for project-service (PreviewJurorImportRequest.rows) */
-export interface JurorImportSheetRow {
-  rowNumber: number;
-  department: string;
-  projectCode: string;
-  jurorName: string;
-  email: string;
-}
-
-type Field = Exclude<keyof JurorImportSheetRow, 'rowNumber'>;
-
-/** Columns read by normalized header text; any other column ("(auto)" ones included) is ignored */
-const COLUMNS: { header: string; label: string; field: Field }[] = [
-  { header: 'departamento', label: 'Departamento', field: 'department' },
-  { header: 'numero', label: 'Número', field: 'projectCode' },
-  { header: 'jurado', label: 'Jurado', field: 'jurorName' },
-  { header: 'email', label: 'Email', field: 'email' },
-];
-
-/** "Número*" -> "numero" */
-const normalizeHeader = (value: string): string =>
-  value
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/\*/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
+type Field = JurorImportField;
+const COLUMNS = JUROR_IMPORT_COLUMNS.map((column) => ({
+  ...column,
+  header: normalizeHeader(column.label),
+}));
 
 /** Plain text of a cell, whatever Excel stored: number, hyperlink, rich text or formula */
 export const cellText = (value: ExcelJS.CellValue): string => {

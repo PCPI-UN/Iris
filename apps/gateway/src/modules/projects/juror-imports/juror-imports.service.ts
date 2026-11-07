@@ -14,6 +14,7 @@ import {
   ProjectsServiceClient,
 } from '@app/common/generated/project';
 import { parseJurorImportSheet } from './parse-juror-import-sheet';
+import { buildJurorImportTemplate } from './build-juror-import-template';
 
 /** One row of the preview as the front receives it */
 export interface JurorImportPreviewRow {
@@ -94,5 +95,23 @@ export class JurorImportsService implements OnModuleInit {
       eventWarnings: res.eventWarnings ?? [],
       canConfirm: res.canConfirm,
     };
+  }
+
+  /** Builds the template of the event with its departments and approved projects */
+  async template(eventId: number): Promise<{ fileName: string; file: Buffer }> {
+    const data = await firstValueFrom(
+      this.projectsService.getJurorImportTemplate({ eventId }),
+    );
+    const file = await buildJurorImportTemplate({
+      eventName: data.eventName ?? '',
+      departments: data.departments ?? [],
+      projects: (data.projects ?? []).map((project) => ({
+        projectId: project.projectId,
+        department: project.department ?? '',
+        projectCode: project.projectCode ?? '',
+        name: project.name ?? '',
+      })),
+    });
+    return { fileName: `plantilla-jurados-evento-${eventId}.xlsx`, file };
   }
 }

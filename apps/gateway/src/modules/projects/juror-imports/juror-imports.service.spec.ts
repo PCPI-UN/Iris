@@ -61,12 +61,27 @@ describe('JurorImportsService.preview', () => {
     canConfirm: true,
   };
   let previewJurorImport: jest.Mock;
+  let getJurorImportTemplate: jest.Mock;
   let service: JurorImportsService;
 
   beforeEach(() => {
     previewJurorImport = jest.fn().mockReturnValue(of(response));
+    getJurorImportTemplate = jest.fn().mockReturnValue(
+      of({
+        eventName: 'Feria',
+        departments: ['Dpt. Ingeniería Industrial'],
+        projects: [
+          {
+            projectId: 195,
+            department: 'Dpt. Ingeniería Industrial',
+            projectCode: '14',
+            name: 'Modelo',
+          },
+        ],
+      }),
+    );
     const client = {
-      getService: () => ({ previewJurorImport }),
+      getService: () => ({ previewJurorImport, getJurorImportTemplate }),
     } as unknown as ClientGrpc;
     service = new JurorImportsService(client);
     service.onModuleInit();
@@ -132,5 +147,15 @@ describe('JurorImportsService.preview', () => {
       service.preview(10, upload('jurados.xls', await template())),
     ).rejects.toThrow('El archivo debe ser .xlsx.');
     expect(previewJurorImport).not.toHaveBeenCalled();
+  });
+
+  it('builds the template of the event with the data of project-service', async () => {
+    const { fileName, file } = await service.template(10);
+
+    expect(getJurorImportTemplate).toHaveBeenCalledWith({ eventId: 10 });
+    expect(fileName).toBe('plantilla-jurados-evento-10.xlsx');
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(file as unknown as ExcelJS.Buffer);
+    expect(wb.getWorksheet('Proyectos')!.getCell('D2').value).toBe('Modelo');
   });
 });

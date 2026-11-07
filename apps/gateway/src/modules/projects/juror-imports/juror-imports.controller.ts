@@ -1,5 +1,7 @@
 import {
   Controller,
+  Get,
+  StreamableFile,
   HttpCode,
   HttpStatus,
   Param,
@@ -14,6 +16,7 @@ import {
   ApiConsumes,
   ApiOperation,
   ApiParam,
+  ApiProduces,
   ApiResponse,
   ApiSecurity,
   ApiTags,
@@ -24,7 +27,10 @@ import {
   JUROR_IMPORT_MAX_BYTES,
   JUROR_IMPORT_MAX_ROWS,
   JUROR_IMPORT_SHEET,
-} from './parse-juror-import-sheet';
+} from './juror-import-format';
+
+const XLSX_CONTENT_TYPE =
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 @ApiTags('juror-imports')
 @ApiSecurity('JWT-auth')
@@ -78,5 +84,28 @@ export class JurorImportsController {
     @UploadedFile() file?: Express.Multer.File,
   ) {
     return this.jurorImportsService.preview(eventId, file);
+  }
+
+  @RequirePermission('manage:events')
+  @Get('template')
+  @ApiProduces(XLSX_CONTENT_TYPE)
+  @ApiOperation({
+    summary: 'Download the juror template of an event',
+    description:
+      `Excel template to fill the "${JUROR_IMPORT_SHEET}" sheet: the departments of the event as a dropdown, ` +
+      'its approved projects (including those without a number yet) and helper formulas that flag errors before uploading.',
+  })
+  @ApiParam({ name: 'eventId', type: Number, example: 1 })
+  @ApiResponse({ status: 200, description: 'The .xlsx template' })
+  @ApiResponse({ status: 404, description: 'Event not found' })
+  async template(
+    @Param('eventId', ParseIntPipe) eventId: number,
+  ): Promise<StreamableFile> {
+    const { fileName, file } = await this.jurorImportsService.template(eventId);
+    return new StreamableFile(file, {
+      type: XLSX_CONTENT_TYPE,
+      disposition: `attachment; filename="${fileName}"`,
+      length: file.length,
+    });
   }
 }
