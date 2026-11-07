@@ -23,6 +23,9 @@ export interface ProjectDocument {
   url: string;
 }
 
+/** Role id stored in project assignments for jurors */
+export const JUROR_ROLE_ID = 4;
+
 export interface JurorKey {
   memberUserId: number;
   memberEventId: number;
