@@ -92,7 +92,7 @@ const REQUIRED_FIELDS: { key: keyof JurorImportRowInput; label: string }[] = [
 const normalizeText = (value: string): string =>
   value
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
