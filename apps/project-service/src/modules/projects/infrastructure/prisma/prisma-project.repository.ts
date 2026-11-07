@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../common/prisma/prisma.service';
+import { normalizeEmail } from '@app/common/utils/email.util';
 import { ProjectRepository } from '../../domain/repositories/project.repository';
 import { PendingProjectParticipant, Project, TypedDocument } from '../../domain/entities/project.entity';
 import { ProjectDocument, ProjectState, JurorKey, ProjectParticipant } from '../../domain/entities/project.entity';
@@ -298,7 +299,7 @@ export class PrismaProjectRepository implements ProjectRepository {
     const res = await this.prisma.pendingProjectParticipant.updateMany({
       where: {
         projectId,
-        email: { in: emails.map(e => e.trim().toLowerCase()) },
+        email: { in: emails.map(normalizeEmail) },
       },
       data: {
         status: 'INVITED',
