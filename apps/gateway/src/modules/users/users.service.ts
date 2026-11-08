@@ -40,6 +40,16 @@ export class UsersService implements OnModuleInit {
     );
   }
 
+  findRoles() {
+    return firstValueFrom(this.authService.getRoles({}));
+  }
+
+  setRoles(id: number, roleIds: number[], actorUserId: number) {
+    return firstValueFrom(
+      this.authService.setUserPlatformRoles({ userId: id, roleIds, actorUserId }),
+    );
+  }
+
   remove(id: number, actorUserId: number) {
     return firstValueFrom(
       this.authService.deactivateUser({ id, actorUserId }),
