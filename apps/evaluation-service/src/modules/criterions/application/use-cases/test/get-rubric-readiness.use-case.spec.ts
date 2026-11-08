@@ -2,6 +2,7 @@ import { GetRubricReadinessUseCase } from '../get-rubric-readiness.use-case';
 import { Criterion } from '../../../domain/entities/criterion.entity';
 import { Component } from '../../../domain/entities/component.entity';
 import { CriterionRepositoryPort } from '../../../domain/repositories/criterion.repository.port';
+import { EventServicePort } from '../../../infrastructure/ports/event.service.port';
 
 describe('GetRubricReadinessUseCase', () => {
     const criterion = (id: number, componentId: number | null, weight = 1) =>
@@ -16,12 +17,16 @@ describe('GetRubricReadinessUseCase', () => {
     const buildUseCase = (
         eventComponents: Component[],
         criteria: Array<{ criterion: Criterion; courseIds: number[] }>,
+        eventCourseIds: number[] = Array.from(new Set(criteria.flatMap(({ courseIds }) => courseIds))),
     ) => {
         const repository = {
             findComponentsByEvent: jest.fn().mockResolvedValue(eventComponents),
             findActiveByEventWithCourses: jest.fn().mockResolvedValue(criteria),
         } as unknown as CriterionRepositoryPort;
-        return new GetRubricReadinessUseCase(repository);
+        const eventService = {
+            listCourseIdsByEvent: jest.fn().mockResolvedValue(eventCourseIds),
+        } as unknown as EventServicePort;
+        return new GetRubricReadinessUseCase(repository, eventService);
     };
 
     it('marks a category ready when the components add up to 100% and each one has a criterion', async () => {
@@ -79,6 +84,25 @@ describe('GetRubricReadinessUseCase', () => {
         const result = await useCase.execute({ eventId: 1, courseId: 30 });
 
         expect(result.categories).toEqual([
+            { courseId: 30, ready: false, criteriaCount: 0, missingComponentIds: [11, 12, 13], criteriaWithoutComponent: [] },
+        ]);
+    });
+
+    it('reports the categories of the event without any criterion as not ready', async () => {
+        const useCase = buildUseCase(
+            components,
+            [
+                { criterion: criterion(1, 11), courseIds: [10] },
+                { criterion: criterion(2, 12), courseIds: [10] },
+                { criterion: criterion(3, 13), courseIds: [10] },
+            ],
+            [10, 30],
+        );
+
+        const result = await useCase.execute({ eventId: 1 });
+
+        expect(result.categories).toEqual([
+            expect.objectContaining({ courseId: 10, ready: true }),
             { courseId: 30, ready: false, criteriaCount: 0, missingComponentIds: [11, 12, 13], criteriaWithoutComponent: [] },
         ]);
     });
