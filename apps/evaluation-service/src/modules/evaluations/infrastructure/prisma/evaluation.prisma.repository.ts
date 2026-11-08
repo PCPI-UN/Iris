@@ -17,7 +17,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
     constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
     async save(evaluation: Evaluation, scores: EvaluationDetail[]): Promise<Evaluation> {
-        const result = await this.prisma.evaluation.create({
+        const result = await this.prisma.db.evaluation.create({
             data: {
                 projectId: evaluation.projectId,
                 memberUserId: evaluation.memberUserId,
@@ -52,7 +52,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
     }
 
     async findById(id: number): Promise<Evaluation | null> {
-        const result = await this.prisma.evaluation.findUnique({
+        const result = await this.prisma.db.evaluation.findUnique({
             where: { id },
             include: {
                 scores: true,
@@ -76,7 +76,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
     }
 
     async findAll(): Promise<Evaluation[]> {
-        const results = await this.prisma.evaluation.findMany({
+        const results = await this.prisma.db.evaluation.findMany({
             include: {
                 scores: true,
             },
@@ -95,14 +95,14 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
     }
 
     async countAll(): Promise<number> {
-        return this.prisma.evaluation.count();
+        return this.prisma.db.evaluation.count();
     }
 
     async findByProjectId(projectId: number, page: number, limit: number): Promise<PaginatedEvaluations> {
         const skip = (page - 1) * limit;
 
         const [results, total] = await Promise.all([
-            this.prisma.evaluation.findMany({
+            this.prisma.db.evaluation.findMany({
                 where: { projectId },
                 include: {
                     scores: true,
@@ -111,7 +111,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
                 take: limit,
                 orderBy: { date: 'desc' },
             }),
-            this.prisma.evaluation.count({
+            this.prisma.db.evaluation.count({
                 where: { projectId },
             }),
         ]);
@@ -137,7 +137,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
         const skip = (page - 1) * limit;
 
         const [results, total] = await Promise.all([
-            this.prisma.evaluation.findMany({
+            this.prisma.db.evaluation.findMany({
                 where: {
                     memberUserId: userId,
                     memberEventId: eventId,
@@ -149,7 +149,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
                 take: limit,
                 orderBy: { date: 'desc' },
             }),
-            this.prisma.evaluation.count({
+            this.prisma.db.evaluation.count({
                 where: {
                     memberUserId: userId,
                     memberEventId: eventId,
@@ -175,7 +175,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
     }
 
     async findByProjectAndEvaluator(projectId: number, memberUserId: number, memberEventId: number, memberRoleId: number): Promise<Evaluation | null> {
-        const result = await this.prisma.evaluation.findFirst({
+        const result = await this.prisma.db.evaluation.findFirst({
             where: {
                 projectId,
                 memberUserId,
@@ -204,7 +204,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
     }
 
     async existsByProjectAndEvaluator(projectId: number, memberUserId: number, memberEventId: number): Promise<boolean> {
-        const count = await this.prisma.evaluation.count({
+        const count = await this.prisma.db.evaluation.count({
             where: {
                 projectId,
                 memberUserId,
@@ -216,7 +216,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
     }
 
     async findEvaluationDetails(evaluationId: number): Promise<EvaluationDetail[]> {
-        const results = await this.prisma.evaluationDetail.findMany({
+        const results = await this.prisma.db.evaluationDetail.findMany({
             where: { evaluationId },
         });
 
@@ -230,14 +230,14 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
 
     async getProjectStats(projectId: number): Promise<ProjectStats> {
         // Get average grade and count
-        const gradeStats = await this.prisma.evaluation.aggregate({
+        const gradeStats = await this.prisma.db.evaluation.aggregate({
             where: { projectId },
             _avg: { grade: true },
             _count: true,
         });
 
         // Get all evaluation details with criterion info (including category and weight)
-        const evaluationDetails = await this.prisma.evaluationDetail.findMany({
+        const evaluationDetails = await this.prisma.db.evaluationDetail.findMany({
             where: {
                 evaluation: {
                     projectId,
@@ -290,7 +290,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
         }
 
         // Get unique evaluator user IDs for this project
-        const evaluators = await this.prisma.evaluation.findMany({
+        const evaluators = await this.prisma.db.evaluation.findMany({
             where: { projectId },
             select: { memberUserId: true },
         });
@@ -311,7 +311,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
         userId: number,
         eventId: number
     ): Promise<EvaluationWithDetails[]> {
-        const evaluations = await this.prisma.evaluation.findMany({
+        const evaluations = await this.prisma.db.evaluation.findMany({
             where: {
                 projectId: { in: projectIds },
                 memberUserId: userId,
@@ -351,7 +351,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
 
         // Find evaluations for the specified projects
         // Group by projectId and calculate average grade
-        const projectGrades = await this.prisma.evaluation.groupBy({
+        const projectGrades = await this.prisma.db.evaluation.groupBy({
             by: ['projectId'],
             where: {
                 projectId: { in: projectIds },

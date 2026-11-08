@@ -18,7 +18,18 @@ export class CreateCriterionUseCase {
     private readonly categoryLock: CategoryLockService,
   ) { }
 
-  async execute(createCriterionDto: CreateCriterionDto): Promise<{
+  execute(createCriterionDto: CreateCriterionDto): Promise<{
+    criterion: Criterion;
+    courseIds: number[];
+    component?: Component;
+  }> {
+    // The rubric checks and the write run under the rubric lock of the event
+    return this.criterionRepository.withRubricLock([createCriterionDto.eventId], 'exclusive', () =>
+      this.create(createCriterionDto),
+    );
+  }
+
+  private async create(createCriterionDto: CreateCriterionDto): Promise<{
     criterion: Criterion;
     courseIds: number[];
     component?: Component;

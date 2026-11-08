@@ -14,6 +14,21 @@ export class UpdateComponentUseCase {
   ) {}
 
   async execute(updateComponentDto: UpdateComponentDto): Promise<Component> {
+    const existingComponent = await this.criterionRepository.findComponentById(updateComponentDto.id);
+    if (!existingComponent) {
+      throw new RpcException({
+        code: status.NOT_FOUND,
+        message: `Component with ID ${updateComponentDto.id} not found`,
+      });
+    }
+
+    // The rubric checks and the write run under the rubric lock of the event
+    return this.criterionRepository.withRubricLock([existingComponent.eventId], 'exclusive', () =>
+      this.update(updateComponentDto),
+    );
+  }
+
+  private async update(updateComponentDto: UpdateComponentDto): Promise<Component> {
     const { id, name, weight } = updateComponentDto;
 
     // Get the existing component

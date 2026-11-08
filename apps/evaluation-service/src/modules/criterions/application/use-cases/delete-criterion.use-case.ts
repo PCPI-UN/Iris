@@ -13,6 +13,21 @@ export class DeleteCriterionUseCase {
   ) {}
 
   async execute(deleteCriterionDto: DeleteCriterionDto): Promise<void> {
+    const existingCriterion = await this.criterionRepository.findById(deleteCriterionDto.id);
+    if (!existingCriterion) {
+      throw new RpcException({
+        code: status.NOT_FOUND,
+        message: 'Criterion not found with the provided ID',
+      });
+    }
+
+    // The rubric checks and the write run under the rubric lock of the event
+    await this.criterionRepository.withRubricLock([existingCriterion.eventId], 'exclusive', () =>
+      this.delete(deleteCriterionDto),
+    );
+  }
+
+  private async delete(deleteCriterionDto: DeleteCriterionDto): Promise<void> {
     const { id } = deleteCriterionDto;
 
     const existingCriterion = await this.criterionRepository.findById(id);

@@ -61,7 +61,7 @@ export class EvaluateProjectUseCase {
     ) { }
 
     async execute(request: EvaluateProjectDto): Promise<{ evaluation: Evaluation; scores: EvaluationDetail[] }> {
-        const { projectId, userId, scores, comments } = request;
+        const { projectId, userId } = request;
 
         // 0. Get project to extract eventId
         const project = await this.projectService.getProject(projectId);
@@ -127,6 +127,37 @@ export class EvaluateProjectUseCase {
             });
         }
 
+        // 3-6 run in one transaction under the rubric lock of the event, so the rubric cannot change
+        // between reading it and saving the evaluation. The lock is shared: evaluations do not wait for each other.
+        const { savedEvaluation, evaluationDetails } = await this.criterionRepository.withRubricLock(
+            [memberEventId],
+            'shared',
+            () => this.gradeAndSave(request, project.courseId, memberEventId, memberRoleId, event.evaluationType),
+        );
+
+        // 7. Return evaluation with scores in the expected format
+        const scoresResponse: EvaluationDetail[] = evaluationDetails.map(detail => ({
+            evaluationId: savedEvaluation.id,
+            criterionId: detail.criterionId,
+            score: detail.score,
+            weight: detail.weight,
+        }));
+
+        return {
+            evaluation: savedEvaluation,
+            scores: scoresResponse,
+        };
+    }
+
+    private async gradeAndSave(
+        request: EvaluateProjectDto,
+        courseId: number,
+        memberEventId: number,
+        memberRoleId: number,
+        eventEvaluationType: unknown,
+    ): Promise<{ savedEvaluation: Evaluation; evaluationDetails: EvaluationDetail[] }> {
+        const { projectId, userId: memberUserId, scores, comments } = request;
+
         // 3. Check if already evaluated
         const alreadyEvaluated = await this.evaluationRepository.existsByProjectAndEvaluator(
             projectId,
@@ -150,7 +181,7 @@ export class EvaluateProjectUseCase {
         }
 
         const [courseCriteria, components] = await Promise.all([
-            this.criterionRepository.findByCourseId(project.courseId),
+            this.criterionRepository.findByCourseId(courseId),
             this.criterionRepository.findComponentsByEvent(memberEventId),
         ]);
         const rubric = courseCriteria.filter((criterion) => criterion.eventId === memberEventId);
@@ -190,7 +221,7 @@ export class EvaluateProjectUseCase {
         const scoredCriterionIds = new Set<number>();
 
         // Resolve score validation and mapping from the event evaluation type
-        const evaluationType = this.resolveEvaluationType(event.evaluationType);
+        const evaluationType = this.resolveEvaluationType(eventEvaluationType);
         const scoreValidator = ScoreValidatorFactory.create(evaluationType);
         const scoreMapper = ScoreMapperFactory.create(evaluationType);
 
@@ -262,17 +293,6 @@ export class EvaluateProjectUseCase {
 
         const savedEvaluation = await this.evaluationRepository.save(evaluation, evaluationDetails);
 
-        // 7. Return evaluation with scores in the expected format
-        const scoresResponse: EvaluationDetail[] = evaluationDetails.map(detail => ({
-            evaluationId: savedEvaluation.id,
-            criterionId: detail.criterionId,
-            score: detail.score,
-            weight: detail.weight,
-        }));
-
-        return {
-            evaluation: savedEvaluation,
-            scores: scoresResponse,
-        };
+        return { savedEvaluation, evaluationDetails };
     }
 }

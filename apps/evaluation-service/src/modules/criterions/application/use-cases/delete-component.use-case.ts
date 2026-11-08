@@ -12,6 +12,21 @@ export class DeleteComponentUseCase {
   ) {}
 
   async execute(deleteComponentDto: DeleteComponentDto): Promise<void> {
+    const component = await this.criterionRepository.findComponentById(deleteComponentDto.id);
+    if (!component) {
+      throw new RpcException({
+        code: status.NOT_FOUND,
+        message: `Component with ID ${deleteComponentDto.id} not found`,
+      });
+    }
+
+    // The rubric checks and the write run under the rubric lock of the event
+    await this.criterionRepository.withRubricLock([component.eventId], 'exclusive', () =>
+      this.delete(deleteComponentDto),
+    );
+  }
+
+  private async delete(deleteComponentDto: DeleteComponentDto): Promise<void> {
     const { id } = deleteComponentDto;
 
     // Verify component exists

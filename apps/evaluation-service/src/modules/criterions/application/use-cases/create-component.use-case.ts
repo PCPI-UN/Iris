@@ -13,7 +13,14 @@ export class CreateComponentUseCase {
     private readonly criterionRepository: CriterionRepositoryPort,
   ) {}
 
-  async execute(createComponentDto: CreateComponentDto): Promise<Component> {
+  execute(createComponentDto: CreateComponentDto): Promise<Component> {
+    // The rubric checks and the write run under the rubric lock of the event
+    return this.criterionRepository.withRubricLock([createComponentDto.eventId], 'exclusive', () =>
+      this.create(createComponentDto),
+    );
+  }
+
+  private async create(createComponentDto: CreateComponentDto): Promise<Component> {
     const { name, weight, eventId } = createComponentDto;
 
     if (!name || name.trim().length === 0) {

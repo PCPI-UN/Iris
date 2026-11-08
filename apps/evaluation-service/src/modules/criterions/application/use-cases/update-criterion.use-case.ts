@@ -22,6 +22,24 @@ export class UpdateCriterionUseCase {
     courseIds: number[];
     component?: Component;
   }> {
+    const existingCriterion = await this.criterionRepository.findById(updateCriterionDto.id);
+    if (!existingCriterion) {
+      throw new RpcException({
+        code: status.NOT_FOUND,
+        message: 'Criterion not found with the provided ID',
+      });
+    }
+
+    // The rubric checks and the write run under the rubric lock of the events involved
+    const eventIds = [existingCriterion.eventId, updateCriterionDto.eventId ?? existingCriterion.eventId];
+    return this.criterionRepository.withRubricLock(eventIds, 'exclusive', () => this.update(updateCriterionDto));
+  }
+
+  private async update(updateCriterionDto: UpdateCriterionDto): Promise<{
+    criterion: Criterion;
+    courseIds: number[];
+    component?: Component;
+  }> {
     const { id, eventId, name, description, weight, active, category, componentId } = updateCriterionDto;
     // A repeated proto field cannot be "unset": the gateway sends [] when the client did not send courses,
     // and a criterion always needs at least one course, so an empty list means "keep the current courses".

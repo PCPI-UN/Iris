@@ -72,6 +72,7 @@ describe('Criteria and components CRUD - rules', () => {
             sumComponentWeightsByEvent: jest.fn().mockResolvedValue(0),
             hasEvaluationsForEvent: jest.fn().mockResolvedValue(false),
             findEvaluatedProjectIds: jest.fn().mockResolvedValue([]),
+            withRubricLock: jest.fn((_eventIds, _mode, work) => work()),
         } as jest.Mocked<CriterionRepositoryPort>;
 
         projectService = {
@@ -397,6 +398,26 @@ describe('Criteria and components CRUD - rules', () => {
             await useCase.execute({ id: 5 });
 
             expect(criterionRepository.deleteComponent).toHaveBeenCalledWith(5);
+        });
+    });
+
+    describe('rubric lock', () => {
+        it.each([
+            ['creating a criterion', () => new CreateCriterionUseCase(criterionRepository, eventService, categoryLock).execute({ eventId: 1, name: 'Oral', courseIds: [10], componentId: 5 }), [1]],
+            ['moving a criterion to another event', () => {
+                criterionRepository.findComponentById.mockResolvedValue(new Component(20, 'Oral', 0.3, 2));
+                return new UpdateCriterionUseCase(criterionRepository, eventService, categoryLock).execute({ id: 1, eventId: 2, componentId: 20, courseIds: [40] });
+            }, [1, 2]],
+            ['deleting a criterion', () => new DeleteCriterionUseCase(criterionRepository, categoryLock).execute({ id: 1 }), [1]],
+            ['creating a component', () => new CreateComponentUseCase(criterionRepository).execute({ name: 'Oral', weight: 0.3, eventId: 1 }), [1]],
+            ['changing a component', () => new UpdateComponentUseCase(criterionRepository).execute({ id: 5, weight: 0.2 }), [1]],
+            ['deleting a component', () => new DeleteComponentUseCase(criterionRepository).execute({ id: 5 }), [1]],
+        ])('takes the exclusive rubric lock of the event when %s', async (_action, run, eventIds) => {
+            criterionRepository.createComponent.mockResolvedValue(new Component(9, 'Oral', 0.3, 1));
+
+            await run();
+
+            expect(criterionRepository.withRubricLock).toHaveBeenCalledWith(eventIds, 'exclusive', expect.any(Function));
         });
     });
 

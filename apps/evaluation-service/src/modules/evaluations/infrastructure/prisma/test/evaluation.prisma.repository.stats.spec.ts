@@ -30,7 +30,8 @@ describe('EvaluationPrismaRepository - project statistics', () => {
             },
         };
 
-        return new EvaluationPrismaRepository(prisma as unknown as PrismaService);
+        // Repositories query through `db` (the open transaction, or the default client)
+        return new EvaluationPrismaRepository({ db: prisma } as unknown as PrismaService);
     };
 
     describe('getProjectStats', () => {
