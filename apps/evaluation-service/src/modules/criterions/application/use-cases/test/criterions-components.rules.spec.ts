@@ -22,7 +22,9 @@ import { EventServicePort } from '../../../infrastructure/ports/event.service.po
  *   the components of an event cannot exceed 100%,
  * - every criterion belongs to a component of its event and has a relative weight
  *   (1 by default) that is never rewritten,
- * - the rubric of an event cannot change once it has evaluations; texts can.
+ * - the rubric of an event cannot change once it has evaluations; texts can,
+ * - while the components of an evaluated event do not add up to 100% they can still be
+ *   fixed (no grade was computed with an incomplete rubric).
  */
 describe('Criteria and components CRUD - rules', () => {
     const buildCriterion = (overrides: Partial<Criterion> = {}): Criterion =>
@@ -225,6 +227,8 @@ describe('Criteria and components CRUD - rules', () => {
     describe('rubric locked once the event has evaluations', () => {
         beforeEach(() => {
             criterionRepository.hasEvaluationsForEvent.mockResolvedValue(true);
+            // A complete rubric: the components of the event add up to 100%
+            criterionRepository.sumComponentWeightsByEvent.mockResolvedValue(1);
         });
 
         it('rejects creating a criterion', async () => {
@@ -306,6 +310,40 @@ describe('Criteria and components CRUD - rules', () => {
                 rpcError(status.FAILED_PRECONDITION, 'already has evaluations'),
             );
             expect(criterionRepository.deleteComponent).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('evaluated event whose components do not add up to 100%', () => {
+        beforeEach(() => {
+            // Event evaluated before the migration and left at 0.399 / 0.30 / 0.28 = 0.979
+            criterionRepository.hasEvaluationsForEvent.mockResolvedValue(true);
+            criterionRepository.findComponentById.mockResolvedValue(new Component(5, 'Diseño', 0.399, 1));
+            criterionRepository.sumComponentWeightsByEvent.mockImplementation((_eventId, excludeComponentId) =>
+                Promise.resolve(excludeComponentId === undefined ? 0.979 : 0.58),
+            );
+        });
+
+        it('allows fixing a component weight so the remaining jurors can evaluate', async () => {
+            const useCase = new UpdateComponentUseCase(criterionRepository);
+
+            await expect(useCase.execute({ id: 5, weight: 0.42 })).resolves.toEqual(
+                expect.objectContaining({ id: 5, weight: 0.42 }),
+            );
+        });
+
+        it('allows creating a missing component', async () => {
+            criterionRepository.createComponent.mockResolvedValue(new Component(9, 'Extra', 0.021, 1));
+
+            const useCase = new CreateComponentUseCase(criterionRepository);
+
+            await expect(useCase.execute({ name: 'Extra', weight: 0.021, eventId: 1 })).resolves.toBeInstanceOf(Component);
+        });
+
+        it('allows deleting an empty component', async () => {
+            const useCase = new DeleteComponentUseCase(criterionRepository);
+            await useCase.execute({ id: 5 });
+
+            expect(criterionRepository.deleteComponent).toHaveBeenCalledWith(5);
         });
     });
 

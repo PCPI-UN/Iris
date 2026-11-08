@@ -3,6 +3,7 @@ import { RpcException } from '@nestjs/microservices';
 import { status } from '@grpc/grpc-js';
 import { CriterionRepositoryPort } from '@criterions/domain/repositories/criterion.repository.port';
 import { DeleteComponentDto } from '../dto/delete-component.dto';
+import { areComponentsLocked, componentsLockedMessage } from '../services/component-lock';
 
 @Injectable()
 export class DeleteComponentUseCase {
@@ -24,10 +25,10 @@ export class DeleteComponentUseCase {
     }
 
     // Removing a component changes the total weight of the event rubric
-    if (await this.criterionRepository.hasEvaluationsForEvent(component.eventId)) {
+    if (await areComponentsLocked(this.criterionRepository, component.eventId)) {
       throw new RpcException({
         code: status.FAILED_PRECONDITION,
-        message: `Event ${component.eventId} already has evaluations; its components cannot be deleted`,
+        message: componentsLockedMessage(component.eventId),
       });
     }
 

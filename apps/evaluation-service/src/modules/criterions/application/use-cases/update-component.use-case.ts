@@ -4,6 +4,7 @@ import { status } from '@grpc/grpc-js';
 import { CriterionRepositoryPort } from '@criterions/domain/repositories/criterion.repository.port';
 import { Component } from '@criterions/domain/entities/component.entity';
 import { UpdateComponentDto } from '../dto/update-component.dto';
+import { areComponentsLocked, componentsLockedMessage } from '../services/component-lock';
 import { exceedsFullWeight, exceedsFullWeightMessage } from '@criterions/domain/services/rubric';
 
 @Injectable()
@@ -45,10 +46,10 @@ export class UpdateComponentUseCase {
 
     // The weight is part of every criterion's effective weight, so changing it alters the rubric used to grade
     if (finalWeight !== existingComponent.weight) {
-      if (await this.criterionRepository.hasEvaluationsForEvent(existingComponent.eventId)) {
+      if (await areComponentsLocked(this.criterionRepository, existingComponent.eventId)) {
         throw new RpcException({
           code: status.FAILED_PRECONDITION,
-          message: `Event ${existingComponent.eventId} already has evaluations; component weights cannot be modified`,
+          message: componentsLockedMessage(existingComponent.eventId),
         });
       }
 

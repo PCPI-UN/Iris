@@ -4,6 +4,7 @@ import { status } from '@grpc/grpc-js';
 import { CriterionRepositoryPort } from '@criterions/domain/repositories/criterion.repository.port';
 import { Component } from '@criterions/domain/entities/component.entity';
 import { CreateComponentDto } from '../dto/create-component.dto';
+import { areComponentsLocked, componentsLockedMessage } from '../services/component-lock';
 import { exceedsFullWeight, exceedsFullWeightMessage } from '@criterions/domain/services/rubric';
 
 @Injectable()
@@ -36,10 +37,10 @@ export class CreateComponentUseCase {
       });
     }
 
-    if (await this.criterionRepository.hasEvaluationsForEvent(eventId)) {
+    if (await areComponentsLocked(this.criterionRepository, eventId)) {
       throw new RpcException({
         code: status.FAILED_PRECONDITION,
-        message: `Event ${eventId} already has evaluations; its components cannot be modified`,
+        message: componentsLockedMessage(eventId),
       });
     }
 
