@@ -19,21 +19,13 @@ export interface RankableRow {
 }
 
 /**
- * Rounds half up to 2 decimals with the same rule evaluation-service uses for
- * stored grades and averages (see libs/common/src/utils/grade-rounding.ts).
- */
-export function roundRankingGrade(grade: number): number {
-  return roundGrade(grade);
-}
-
-/**
  * Sorts rows by rounded average (descending) and assigns dense positions.
  * Returns a new array; the given rows are updated in place with their position.
  */
 export function assignRankingPositions<T extends RankableRow>(rows: T[]): T[] {
   const sorted = [...rows].sort((a, b) => {
     const gradeDiff =
-      roundRankingGrade(b.averageGrade) - roundRankingGrade(a.averageGrade);
+      roundGrade(b.averageGrade) - roundGrade(a.averageGrade);
     if (gradeDiff !== 0) {
       return gradeDiff;
     }
@@ -43,7 +35,7 @@ export function assignRankingPositions<T extends RankableRow>(rows: T[]): T[] {
   let position = 0;
   let previousGrade: number | undefined;
   for (const row of sorted) {
-    const grade = roundRankingGrade(row.averageGrade);
+    const grade = roundGrade(row.averageGrade);
     if (grade !== previousGrade) {
       position += 1;
       previousGrade = grade;
