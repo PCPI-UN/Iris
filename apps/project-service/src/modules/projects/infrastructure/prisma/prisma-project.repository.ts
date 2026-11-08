@@ -3,7 +3,7 @@ import { PrismaService } from '../../../../common/prisma/prisma.service';
 import { normalizeEmail } from '@app/common/utils/email.util';
 import { ProjectRepository } from '../../domain/repositories/project.repository';
 import { PendingProjectParticipant, Project, TypedDocument } from '../../domain/entities/project.entity';
-import { ProjectDocument, ProjectState, JurorKey, ProjectParticipant } from '../../domain/entities/project.entity';
+import { ProjectDocument, ProjectState, JurorKey, ProjectParticipant, UserParticipation } from '../../domain/entities/project.entity';
 
 
 type CreateProjectInput = {
@@ -399,6 +399,36 @@ export class PrismaProjectRepository implements ProjectRepository {
       },
     });
     return project as unknown as Project | null;
+  }
+
+  async listParticipationsByUser(userId: number, email: string): Promise<UserParticipation[]> {
+    const participations = await this.prisma.projectParticipant.findMany({
+      where: { userId },
+      include: { project: true },
+      orderBy: { project: { createdAt: 'desc' } },
+    });
+    if (!participations.length) return [];
+
+    // career and semester only exist on the pending participant row captured at
+    // submission. (project_id, email) is unique there, so each project matches at most one row
+    const pendings = await this.prisma.pendingProjectParticipant.findMany({
+      where: {
+        projectId: { in: participations.map(p => p.projectId) },
+        email: { equals: email.trim(), mode: 'insensitive' },
+      },
+      select: { projectId: true, career: true, semester: true },
+    });
+    const byProject = new Map(pendings.map(p => [p.projectId, p]));
+
+    return participations.map(p => {
+      const pending = byProject.get(p.projectId);
+      return {
+        project: p.project as unknown as Project,
+        studentCode: p.studentCode,
+        career: pending?.career ?? null,
+        semester: pending?.semester ?? null,
+      };
+    });
   }
 
 }

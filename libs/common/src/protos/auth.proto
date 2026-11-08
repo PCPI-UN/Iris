@@ -48,6 +48,8 @@ service AuthService {
   rpc GetUserByEmail (GetUserByEmailRequest) returns (User) {}
   rpc GetUsers (GetUsersRequest) returns (GetUsersResponse) {}
   rpc UpdateUser (UpdateUserRequest) returns (User) {}
+  // Self-service profile edition: the caller can only change these fields of its own account
+  rpc UpdateOwnProfile (UpdateOwnProfileRequest) returns (User) {}
   rpc DeactivateUser (DeactivateUserRequest) returns (DeactivateUserResponse) {}
 
   // ---- ROLES MODULE ----
@@ -248,6 +250,13 @@ message GetUsersRequest {
 
 message UpdateUserRequest {
   int32 id = 1;
+  optional string firstName = 2;
+  optional string lastName = 3;
+  optional string phone = 4;
+}
+
+message UpdateOwnProfileRequest {
+  int32 userId = 1;
   optional string firstName = 2;
   optional string lastName = 3;
   optional string phone = 4;
