@@ -22,8 +22,8 @@ import { UpdateCriterionDto } from './dto/update-criterion.dto';
 import { ListCriterionsDto } from './dto/list-criterions.dto';
 import { CreateComponentDto } from './dto/create-component.dto';
 import { UpdateComponentDto } from './dto/update-component.dto';
-import { RequirePermission } from '@common/decorators/require-permission.decorator';
-import { InvalidateCache } from '@common/cache/invalidate-cache.decorator';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
+import { InvalidateCache } from '../../common/cache/invalidate-cache.decorator';
 
 @ApiTags('criterions')
 @ApiSecurity('JWT-auth')

@@ -20,7 +20,7 @@ import { TieBreaksService } from './tiebreaks.service';
 import { CreateTieBreakDto } from './dto/create-tiebreak.dto';
 import { UpdateTieBreakDto } from './dto/update-tiebreak.dto';
 import { ListTieBreaksDto } from './dto/list-tiebreaks.dto';
-import { RequirePermission } from '@common/decorators/require-permission.decorator';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 
 @ApiTags('tiebreaks')
 @ApiSecurity('JWT-auth')
