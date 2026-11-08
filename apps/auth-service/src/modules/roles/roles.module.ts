@@ -12,6 +12,9 @@ import { GetRolesUseCase } from '@roles/application/use-cases/get-roles.use-case
 import { RemovePlatformRoleUseCase } from '@roles/application/use-cases/remove-platform-role.use-case';
 import { RolesController } from '@roles/interface/grpc/roles.controller';
 
+import { ResolvePlatformRolesUseCase } from './application/use-cases/resolve-platform-roles.use-case';
+import { AccountAdministrationPolicy } from './application/services/account-administration.policy';
+
 @Module({
   imports: [PrismaModule],
   controllers: [RolesController],
@@ -22,6 +25,8 @@ import { RolesController } from '@roles/interface/grpc/roles.controller';
     GetRolesByIdsUseCase,
     GetRolesUseCase,
     RemovePlatformRoleUseCase,
+    ResolvePlatformRolesUseCase,
+    AccountAdministrationPolicy,
     {
       provide: RoleRepositoryPort,
       useClass: PrismaRoleRepository,
@@ -31,6 +36,13 @@ import { RolesController } from '@roles/interface/grpc/roles.controller';
       useClass: PrismaPlatformStaffRepository,
     },
   ],
-  exports: [ValidateRolesExistUseCase, AssignPlatformRoleUseCase, GetRolesUseCase],
+  exports: [
+    ValidateRolesExistUseCase,
+    AssignPlatformRoleUseCase,
+    GetRolesUseCase,
+    ResolvePlatformRolesUseCase,
+    AccountAdministrationPolicy,
+    PlatformStaffRepositoryPort,
+  ],
 })
 export class RolesModule {}

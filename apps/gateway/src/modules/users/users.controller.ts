@@ -21,6 +21,8 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { FindUsersQueryDto } from './dto/find-users-query.dto';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
+import { GetUser } from '../../common/decorators/get-user.decorator';
+import { AppUser } from '../auth/types/app-user.type';
 
 @ApiTags('users')
 @ApiSecurity('JWT-auth')
@@ -35,8 +37,9 @@ export class UsersController {
   @ApiResponse({ status: 201, description: 'User created successfully' })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
   @ApiResponse({ status: 403, description: 'Forbidden - Missing create:users permission' })
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.create(createUserDto);
+  @ApiResponse({ status: 403, description: 'Forbidden - Only the principal admin creates administrators' })
+  create(@Body() createUserDto: CreateUserDto, @GetUser() user: AppUser) {
+    return this.usersService.create(createUserDto, user.id);
   }
 
   @RequirePermission('read:users')
@@ -67,11 +70,13 @@ export class UsersController {
   @ApiResponse({ status: 400, description: 'Invalid input data' })
   @ApiResponse({ status: 403, description: 'Forbidden - Missing update:users permission' })
   @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Only the principal admin edits administrators' })
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateUserDto: UpdateUserDto,
+    @GetUser() user: AppUser,
   ) {
-    return this.usersService.update(id, updateUserDto);
+    return this.usersService.update(id, updateUserDto, user.id);
   }
 
   @RequirePermission('delete:users')
@@ -81,7 +86,9 @@ export class UsersController {
   @ApiResponse({ status: 200, description: 'User deactivated successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden - Missing delete:users permission' })
   @ApiResponse({ status: 404, description: 'User not found' })
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.usersService.remove(id);
+  @ApiResponse({ status: 403, description: 'Forbidden - Own account, or an administrator without being the principal admin' })
+  @ApiResponse({ status: 400, description: 'The last active Admin cannot be deactivated' })
+  remove(@Param('id', ParseIntPipe) id: number, @GetUser() user: AppUser) {
+    return this.usersService.remove(id, user.id);
   }
 }

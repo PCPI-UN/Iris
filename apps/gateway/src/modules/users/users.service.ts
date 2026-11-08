@@ -20,8 +20,10 @@ export class UsersService implements OnModuleInit {
       this.client.getService<AuthServiceClient>(AUTH_SERVICE_NAME);
   }
 
-  create(createUserDto: CreateUserDto) {
-    return firstValueFrom(this.authService.createPlatformUser(createUserDto));
+  create(createUserDto: CreateUserDto, actorUserId: number) {
+    return firstValueFrom(
+      this.authService.createPlatformUser({ ...createUserDto, actorUserId }),
+    );
   }
 
   findAll(query: FindUsersQueryDto) {
@@ -32,13 +34,15 @@ export class UsersService implements OnModuleInit {
     return firstValueFrom(this.authService.getUser({ id }));
   }
 
-  update(id: number, updateUserDto: UpdateUserDto) {
+  update(id: number, updateUserDto: UpdateUserDto, actorUserId: number) {
     return firstValueFrom(
-      this.authService.updateUser({ id, ...updateUserDto }),
+      this.authService.updateUser({ id, ...updateUserDto, actorUserId }),
     );
   }
 
-  remove(id: number) {
-    return firstValueFrom(this.authService.deactivateUser({ id }));
+  remove(id: number, actorUserId: number) {
+    return firstValueFrom(
+      this.authService.deactivateUser({ id, actorUserId }),
+    );
   }
 }
