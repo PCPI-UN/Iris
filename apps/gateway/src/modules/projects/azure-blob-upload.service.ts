@@ -11,6 +11,9 @@ import * as path from 'path';
 
 
 
+/** Matches values that carry a scheme, e.g. https://… (blob names never do) */
+const ABSOLUTE_URL = /^[a-z][a-z0-9+.-]*:\/\//i;
+
 /** Lifetime of the read signature added when a document is served */
 const READ_SAS_TTL_SEC = 3600;
 
@@ -19,7 +22,6 @@ export interface AzureBlobUploadResponse {
   filename: string;
   mimetype: string;
   size: number;
-  url: string;
 }
 
 @Injectable()
@@ -87,9 +89,6 @@ export class AzureBlobUploadService {
         filename: file.originalname,
         mimetype: file.mimetype,
         size: file.size,
-        // Permanent blob URL without SAS; the read signature is added when
-        // the document is served (see signStoredUrl)
-        url: blockBlobClient.url,
       };
     } catch (error) {
       this.logger.error(
@@ -103,48 +102,54 @@ export class AzureBlobUploadService {
   }
 
   /**
-   * Removes any SAS query from a URL that points to our container, so only the
-   * permanent blob URL is persisted. Other URLs are returned untouched.
+   * Value to persist for a document. A URL that points to our container
+   * (with or without SAS, on any storage account) is reduced to its blob name,
+   * so the account only lives in the configuration. Blob names and URLs from
+   * other places are returned untouched.
    */
-  toStoredUrl(url: string): string {
-    const blob = this.parseOwnBlobUrl(url);
-    return blob ? blob.baseUrl : url;
+  toStoredUrl(value: string): string {
+    return this.extractBlobName(value) ?? value;
   }
 
   /**
-   * Returns the URL with a fresh read-only SAS when it points to our
-   * container (including legacy URLs stored with an expired or expiring SAS).
-   * Any other URL is returned untouched.
+   * Public URL for a stored document value:
+   * - a blob name is rebuilt on the configured account and signed for reading
+   * - a URL to our container (legacy rows stored with host and SAS) is reduced
+   *   to its blob name and signed the same way
+   * - any other value (external URL, empty) is returned untouched
    */
-  signStoredUrl(url: string, ttlSec: number = READ_SAS_TTL_SEC): string {
-    const blob = this.parseOwnBlobUrl(url);
-    if (!blob || !this.accountName || !this.accountKey) return url;
-    return this.generateReadSasUrl(blob.blobName, ttlSec);
+  signStoredUrl(value: string, ttlSec: number = READ_SAS_TTL_SEC): string {
+    if (!value || !this.accountName || !this.accountKey) return value;
+
+    const blobName = ABSOLUTE_URL.test(value)
+      ? this.extractBlobName(value)
+      : value;
+
+    return blobName ? this.generateReadSasUrl(blobName, ttlSec) : value;
   }
 
-  private parseOwnBlobUrl(
-    url: unknown,
-  ): { blobName: string; baseUrl: string } | null {
-    if (typeof url !== 'string' || !this.accountName || !this.containerName) {
-      return null;
-    }
+  /**
+   * Blob name of a URL that points to our container on an Azure blob host,
+   * or null for any other URL.
+   */
+  private extractBlobName(value: unknown): string | null {
+    if (typeof value !== 'string' || !this.containerName) return null;
+
     let parsed: URL;
     try {
-      parsed = new URL(url);
+      parsed = new URL(value);
     } catch {
       return null;
     }
+
     const prefix = `/${this.containerName}/`;
     if (
-      parsed.hostname !== `${this.accountName}.blob.core.windows.net` ||
+      !parsed.hostname.endsWith('.blob.core.windows.net') ||
       !parsed.pathname.startsWith(prefix)
     ) {
       return null;
     }
-    return {
-      blobName: decodeURIComponent(parsed.pathname.slice(prefix.length)),
-      baseUrl: `${parsed.origin}${parsed.pathname}`,
-    };
+    return decodeURIComponent(parsed.pathname.slice(prefix.length));
   }
 
   /**

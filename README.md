@@ -154,7 +154,7 @@ Variables a configurar en `.env`:
 #### 📦 Almacenamiento de Archivos (Azure Blob Storage)
 El API Gateway inicializa el cliente del SDK de Azure Blob en su constructor (`AzureBlobUploadService`) para la subida de documentos y entregables de proyectos.
 - `AZURE_BLOB_SAS_URL`: SAS URL con permisos de contenedor. En **desarrollo local** se utiliza una URI dummy sintácticamente válida (`https://dummy.blob.core.windows.net/dummy?dummy`) para permitir que el Gateway levante sin credenciales reales de Azure.
-- `AZURE_ACCOUNT_NAME`: Nombre de la cuenta de almacenamiento (usar `dummy` en local).
+- `AZURE_ACCOUNT_NAME`: Nombre de la cuenta de almacenamiento (usar `dummy` en local). En la base de datos los documentos guardan solo el nombre del blob; el Gateway arma la URL (`https://<cuenta>.blob.core.windows.net/<contenedor>/<blob>`) y la firma con una SAS de lectura al responder. Para cambiar de cuenta basta con actualizar esta variable y `AZURE_ACCOUNT_KEY`, siempre que los archivos se copien con el mismo nombre y contenedor.
 - `AZURE_ACCOUNT_KEY`: Llave de la cuenta de almacenamiento (usar `dummy` en local).
 - `AZURE_CONTAINER`: Nombre del contenedor (usar `dummy` en local).
 

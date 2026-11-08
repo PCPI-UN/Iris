@@ -17,14 +17,24 @@ describe('SignBlobUrlsInterceptor', () => {
       ),
     );
 
-  it('signs url fields at any depth, in objects and arrays', async () => {
+  const doc = (url: string) => ({ id: 1, projectId: 5, type: 'POSTER', url });
+
+  it('signs the url of project documents at any depth', async () => {
     const result = await run({
-      items: [{ id: 1, documents: [{ url: 'a' }, { url: 'b' }] }],
-      project: { documents: [{ url: 'c' }] },
+      items: [{ id: 1, documents: [doc('a'), doc('b')] }],
+      document: doc('c'),
     });
     expect(result).toEqual({
-      items: [{ id: 1, documents: [{ url: 'a?signed' }, { url: 'b?signed' }] }],
-      project: { documents: [{ url: 'c?signed' }] },
+      items: [{ id: 1, documents: [doc('a?signed'), doc('b?signed')] }],
+      document: doc('c?signed'),
+    });
+  });
+
+  it('leaves url fields that are not project documents alone', async () => {
+    const payload = { link: { url: 'x' }, other: { projectId: 5, url: 'y' } };
+    expect(await run(payload)).toEqual({
+      link: { url: 'x' },
+      other: { projectId: 5, url: 'y' },
     });
   });
 

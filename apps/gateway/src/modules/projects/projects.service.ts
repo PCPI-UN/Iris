@@ -293,7 +293,7 @@ export class ProjectsService implements OnModuleInit {
         firstValueFrom(
           this.projectsService.addProjectDocumentFromUrl({
             projectId: createdProject.id,
-            url: uploadResult.url,
+            url: uploadResult.blobName,
             type: this.mapDocumentTypeToProto(documentMetadata[index].type),
           }),
         ),
@@ -563,7 +563,7 @@ export class ProjectsService implements OnModuleInit {
 
     if (file) {
       const uploadResult = await this.azureBlobUploadService.uploadFile(file);
-      request.url = uploadResult.url;
+      request.url = uploadResult.blobName;
     } else if (dto.url && dto.url.trim() !== '') {
       request.url = this.azureBlobUploadService.toStoredUrl(dto.url.trim());
     }
@@ -892,7 +892,7 @@ export class ProjectsService implements OnModuleInit {
         firstValueFrom(
           this.projectsService.addProjectDocumentFromUrl({
             projectId,
-            url: uploadResult.url,
+            url: uploadResult.blobName,
             type: this.mapDocumentTypeToProto(documentMetadata[index].type),
           }),
         ),
