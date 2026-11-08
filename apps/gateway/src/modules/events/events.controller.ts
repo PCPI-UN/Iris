@@ -25,7 +25,6 @@ import { RequirePermission } from '../../common/decorators/require-permission.de
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { InvalidateCache } from '../../common/cache/invalidate-cache.decorator';
 import { EventService } from './events.service';
-import { AppUser } from '../auth/types/app-user.type';
 import { EventStatus } from '@app/common/generated/event';
 
 // Event DTOs
@@ -160,12 +159,12 @@ export class EventsController {
    * ADMIN ENDPOINT - List all events with filtering
    * Requires manage:events permission (Admin/EventManager only)
    */
-  @RequirePermission('manage:events')
+  @RequirePermission('read:events')
   @Get()
   @ApiOperation({
     summary: 'List all events (admin)',
     description:
-      'Get a paginated list of all events in the system with optional filters. Requires manage:events permission.',
+      'Get a paginated list of all events in the system with optional filters. Requires read:events permission.',
   })
   @ApiResponse({
     status: 200,
@@ -173,7 +172,7 @@ export class EventsController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - Missing manage:events permission',
+    description: 'Forbidden - Missing read:events permission',
   })
   async listEvents(@Query() query: ListEventsDTO) {
     return this.eventsService.listEvents(query);
@@ -224,7 +223,7 @@ export class EventsController {
     return this.eventsService.listMyEvents(userId, query);
   }
 
-  @RequirePermission('manage:events')
+  @RequirePermission('read:events')
   @Get('dropdown')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List events for dropdown' })
@@ -241,19 +240,11 @@ export class EventsController {
     status: 401,
     description: 'Unauthorized - Authentication required',
   })
-  @ApiResponse({ status: 403, description: 'Forbidden - Admin role required' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Missing read:events permission' })
   async listEventsDropdown(
     @Query() query: ListEventsDropdownDTO,
-    @GetUser() user: AppUser,
   ) {
-    const isAdmin = user.platformRoles?.some((role) => role.name === 'Admin');
-
-    if (!isAdmin) {
-      throw new ForbiddenException(
-        'Only Admin users can access events dropdown',
-      );
-    }
-
+    // Access is decided by read:events (Admin, FacultyAdmin, EventManager, Dean), not by role name
     const response = await this.eventsService.listEvents(query);
 
     return {
@@ -824,7 +815,7 @@ export class EventsController {
     return this.eventsService.getRankingEventByEventId(eventId);
   }
 
-  @RequirePermission('manage:events')
+  @RequirePermission('read:events')
   @Get('ranking-config/:id')
   @ApiOperation({ summary: 'Get ranking configuration by ID' })
   @ApiParam({ name: 'id', description: 'Ranking config ID', type: Number })
@@ -857,7 +848,7 @@ export class EventsController {
     return this.eventsService.deleteRankingEvent(id);
   }
 
-  @RequirePermission('manage:events')
+  @RequirePermission('read:grades')
   @Get(':eventId/rankings')
   @ApiOperation({
     summary: 'Get full ranking report (admin)',

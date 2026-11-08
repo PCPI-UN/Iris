@@ -62,7 +62,7 @@ export class CriterionsController {
   }
 
   @Get('components')
-  @RequirePermission('manage:events')
+  @RequirePermission('read:events')
   @ApiOperation({
     summary: 'List all components',
     description:
@@ -74,14 +74,14 @@ export class CriterionsController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - Requires manage:events permission',
+    description: 'Forbidden - Requires read:events permission',
   })
   async listComponents() {
     return this.criterionsService.listComponents();
   }
 
   @Get('components/:id')
-  @RequirePermission('manage:events')
+  @RequirePermission('read:events')
   @ApiOperation({
     summary: 'Get component by ID',
     description:
@@ -98,7 +98,7 @@ export class CriterionsController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - Requires manage:events permission',
+    description: 'Forbidden - Requires read:events permission',
   })
   @ApiResponse({
     status: 404,
@@ -208,7 +208,7 @@ export class CriterionsController {
   }
 
   @Get()
-  @RequirePermission('manage:events')
+  @RequirePermission('read:events')
   @ApiOperation({
     summary: 'List criterions with pagination and filters',
     description:
@@ -220,7 +220,7 @@ export class CriterionsController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - Requires manage:events permission',
+    description: 'Forbidden - Requires read:events permission',
   })
   async listCriterions(@Query() query: ListCriterionsDto) {
     return this.criterionsService.listCriterions(query);
@@ -252,7 +252,7 @@ export class CriterionsController {
   }
 
   @Get(':id')
-  @RequirePermission('manage:events')
+  @RequirePermission('read:events')
   @ApiOperation({
     summary: 'Get criterion by ID',
     description:
@@ -269,7 +269,7 @@ export class CriterionsController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - Requires manage:events permission',
+    description: 'Forbidden - Requires read:events permission',
   })
   @ApiResponse({
     status: 404,

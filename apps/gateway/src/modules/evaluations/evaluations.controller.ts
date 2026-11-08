@@ -74,7 +74,7 @@ export class EvaluationsController {
         return this.evaluationsService.getProjectStats(projectId);
     }
 
-    @RequirePermission('manage:events')
+    @RequirePermission('read:grades')
     @Get('courses/:courseId/top-projects')
     @ApiOperation({
         summary: 'Get top N projects for a course',
