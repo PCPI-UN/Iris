@@ -62,6 +62,15 @@ export class UpdateCriterionUseCase {
       });
     }
 
+    // The categories of a criterion belong to its event: moving it to another event without new
+    // categories would leave it linked to categories of the previous event, out of every rubric.
+    if (finalEventId !== existingCriterion.eventId && courseIds === undefined) {
+      throw new RpcException({
+        code: status.INVALID_ARGUMENT,
+        message: `The categories of event ${finalEventId} (courseIds) are required to move a criterion to it`,
+      });
+    }
+
     // Only the texts can change once a category has evaluations; anything else alters the rubric used to grade it.
     // Clients usually resend the whole form, so unchanged values must not count as a change.
     const currentCourseIds = (await this.criterionRepository.getCriterionCourses(id))

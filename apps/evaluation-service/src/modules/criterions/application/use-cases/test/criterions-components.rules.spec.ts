@@ -416,6 +416,27 @@ describe('Criteria and components CRUD - rules', () => {
             expect(result.courseIds).toEqual([10]);
         });
 
+        it('requires the categories of the new event when a criterion moves to another event', async () => {
+            criterionRepository.findComponentById.mockResolvedValue(new Component(20, 'Oral', 0.3, 2));
+
+            const useCase = new UpdateCriterionUseCase(criterionRepository, eventService, categoryLock);
+
+            await expect(useCase.execute({ id: 1, eventId: 2, componentId: 20 })).rejects.toEqual(
+                rpcError(status.INVALID_ARGUMENT, 'courseIds'),
+            );
+            expect(criterionRepository.update).not.toHaveBeenCalled();
+        });
+
+        it('moves a criterion to another event with categories of that event', async () => {
+            criterionRepository.findComponentById.mockResolvedValue(new Component(20, 'Oral', 0.3, 2));
+
+            const useCase = new UpdateCriterionUseCase(criterionRepository, eventService, categoryLock);
+            const result = await useCase.execute({ id: 1, eventId: 2, componentId: 20, courseIds: [40] });
+
+            expect(eventService.validateCoursesBelongToEvent).toHaveBeenCalledWith([40], 2);
+            expect(result).toEqual(expect.objectContaining({ courseIds: [40] }));
+        });
+
         it('rejects removing the component of a criterion', async () => {
             criterionRepository.findById.mockResolvedValue(buildCriterion({ componentId: null }));
 
