@@ -167,6 +167,26 @@ describe('Criteria and components CRUD - rules', () => {
             await expect(useCase.execute({ name: 'Oral', weight: 0.3, eventId: 1 })).resolves.toBeInstanceOf(Component);
         });
 
+        it('rejects raising a component weight over the 100% of the event', async () => {
+            criterionRepository.sumComponentWeightsByEvent.mockResolvedValue(0.8);
+
+            const useCase = new UpdateComponentUseCase(criterionRepository);
+
+            await expect(useCase.execute({ id: 5, weight: 0.4 })).rejects.toEqual(
+                rpcError(status.INVALID_ARGUMENT, 'would exceed 100%'),
+            );
+        });
+
+        it('allows lowering a component weight when the event is already over 100% (0.5 / 0.3 / 0.5)', async () => {
+            criterionRepository.sumComponentWeightsByEvent.mockResolvedValue(0.5 + 0.5);
+
+            const useCase = new UpdateComponentUseCase(criterionRepository);
+
+            await expect(useCase.execute({ id: 5, weight: 0.1 })).resolves.toEqual(
+                expect.objectContaining({ id: 5, weight: 0.1 }),
+            );
+        });
+
         it('saves the weight requested for the component', async () => {
             const useCase = new UpdateComponentUseCase(criterionRepository);
             const result = await useCase.execute({ id: 5, weight: 0.4 });

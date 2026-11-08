@@ -4,7 +4,7 @@ import { status } from '@grpc/grpc-js';
 import { CriterionRepositoryPort } from '@criterions/domain/repositories/criterion.repository.port';
 import { Component } from '@criterions/domain/entities/component.entity';
 import { UpdateComponentDto } from '../dto/update-component.dto';
-import { WEIGHT_SUM_TOLERANCE } from '../../../../common/utils/grade.utils';
+import { exceedsFullWeight, exceedsFullWeightMessage } from '@criterions/domain/services/rubric';
 
 @Injectable()
 export class UpdateComponentUseCase {
@@ -53,10 +53,10 @@ export class UpdateComponentUseCase {
       }
 
       const otherWeight = await this.criterionRepository.sumComponentWeightsByEvent(existingComponent.eventId, id);
-      if (otherWeight + finalWeight > 1 + WEIGHT_SUM_TOLERANCE) {
+      if (exceedsFullWeight(otherWeight, finalWeight, existingComponent.weight)) {
         throw new RpcException({
           code: status.INVALID_ARGUMENT,
-          message: `Total component weight for event ${existingComponent.eventId} would exceed 100%. Other components: ${(otherWeight * 100).toFixed(2)}%, Requested: ${(finalWeight * 100).toFixed(2)}%`,
+          message: exceedsFullWeightMessage(existingComponent.eventId, otherWeight, finalWeight),
         });
       }
     }
