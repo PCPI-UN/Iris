@@ -38,4 +38,5 @@ export abstract class CriterionRepositoryPort {
 
   // An event rubric cannot change once the event has evaluations
   abstract hasEvaluationsForEvent(eventId: number): Promise<boolean>;
+  abstract findEvaluatedProjectIds(eventId: number): Promise<number[]>;
 }

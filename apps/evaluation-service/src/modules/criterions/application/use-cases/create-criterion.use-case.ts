@@ -6,6 +6,7 @@ import { CreateCriterionDto } from '../dto/create-criterion.dto';
 import { Criterion } from '@criterions/domain/entities/criterion.entity';
 import { Component } from '@criterions/domain/entities/component.entity';
 import { EventServicePort } from '../../infrastructure/ports/event.service.port';
+import { CategoryLockService } from '../services/category-lock.service';
 
 const DEFAULT_RELATIVE_WEIGHT = 1;
 
@@ -14,6 +15,7 @@ export class CreateCriterionUseCase {
   constructor(
     private readonly criterionRepository: CriterionRepositoryPort,
     private readonly eventService: EventServicePort,
+    private readonly categoryLock: CategoryLockService,
   ) { }
 
   async execute(createCriterionDto: CreateCriterionDto): Promise<{
@@ -50,12 +52,8 @@ export class CreateCriterionUseCase {
       });
     }
 
-    if (await this.criterionRepository.hasEvaluationsForEvent(eventId)) {
-      throw new RpcException({
-        code: status.FAILED_PRECONDITION,
-        message: `Event ${eventId} already has evaluations; its criteria cannot be modified`,
-      });
-    }
+    // A new criterion changes the rubric of its categories only
+    await this.categoryLock.assertNotEvaluated(eventId, courseIds);
 
     const component = await this.criterionRepository.findComponentById(componentId);
     if (!component) {

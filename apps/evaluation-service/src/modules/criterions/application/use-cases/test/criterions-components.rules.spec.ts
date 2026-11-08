@@ -15,6 +15,8 @@ import { Criterion } from '../../../domain/entities/criterion.entity';
 import { Component } from '../../../domain/entities/component.entity';
 import { CriterionRepositoryPort } from '../../../domain/repositories/criterion.repository.port';
 import { EventServicePort } from '../../../infrastructure/ports/event.service.port';
+import { ProjectServicePort } from '../../../infrastructure/ports/project.service.port';
+import { CategoryLockService } from '../../services/category-lock.service';
 
 /**
  * Rules for managing criteria and components (CU-86e3vmxar / IRIS-V3-EVAL-02):
@@ -22,7 +24,8 @@ import { EventServicePort } from '../../../infrastructure/ports/event.service.po
  *   the components of an event cannot exceed 100%,
  * - every criterion belongs to a component of its event and has a relative weight
  *   (1 by default) that is never rewritten,
- * - the rubric of an event cannot change once it has evaluations; texts can,
+ * - the criteria of a category cannot change once a project of that category has been
+ *   evaluated (texts can); the components of an event, once the event has evaluations,
  * - while the components of an evaluated event do not add up to 100% they can still be
  *   fixed (no grade was computed with an incomplete rubric).
  */
@@ -43,6 +46,8 @@ describe('Criteria and components CRUD - rules', () => {
 
     let criterionRepository: jest.Mocked<CriterionRepositoryPort>;
     let eventService: jest.Mocked<EventServicePort>;
+    let projectService: jest.Mocked<ProjectServicePort>;
+    let categoryLock: CategoryLockService;
 
     beforeEach(() => {
         criterionRepository = {
@@ -66,7 +71,13 @@ describe('Criteria and components CRUD - rules', () => {
             countActiveCriteriaInComponent: jest.fn().mockResolvedValue(0),
             sumComponentWeightsByEvent: jest.fn().mockResolvedValue(0),
             hasEvaluationsForEvent: jest.fn().mockResolvedValue(false),
+            findEvaluatedProjectIds: jest.fn().mockResolvedValue([]),
         } as jest.Mocked<CriterionRepositoryPort>;
+
+        projectService = {
+            getProjectCategories: jest.fn().mockResolvedValue(new Map()),
+        } as jest.Mocked<ProjectServicePort>;
+        categoryLock = new CategoryLockService(criterionRepository, projectService);
 
         eventService = {
             getEvent: jest.fn().mockResolvedValue({ id: 1 }),
@@ -112,7 +123,7 @@ describe('Criteria and components CRUD - rules', () => {
 
     describe('creating criteria', () => {
         it('uses a relative weight of 1 when none is sent', async () => {
-            const useCase = new CreateCriterionUseCase(criterionRepository, eventService);
+            const useCase = new CreateCriterionUseCase(criterionRepository, eventService, categoryLock);
 
             await useCase.execute({ eventId: 1, name: 'Claridad', courseIds: [10], componentId: 5 });
 
@@ -122,7 +133,7 @@ describe('Criteria and components CRUD - rules', () => {
         });
 
         it('keeps the relative weight sent by the client', async () => {
-            const useCase = new CreateCriterionUseCase(criterionRepository, eventService);
+            const useCase = new CreateCriterionUseCase(criterionRepository, eventService, categoryLock);
 
             const result = await useCase.execute({ eventId: 1, name: 'Claridad', weight: 10, courseIds: [10], componentId: 5 });
 
@@ -132,7 +143,7 @@ describe('Criteria and components CRUD - rules', () => {
         it('rejects a component that belongs to another event', async () => {
             criterionRepository.findComponentById.mockResolvedValue(new Component(5, 'Oral', 0.3, 2));
 
-            const useCase = new CreateCriterionUseCase(criterionRepository, eventService);
+            const useCase = new CreateCriterionUseCase(criterionRepository, eventService, categoryLock);
 
             await expect(
                 useCase.execute({ eventId: 1, name: 'Claridad', courseIds: [10], componentId: 5 }),
@@ -140,7 +151,7 @@ describe('Criteria and components CRUD - rules', () => {
         });
 
         it('drops duplicated courses', async () => {
-            const useCase = new CreateCriterionUseCase(criterionRepository, eventService);
+            const useCase = new CreateCriterionUseCase(criterionRepository, eventService, categoryLock);
 
             const result = await useCase.execute({ eventId: 1, name: 'Claridad', courseIds: [10, 10, 11], componentId: 5 });
 
@@ -226,31 +237,73 @@ describe('Criteria and components CRUD - rules', () => {
 
     describe('rubric locked once the event has evaluations', () => {
         beforeEach(() => {
+            // Project 100 (category 10) and project 101 (category 11) were evaluated; category 12 was not
+            criterionRepository.findEvaluatedProjectIds.mockResolvedValue([100, 101]);
+            projectService.getProjectCategories.mockResolvedValue(new Map([[100, 10], [101, 11], [102, 12]]));
             criterionRepository.hasEvaluationsForEvent.mockResolvedValue(true);
             // A complete rubric: the components of the event add up to 100%
             criterionRepository.sumComponentWeightsByEvent.mockResolvedValue(1);
         });
 
         it('rejects creating a criterion', async () => {
-            const useCase = new CreateCriterionUseCase(criterionRepository, eventService);
+            const useCase = new CreateCriterionUseCase(criterionRepository, eventService, categoryLock);
 
             await expect(
                 useCase.execute({ eventId: 1, name: 'Extra', courseIds: [10], componentId: 5 }),
-            ).rejects.toEqual(rpcError(status.FAILED_PRECONDITION, 'already has evaluations'));
+            ).rejects.toEqual(rpcError(status.FAILED_PRECONDITION, 'Categories [10] of event 1 already have evaluations'));
         });
 
         it.each([
             ['weight', { weight: 2 }],
             ['active', { active: false }],
-            ['courses', { courseIds: [10, 11] }],
+            ['courses', { courseIds: [12] }],
             ['component', { componentId: 6 }],
         ])('rejects changing the %s of a criterion instead of ignoring it', async (_field, change) => {
-            const useCase = new UpdateCriterionUseCase(criterionRepository, eventService);
+            const useCase = new UpdateCriterionUseCase(criterionRepository, eventService, categoryLock);
 
             await expect(useCase.execute({ id: 1, ...change })).rejects.toEqual(
-                rpcError(status.FAILED_PRECONDITION, 'already has evaluations'),
+                rpcError(status.FAILED_PRECONDITION, 'already have evaluations'),
             );
             expect(criterionRepository.update).not.toHaveBeenCalled();
+        });
+
+        it('allows creating the criterion a category without evaluations is missing', async () => {
+            const useCase = new CreateCriterionUseCase(criterionRepository, eventService, categoryLock);
+
+            await expect(
+                useCase.execute({ eventId: 1, name: 'Oral', courseIds: [12], componentId: 5 }),
+            ).resolves.toEqual(expect.objectContaining({ courseIds: [12] }));
+        });
+
+        it('allows adding a category without evaluations to a criterion of an evaluated one', async () => {
+            const useCase = new UpdateCriterionUseCase(criterionRepository, eventService, categoryLock);
+
+            await expect(useCase.execute({ id: 1, courseIds: [10, 12] })).resolves.toEqual(
+                expect.objectContaining({ courseIds: [10, 12] }),
+            );
+        });
+
+        it('allows removing a category without evaluations from a criterion shared with an evaluated one', async () => {
+            criterionRepository.getCriterionCourses.mockResolvedValue([
+                { criterion_id: 1, course_id: 10 },
+                { criterion_id: 1, course_id: 12 },
+            ] as any);
+
+            const useCase = new UpdateCriterionUseCase(criterionRepository, eventService, categoryLock);
+
+            await expect(useCase.execute({ id: 1, courseIds: [10] })).resolves.toEqual(
+                expect.objectContaining({ courseIds: [10] }),
+            );
+        });
+
+        it('rejects any change when the category of an evaluated project is unknown', async () => {
+            projectService.getProjectCategories.mockResolvedValue(new Map([[100, 10]]));
+
+            const useCase = new CreateCriterionUseCase(criterionRepository, eventService, categoryLock);
+
+            await expect(
+                useCase.execute({ eventId: 1, name: 'Oral', courseIds: [12], componentId: 5 }),
+            ).rejects.toEqual(rpcError(status.FAILED_PRECONDITION, 'whose category is unknown'));
         });
 
         it('detects a change of courses hidden behind duplicated ids', async () => {
@@ -259,15 +312,15 @@ describe('Criteria and components CRUD - rules', () => {
                 { criterion_id: 1, course_id: 11 },
             ] as any);
 
-            const useCase = new UpdateCriterionUseCase(criterionRepository, eventService);
+            const useCase = new UpdateCriterionUseCase(criterionRepository, eventService, categoryLock);
 
             await expect(useCase.execute({ id: 1, courseIds: [10, 10] })).rejects.toEqual(
-                rpcError(status.FAILED_PRECONDITION, 'already has evaluations'),
+                rpcError(status.FAILED_PRECONDITION, 'Categories [11]'),
             );
         });
 
         it('still allows renaming a criterion when the client resends the unchanged values', async () => {
-            const useCase = new UpdateCriterionUseCase(criterionRepository, eventService);
+            const useCase = new UpdateCriterionUseCase(criterionRepository, eventService, categoryLock);
 
             const result = await useCase.execute({ id: 1, name: 'Renamed', weight: 1, courseIds: [10], active: true, componentId: 5 });
 
@@ -276,10 +329,10 @@ describe('Criteria and components CRUD - rules', () => {
         });
 
         it('rejects deleting a criterion', async () => {
-            const useCase = new DeleteCriterionUseCase(criterionRepository);
+            const useCase = new DeleteCriterionUseCase(criterionRepository, categoryLock);
 
             await expect(useCase.execute({ id: 1 })).rejects.toEqual(
-                rpcError(status.FAILED_PRECONDITION, 'already has evaluations'),
+                rpcError(status.FAILED_PRECONDITION, 'already have evaluations'),
             );
             expect(criterionRepository.delete).not.toHaveBeenCalled();
         });
@@ -348,8 +401,15 @@ describe('Criteria and components CRUD - rules', () => {
     });
 
     describe('updating criteria', () => {
+        it('does not ask project-service when the event has no evaluations', async () => {
+            const useCase = new UpdateCriterionUseCase(criterionRepository, eventService, categoryLock);
+            await useCase.execute({ id: 1, weight: 2 });
+
+            expect(projectService.getProjectCategories).not.toHaveBeenCalled();
+        });
+
         it('keeps the current courses when the gateway sends an empty course list', async () => {
-            const useCase = new UpdateCriterionUseCase(criterionRepository, eventService);
+            const useCase = new UpdateCriterionUseCase(criterionRepository, eventService, categoryLock);
             const result = await useCase.execute({ id: 1, name: 'Renamed', courseIds: [] });
 
             expect(criterionRepository.removeAllCourseAssociations).not.toHaveBeenCalled();
@@ -359,7 +419,7 @@ describe('Criteria and components CRUD - rules', () => {
         it('rejects removing the component of a criterion', async () => {
             criterionRepository.findById.mockResolvedValue(buildCriterion({ componentId: null }));
 
-            const useCase = new UpdateCriterionUseCase(criterionRepository, eventService);
+            const useCase = new UpdateCriterionUseCase(criterionRepository, eventService, categoryLock);
 
             await expect(useCase.execute({ id: 1, name: 'Renamed' })).rejects.toEqual(
                 rpcError(status.INVALID_ARGUMENT, 'must belong to a component'),
@@ -371,7 +431,7 @@ describe('Criteria and components CRUD - rules', () => {
                 new RpcException({ code: status.FAILED_PRECONDITION, message: 'domain error' }),
             );
 
-            const useCase = new UpdateCriterionUseCase(criterionRepository, eventService);
+            const useCase = new UpdateCriterionUseCase(criterionRepository, eventService, categoryLock);
 
             await expect(useCase.execute({ id: 1, name: 'Renamed' })).rejects.toEqual(
                 rpcError(status.FAILED_PRECONDITION, 'domain error'),
@@ -381,7 +441,7 @@ describe('Criteria and components CRUD - rules', () => {
         it('masks unexpected errors as INTERNAL', async () => {
             criterionRepository.update.mockRejectedValue(new Error('connection reset'));
 
-            const useCase = new UpdateCriterionUseCase(criterionRepository, eventService);
+            const useCase = new UpdateCriterionUseCase(criterionRepository, eventService, categoryLock);
 
             await expect(useCase.execute({ id: 1, name: 'Renamed' })).rejects.toEqual(
                 rpcError(status.INTERNAL, 'Failed to update criterion'),

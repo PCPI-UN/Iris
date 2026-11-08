@@ -33,6 +33,16 @@ export class PrismaCriterionRepository implements CriterionRepositoryPort {
     return count > 0;
   }
 
+  async findEvaluatedProjectIds(eventId: number): Promise<number[]> {
+    const evaluations = await this.prisma.evaluation.findMany({
+      where: { memberEventId: eventId },
+      select: { projectId: true },
+      distinct: ['projectId'],
+    });
+
+    return evaluations.map((evaluation) => evaluation.projectId);
+  }
+
   async countActiveCriteriaInComponent(componentId: number): Promise<number> {
     return this.prisma.criterion.count({
       where: { componentId, active: true },

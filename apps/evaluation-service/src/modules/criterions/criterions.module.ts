@@ -17,6 +17,9 @@ import { CriterionRepositoryPort } from './domain/repositories/criterion.reposit
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { EventServicePort } from './infrastructure/ports/event.service.port';
 import { EventServiceAdapter } from './infrastructure/adapters/event.service.adapter';
+import { ProjectServicePort } from './infrastructure/ports/project.service.port';
+import { ProjectServiceAdapter } from './infrastructure/adapters/project.service.adapter';
+import { CategoryLockService } from './application/services/category-lock.service';
 
 @Module({
   imports: [PrismaModule],
@@ -34,6 +37,7 @@ import { EventServiceAdapter } from './infrastructure/adapters/event.service.ada
     UpdateComponentUseCase,
     DeleteComponentUseCase,
     GetRubricReadinessUseCase,
+    CategoryLockService,
     {
       provide: CriterionRepositoryPort,
       useClass: PrismaCriterionRepository,
@@ -41,6 +45,10 @@ import { EventServiceAdapter } from './infrastructure/adapters/event.service.ada
     {
       provide: EventServicePort,
       useClass: EventServiceAdapter,
+    },
+    {
+      provide: ProjectServicePort,
+      useClass: ProjectServiceAdapter,
     },
   ],
   exports: [CriterionRepositoryPort],
