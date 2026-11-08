@@ -46,6 +46,8 @@ data:
   PROJECT_SERVICE_URL: "project-service:50055"
 
   # Notification Service
+  # Ordered email providers: primary first, then fallback (acs, emailjs)
+  EMAIL_PROVIDERS: "acs,emailjs"
   EMAIL_PUBLIC_KEY: "JSamv4icvDDEi6eMZ"
   EMAIL_PRIVATE_KEY: "v2Pi81dRQn5520f8mWlq8"
   EMAILJS_TEMPLATE_PROJECT-CONFIRMATION_ID: "template_mqar2l3"
