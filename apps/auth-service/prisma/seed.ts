@@ -4,112 +4,9 @@ import * as readline from 'readline';
 
 const prisma = new PrismaClient();
 
-// Platform Permissions (18 total)
-const PLATFORM_PERMISSIONS = [
-  // User Management
-  { action: 'create', resource: 'users', description: 'Create new user accounts' },
-  { action: 'read', resource: 'users', description: 'View user information' },
-  { action: 'update', resource: 'users', description: 'Modify user profiles' },
-  { action: 'delete', resource: 'users', description: 'Deactivate user accounts' },
-  { action: 'manage', resource: 'user_roles', description: 'Assign/remove platform roles' },
-
-  // Invitation Management
-  { action: 'create', resource: 'invitations', description: 'Create platform/event/project invitations' },
-  { action: 'read', resource: 'invitations', description: 'View invitation details' },
-  { action: 'accept', resource: 'invitations', description: 'Accept invitations (USER)' },
-
-  // Event Management
-  { action: 'manage', resource: 'events', description: 'Full event management (CRUD)' },
-  { action: 'read', resource: 'events', description: 'View event information' },
-  { action: 'create', resource: 'events', description: 'Create new events' },
-  { action: 'update', resource: 'events', description: 'Modify event details' },
-  { action: 'delete', resource: 'events', description: 'Delete events' },
-  { action: 'manage', resource: 'all_events', description: 'Bypass event membership checks (admin override)' },
-  { action: 'view', resource: 'public_events', description: 'View public events (USER)' },
-
-  // Course Management
-  { action: 'manage', resource: 'courses', description: 'Manage courses within events' },
-
-  // Profile Management
-  { action: 'manage', resource: 'own_profile', description: 'Manage own user profile (USER)' },
-  { action: 'view', resource: 'own_data', description: 'View own user data (USER)' },
-];
-
-// Event Permissions (7 total)
-const EVENT_PERMISSIONS = [
-  { action: 'read', resource: 'event_members', description: 'View event member list' },
-  { action: 'read', resource: 'event_projects', description: 'View projects in event' },
-  { action: 'read', resource: 'event_info', description: 'View basic event information' },
-  { action: 'evaluate', resource: 'projects', description: 'Submit evaluations for assigned projects' },
-  { action: 'read', resource: 'evaluations', description: 'View evaluations' },
-  { action: 'submit', resource: 'projects', description: 'Submit projects to event' },
-  { action: 'update', resource: 'own_project', description: 'Modify own submitted project' },
-];
-
-// Role definitions with permission mappings
-const ROLES = [
-  {
-    name: 'Admin',
-    scope: 'PLATFORM',
-    description: 'Full system administrator with all permissions',
-    permissions: PLATFORM_PERMISSIONS.map(p => `${p.action}:${p.resource}`),
-  },
-  {
-    name: 'EventManager',
-    scope: 'PLATFORM',
-    description: 'User responsible for creating and managing events',
-    permissions: [
-      'view:public_events',
-      'accept:invitations',
-      'manage:own_profile',
-      'view:own_data',
-      'read:users',
-      'create:invitations',
-      'read:invitations',
-      'manage:events',
-      'read:events',
-      'create:events',
-      'update:events',
-      'delete:events',
-      'manage:courses',
-    ],
-  },
-  {
-    name: 'User',
-    scope: 'PLATFORM',
-    description: 'Regular authenticated user with basic platform permissions',
-    permissions: [
-      'view:public_events',
-      'accept:invitations',
-      'manage:own_profile',
-      'view:own_data',
-    ],
-  },
-  {
-    name: 'Juror',
-    scope: 'EVENT',
-    description: 'Event member who evaluates assigned projects',
-    permissions: [
-      'read:event_members',
-      'read:event_projects',
-      'read:event_info',
-      'evaluate:projects',
-      'read:evaluations',
-    ],
-  },
-  {
-    name: 'Participant',
-    scope: 'EVENT',
-    description: 'Event member who can submit projects',
-    permissions: [
-      'read:event_members',
-      'read:event_projects',
-      'read:event_info',
-      'submit:projects',
-      'update:own_project',
-    ],
-  },
-];
+// Roles and permissions are created by the migrations of auth-service (catalogue with
+// fixed role ids), so they reach databases that are already seeded, such as production.
+// The seed only provisions the initial users.
 
 // Default passwords for development
 const DEFAULT_PASSWORDS = {
@@ -308,54 +205,20 @@ function getTestUserPassword(): string {
 async function main() {
   console.log('🌱 Starting database seed...\n');
 
-  // Check if seeding has already been done
-  const existingRoles = await prisma.role.count();
-  if (existingRoles > 0) {
+  // Users are provisioned only once
+  const existingUsers = await prisma.user.count();
+  if (existingUsers > 0) {
     console.log('✅ Database already seeded. Skipping...');
     console.log('💡 To re-seed, first run: npx prisma migrate reset\n');
     return;
   }
 
-  // 1. Seed Permissions
-  console.log('📝 Seeding permissions...');
-  const allPermissions = [...PLATFORM_PERMISSIONS, ...EVENT_PERMISSIONS];
-
-  for (const perm of allPermissions) {
-    await prisma.permission.upsert({
-      where: {
-        action_resource: { action: perm.action, resource: perm.resource },
-      },
-      update: {},
-      create: perm,
-    });
+  const roleCount = await prisma.role.count();
+  const permissionCount = await prisma.permission.count();
+  if (roleCount === 0) {
+    console.error('❌ No roles found: run the migrations of auth-service before the seed.');
+    process.exit(1);
   }
-
-  console.log(`✅ Seeded ${allPermissions.length} permissions (${PLATFORM_PERMISSIONS.length} platform + ${EVENT_PERMISSIONS.length} event)\n`);
-
-  // 2. Seed Roles with Permissions
-  console.log('👥 Seeding roles...');
-
-  for (const roleData of ROLES) {
-    const permissionConnections = roleData.permissions.map(permString => {
-      const [action, resource] = permString.split(':');
-      return { action_resource: { action, resource } };
-    });
-
-    await prisma.role.create({
-      data: {
-        name: roleData.name,
-        scope: roleData.scope,
-        description: roleData.description,
-        permissions: {
-          connect: permissionConnections,
-        },
-      },
-    });
-
-    console.log(`  ✓ Created ${roleData.name} role (${roleData.scope}) with ${roleData.permissions.length} permissions`);
-  }
-
-  console.log(`✅ Seeded ${ROLES.length} roles\n`);
 
   // 3. Create Initial Admin User
   console.log('👤 Creating initial admin user...');
@@ -476,8 +339,8 @@ async function main() {
 
   console.log('📋 Summary:');
   console.log(`   • Environment: ${isProduction() ? 'PRODUCTION' : 'DEVELOPMENT'}`);
-  console.log(`   • Permissions: ${allPermissions.length} (${PLATFORM_PERMISSIONS.length} platform + ${EVENT_PERMISSIONS.length} event)`);
-  console.log(`   • Roles: ${ROLES.length} (User, Admin, EventManager, Juror, Participant)`);
+  console.log(`   • Permissions: ${permissionCount} (created by the migrations)`);
+  console.log(`   • Roles: ${roleCount} (created by the migrations)`);
 
   if (!isProduction()) {
     console.log('   • Admin User: admin@iris.local');
