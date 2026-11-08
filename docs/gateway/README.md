@@ -21,7 +21,7 @@ Single HTTP entry point of the platform. It authenticates the browser session, c
 | Module | Responsibility | Services it calls |
 | --- | --- | --- |
 | `auth` | Login, Microsoft sign-in, signup, activation, refresh, logout, password flows, current user | `auth` |
-| `users` | Platform user administration | `auth` |
+| `users` | Platform user administration and platform roles | `auth` |
 | `events` | Events, courses and categories, awards, inscription details, recaps, members, ranking configuration and rankings | `event`, `auth`, `evaluation`, `invitation` |
 | `projects` | Project submission with files, review, participants, juror assignment, documents | `project`, `event`, `evaluation` |
 | `criterions` | Evaluation criteria and components | `evaluation` |
@@ -37,6 +37,19 @@ Cross-cutting code lives in `src/common`: guards, decorators (`@Public`, `@Requi
 - **Session**: the access and refresh tokens are httpOnly cookies set by `/auth/*`. The token carries the user id (`sub`) and email; the gateway verifies it with the public key and asks `auth-service` for the user, their platform roles and their permissions on every authenticated request.
 - **Endpoint access**: every endpoint requires a session unless it is marked `@Public()`. An endpoint can also declare permissions with `@RequirePermission('action:resource')`; the user must hold all of them. Users with the platform role `Admin` pass every permission check.
 - **Inside the services**: services trust the user id the gateway sends. Event-level rules (for example "the juror is assigned to this project") are checked by the service that owns that data.
+- **Read and write permissions**: reading and changing use different permissions, so read-only roles (the dean) can read without managing: `read:events` for events, rubrics and configuration, `read:grades` for rankings, top projects and tiebreaks, `read:invitations` for invitation lists, and `manage:events` to change them. Roles and their permissions are described in [auth-service](../auth-service/README.md#roles-and-permissions).
+- **User administration**: `POST /users`, `PATCH /users/:id`, `DELETE /users/:id` and `PUT /users/:id/roles` send the id of the user making the request to `auth-service`, which enforces the administrator rules (a faculty administrator cannot create, edit, deactivate or grant administrators; nobody changes their own roles). `GET /users/roles` lists the roles with their ids.
+
+### Route access policy
+
+`src/common/authorization/route-policy.ts` lists every endpoint with the access it is meant to require, and `route-policy.spec.ts` fails when a controller decorator and the table disagree, when an endpoint is missing from the table, or when the table lists an endpoint that no longer exists. To add an endpoint or change who can call one, change the decorator and the table together.
+
+| Access | Meaning |
+| --- | --- |
+| `public` | No session |
+| `session` | Any authenticated user; `why` explains why that is enough (own data, or the service behind checks ownership) |
+| `pending` | Only a session today, without a decision yet; each one must end as `permission` or `session` |
+| `permission` | The permissions listed |
 
 See [auth-service](../auth-service/) for how tokens are issued and refreshed.
 
