@@ -130,6 +130,9 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'GET /invitations/events/:eventId': { permission: ['read:invitations'] },
   'POST /invitations/events/:eventId/jurors': { permission: ['manage:events'] },
   'GET /invitations/me': { access: 'session', why: "invitations addressed to the caller" },
+  // modules/profile/profile.controller.ts
+  'GET /profile/me': { access: 'session', why: "the caller's own profile; the user id comes from the session" },
+  'PATCH /profile/me': { access: 'session', why: "edits the caller's own profile; auth-service only accepts the editable fields" },
   // modules/projects/projects.controller.ts
   'POST /projects': { access: 'public' },
   'GET /projects/:id': { access: 'pending' },
