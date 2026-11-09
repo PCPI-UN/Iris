@@ -25,7 +25,10 @@ import { CategoryLockService } from '../../services/category-lock.service';
  * - every criterion belongs to a component of its event and has a relative weight
  *   (1 by default) that is never rewritten,
  * - the criteria of a category cannot change once a project of that category has been
- *   evaluated (texts can); the components of an event, once the event has evaluations,
+ *   evaluated, while its rubric is complete (texts can); the components of an event, once
+ *   the event has evaluations,
+ * - an evaluated category whose rubric is not complete can still be fixed (nobody can
+ *   evaluate it until it is complete),
  * - while the components of an evaluated event do not add up to 100% they can still be
  *   fixed (no grade was computed with an incomplete rubric).
  */
@@ -244,6 +247,11 @@ describe('Criteria and components CRUD - rules', () => {
             criterionRepository.hasEvaluationsForEvent.mockResolvedValue(true);
             // A complete rubric: the components of the event add up to 100%
             criterionRepository.sumComponentWeightsByEvent.mockResolvedValue(1);
+            // ...and the evaluated categories 10 and 11 have a criterion in every component
+            criterionRepository.findComponentsByEvent.mockResolvedValue([new Component(5, 'Oral', 1, 1)]);
+            criterionRepository.findActiveByEventWithCourses.mockResolvedValue([
+                { criterion: buildCriterion(), courseIds: [10, 11] },
+            ]);
         });
 
         it('rejects creating a criterion', async () => {
@@ -364,6 +372,63 @@ describe('Criteria and components CRUD - rules', () => {
                 rpcError(status.FAILED_PRECONDITION, 'already has evaluations'),
             );
             expect(criterionRepository.deleteComponent).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('evaluated category whose rubric is not complete', () => {
+        // Report event: category 10 was evaluated with Diseño / Escrito / Oral; then a component
+        // "Ajuste" (id 9) was created to reach 100%. Category 10 has no criterion in it, so nobody
+        // can evaluate it, and the components can no longer change (they add up to 100%).
+        const diseno = new Component(5, 'Diseño', 0.399, 1);
+        const ajuste = new Component(9, 'Ajuste', 0.021, 1);
+        const components = [diseno, new Component(6, 'Escrito', 0.3, 1), new Component(7, 'Oral', 0.28, 1), ajuste];
+        const evaluatedRubric = [
+            { criterion: buildCriterion({ id: 1, componentId: 5 }), courseIds: [10] },
+            { criterion: buildCriterion({ id: 2, componentId: 6 }), courseIds: [10] },
+            { criterion: buildCriterion({ id: 3, componentId: 7 }), courseIds: [10] },
+        ];
+
+        beforeEach(() => {
+            criterionRepository.findEvaluatedProjectIds.mockResolvedValue([100]);
+            projectService.getProjectCategories.mockResolvedValue(new Map([[100, 10]]));
+            criterionRepository.hasEvaluationsForEvent.mockResolvedValue(true);
+            criterionRepository.sumComponentWeightsByEvent.mockResolvedValue(1);
+            criterionRepository.findComponentsByEvent.mockResolvedValue(components);
+            criterionRepository.findActiveByEventWithCourses.mockResolvedValue(evaluatedRubric);
+            criterionRepository.findComponentById.mockResolvedValue(ajuste);
+        });
+
+        it('allows adding the criterion the evaluated category is missing in the new component', async () => {
+            const useCase = new CreateCriterionUseCase(criterionRepository, eventService, categoryLock);
+
+            await expect(
+                useCase.execute({ eventId: 1, name: 'Ajuste Civil', courseIds: [10], componentId: 9 }),
+            ).resolves.toEqual(expect.objectContaining({ courseIds: [10] }));
+        });
+
+        it('locks the category again once its rubric is complete', async () => {
+            criterionRepository.findActiveByEventWithCourses.mockResolvedValue([
+                ...evaluatedRubric,
+                { criterion: buildCriterion({ id: 4, componentId: 9 }), courseIds: [10] },
+            ]);
+
+            const useCase = new CreateCriterionUseCase(criterionRepository, eventService, categoryLock);
+
+            await expect(
+                useCase.execute({ eventId: 1, name: 'Otro', courseIds: [10], componentId: 9 }),
+            ).rejects.toEqual(rpcError(status.FAILED_PRECONDITION, 'Categories [10] of event 1 already have evaluations and a complete rubric'));
+        });
+
+        it('allows fixing the criteria of a category while the components of the event do not add up to 100%', async () => {
+            // Event left at 0.979 by the rubric migration: no category is complete
+            criterionRepository.findComponentsByEvent.mockResolvedValue(components.slice(0, 3));
+            criterionRepository.findComponentById.mockResolvedValue(diseno);
+
+            const useCase = new UpdateCriterionUseCase(criterionRepository, eventService, categoryLock);
+
+            await expect(useCase.execute({ id: 1, weight: 2 })).resolves.toEqual(
+                expect.objectContaining({ criterion: expect.objectContaining({ weight: 2 }) }),
+            );
         });
     });
 
