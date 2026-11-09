@@ -46,6 +46,7 @@ data:
   PROJECT_SERVICE_URL: "project-service:50055"
 
   # Notification Service
+  NOTIFICATION_DATABASE_URL: "postgresql://postgres:postgres@notification-db:5432/notification_service"
   # Ordered email providers: primary first, then fallback (acs, emailjs)
   EMAIL_PROVIDERS: "acs,emailjs"
   EMAIL_PUBLIC_KEY: "JSamv4icvDDEi6eMZ"

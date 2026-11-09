@@ -39,6 +39,11 @@ spec:
                 configMapKeyRef:
                   name: pcpi-config
                   key: NODE_ENV
+            - name: DATABASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: NOTIFICATION_DATABASE_URL
             - name: EMAIL_PROVIDERS
               valueFrom:
                 configMapKeyRef:

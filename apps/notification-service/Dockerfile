@@ -15,7 +15,8 @@ RUN mkdir -p libs/common/src/generated && \
 
 COPY . .
 
-RUN pnpm run build notification-service
+RUN cd apps/notification-service && npx prisma generate && cd ../.. && \
+  pnpm run build notification-service
 
 # Development stage - self-contained with all dev tools
 FROM node:lts-alpine AS development
@@ -36,14 +37,20 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-RUN apk add --no-cache dumb-init && \
+RUN apk add --no-cache dumb-init openssl && \
   npm install -g pnpm
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
   pnpm install --prod --frozen-lockfile --ignore-scripts
 
-RUN npm uninstall -g pnpm && \
+COPY --from=builder /app/apps/notification-service/prisma ./apps/notification-service/prisma
+
+RUN npm install -g prisma@6.16.2 && \
+  prisma generate --schema=./apps/notification-service/prisma/schema.prisma && \
+  npm uninstall -g pnpm prisma && \
+  npm cache clean --force && \
+  rm -rf /root/.npm && \
   addgroup -g 1001 -S nodejs && \
   adduser -S nestjs -u 1001
 

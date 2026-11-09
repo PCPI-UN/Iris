@@ -11,6 +11,7 @@ services:
       EVENT_DB_PASSWORD: ${EVENT_DB_PASSWORD:-postgres}
       INVITATION_DB_PASSWORD: ${INVITATION_DB_PASSWORD:-postgres}
       PROJECT_DB_PASSWORD: ${PROJECT_DB_PASSWORD:-postgres}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:-postgres}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres-init.sh:/docker-entrypoint-initdb.d/init.sh:ro
@@ -283,10 +284,15 @@ services:
       target: development
     container_name: iris-notification-service
     environment:
+      - DATABASE_URL=postgresql://notification_user:${NOTIFICATION_DB_PASSWORD:-postgres}@postgres:5432/notification_service
       - NODE_ENV=${NODE_ENV:-development}
       - GRPC_HOST=${GRPC_HOST:-0.0.0.0}
       - GRPC_PORT=${GRPC_PORT:-50056}
       - EMAIL_PROVIDERS=${EMAIL_PROVIDERS:-acs,emailjs}
+      - EMAIL_MAX_ATTEMPTS=${EMAIL_MAX_ATTEMPTS:-5}
+      - EMAIL_RETRY_BASE_DELAY_MS=${EMAIL_RETRY_BASE_DELAY_MS:-60000}
+      - EMAIL_RETRY_POLL_MS=${EMAIL_RETRY_POLL_MS:-15000}
+      - EMAIL_RETRY_BATCH_SIZE=${EMAIL_RETRY_BATCH_SIZE:-20}
       - ACS_CONNECTION_STRING=${ACS_CONNECTION_STRING}
       - ACS_SENDER_ADDRESS=${ACS_SENDER_ADDRESS}
       - EMAILJS_SERVICE_ID=${EMAILJS_SERVICE_ID}
@@ -308,9 +314,12 @@ services:
       - ./nest-cli.json:/app/nest-cli.json
       - ./tsconfig.build.json:/app/tsconfig.build.json
       - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - dokploy-network
-    command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec nest start notification-service --watch"
+    command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec prisma db push --schema=./apps/notification-service/prisma/schema.prisma --accept-data-loss && pnpm exec nest start notification-service --watch"
 
   redis:
     image: redis:7-alpine
