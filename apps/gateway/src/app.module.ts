@@ -12,6 +12,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { UsersModule } from './modules/users/users.module';
+import { ProfileModule } from './modules/profile/profile.module';
 import { CacheModule } from './common/cache/cache.module';
 import { CacheManagementController } from './common/cache/cache-management.controller';
 import { HealthController } from './health.controller';
@@ -22,6 +23,7 @@ import { HealthController } from './health.controller';
     CacheModule,
     AuthModule,
     UsersModule,
+    ProfileModule,
     EventsModule,
     ProjectsModule,
     EvaluationsModule,
