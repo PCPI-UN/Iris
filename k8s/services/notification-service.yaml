@@ -44,21 +44,44 @@ spec:
                 configMapKeyRef:
                   name: pcpi-config
                   key: EMAIL_PROVIDERS
-            - name: EMAIL_PUBLIC_KEY
+            # EmailJS
+            - name: EMAILJS_SERVICE_ID
               valueFrom:
-                configMapKeyRef:
-                  name: pcpi-config
-                  key: EMAIL_PUBLIC_KEY
-            - name: EMAIL_PRIVATE_KEY
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: EMAILJS_SERVICE_ID
+                  optional: true
+            - name: EMAILJS_TEMPLATE_ID
               valueFrom:
-                configMapKeyRef:
-                  name: pcpi-config
-                  key: EMAIL_PRIVATE_KEY
-            - name: EMAILJS_TEMPLATE_PROJECT-CONFIRMATION_ID
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: EMAILJS_TEMPLATE_ID
+                  optional: true
+            - name: EMAILJS_PUBLIC_KEY
               valueFrom:
-                configMapKeyRef:
-                  name: pcpi-config
-                  key: EMAILJS_TEMPLATE_PROJECT-CONFIRMATION_ID
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: EMAILJS_PUBLIC_KEY
+                  optional: true
+            - name: EMAILJS_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: EMAILJS_PRIVATE_KEY
+                  optional: true
+            # Azure Communication Services Email (Fallback)
+            - name: ACS_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: ACS_CONNECTION_STRING
+                  optional: true
+            - name: ACS_SENDER_ADDRESS
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: ACS_SENDER_ADDRESS
+                  optional: true
           readinessProbe:
             tcpSocket:
               port: 50056
