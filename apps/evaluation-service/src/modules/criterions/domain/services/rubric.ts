@@ -1,4 +1,24 @@
-import { isFullWeight } from '../../../../common/utils/grade.utils';
+import { isFullWeight, WEIGHT_SUM_TOLERANCE } from '../../../../common/utils/grade.utils';
+
+/**
+ * True when a component weight change pushes the components of an event over 100%.
+ * Only raising a weight can do that: lowering one is always allowed, so an event left
+ * over 100% (e.g. by the migration of an event with several rubrics) can be fixed.
+ *
+ * @param otherWeight sum of the other components of the event
+ * @param requestedWeight new weight of the component
+ * @param currentWeight current weight of the component (0 when it is being created)
+ */
+export function exceedsFullWeight(otherWeight: number, requestedWeight: number, currentWeight = 0): boolean {
+  return requestedWeight > currentWeight && otherWeight + requestedWeight > 1 + WEIGHT_SUM_TOLERANCE;
+}
+
+export function exceedsFullWeightMessage(eventId: number, otherWeight: number, requestedWeight: number): string {
+  return (
+    `Total component weight for event ${eventId} would exceed 100%. ` +
+    `Other components: ${(otherWeight * 100).toFixed(2)}%, Requested: ${(requestedWeight * 100).toFixed(2)}%`
+  );
+}
 
 export interface RubricComponent {
   id: number;

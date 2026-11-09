@@ -7,15 +7,35 @@ import { Criterion } from '@criterions/domain/entities/criterion.entity';
 import { Component } from '@criterions/domain/entities/component.entity';
 import { CriterionCourse } from '@criterions/domain/entities/criterion-courses.entity';
 import { EventServicePort } from '../../infrastructure/ports/event.service.port';
+import { CategoryLockService } from '../services/category-lock.service';
 
 @Injectable()
 export class UpdateCriterionUseCase {
   constructor(
     private readonly criterionRepository: CriterionRepositoryPort,
     private readonly eventService: EventServicePort,
+    private readonly categoryLock: CategoryLockService,
   ) { }
 
   async execute(updateCriterionDto: UpdateCriterionDto): Promise<{
+    criterion: Criterion;
+    courseIds: number[];
+    component?: Component;
+  }> {
+    const existingCriterion = await this.criterionRepository.findById(updateCriterionDto.id);
+    if (!existingCriterion) {
+      throw new RpcException({
+        code: status.NOT_FOUND,
+        message: 'Criterion not found with the provided ID',
+      });
+    }
+
+    // The rubric checks and the write run under the rubric lock of the events involved
+    const eventIds = [existingCriterion.eventId, updateCriterionDto.eventId ?? existingCriterion.eventId];
+    return this.criterionRepository.withRubricLock(eventIds, 'exclusive', () => this.update(updateCriterionDto));
+  }
+
+  private async update(updateCriterionDto: UpdateCriterionDto): Promise<{
     criterion: Criterion;
     courseIds: number[];
     component?: Component;
@@ -60,32 +80,46 @@ export class UpdateCriterionUseCase {
       });
     }
 
-    // Only the texts can change once the event has evaluations; anything else alters the rubric used to grade.
+    // The categories of a criterion belong to its event: moving it to another event without new
+    // categories would leave it linked to categories of the previous event, out of every rubric.
+    if (finalEventId !== existingCriterion.eventId && courseIds === undefined) {
+      throw new RpcException({
+        code: status.INVALID_ARGUMENT,
+        message: `The categories of event ${finalEventId} (courseIds) are required to move a criterion to it`,
+      });
+    }
+
+    // Only the texts can change once a category has evaluations; anything else alters the rubric used to grade it.
     // Clients usually resend the whole form, so unchanged values must not count as a change.
     const currentCourseIds = (await this.criterionRepository.getCriterionCourses(id))
       .map((cc: CriterionCourse) => cc.course_id);
+    const finalCourseIds = courseIds ?? currentCourseIds;
     const coursesChange =
       courseIds !== undefined &&
       (courseIds.length !== currentCourseIds.length ||
         courseIds.some((courseId) => !currentCourseIds.includes(courseId)));
 
-    const changesRubric =
-      coursesChange ||
+    const changesEveryCategory =
       (weight !== undefined && weight !== existingCriterion.weight) ||
       (active !== undefined && active !== existingCriterion.active) ||
       finalEventId !== existingCriterion.eventId ||
       finalComponentId !== existingCriterion.componentId;
 
-    if (changesRubric) {
-      const eventIds = new Set([existingCriterion.eventId, finalEventId]);
-      for (const affectedEventId of eventIds) {
-        if (await this.criterionRepository.hasEvaluationsForEvent(affectedEventId)) {
-          throw new RpcException({
-            code: status.FAILED_PRECONDITION,
-            message: `Event ${affectedEventId} already has evaluations; its criteria cannot be modified`,
-          });
-        }
-      }
+    // A change of weight, state, component or event alters the rubric of every category of the criterion;
+    // adding or removing a category alters only that category (e.g. removing a category that was never
+    // evaluated from a criterion shared with an evaluated one).
+    const leftCategories = changesEveryCategory
+      ? currentCourseIds
+      : currentCourseIds.filter((courseId) => !finalCourseIds.includes(courseId));
+    const joinedCategories = changesEveryCategory
+      ? finalCourseIds
+      : finalCourseIds.filter((courseId) => !currentCourseIds.includes(courseId));
+
+    if (finalEventId !== existingCriterion.eventId) {
+      await this.categoryLock.assertNotEvaluated(existingCriterion.eventId, leftCategories);
+      await this.categoryLock.assertNotEvaluated(finalEventId, joinedCategories);
+    } else {
+      await this.categoryLock.assertNotEvaluated(finalEventId, [...leftCategories, ...joinedCategories]);
     }
 
     // If eventId is being updated, validate new event exists

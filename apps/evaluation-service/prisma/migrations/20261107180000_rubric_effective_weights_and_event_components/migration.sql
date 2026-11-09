@@ -55,7 +55,9 @@ BEGIN
     END LOOP;
 END $$;
 
--- 2c. Criteria without component go to a "General" component of their event.
+-- 2c. Active criteria without component go to a "General" component of their event.
+-- Inactive (deleted) criteria are not part of any rubric: they keep no component, otherwise
+-- "General" would have no active criterion and no category of the event could be evaluated.
 DO $$
 DECLARE
     orphan RECORD;
@@ -65,6 +67,7 @@ BEGIN
         SELECT DISTINCT "event_id"
         FROM "public"."criterions"
         WHERE "component_id" IS NULL
+          AND "active" = true
     LOOP
         INSERT INTO "public"."Component" ("name", "weight", "event_id")
         VALUES ('General', 0, orphan."event_id")
@@ -73,6 +76,7 @@ BEGIN
         UPDATE "public"."criterions"
         SET "component_id" = general_id
         WHERE "component_id" IS NULL
+          AND "active" = true
           AND "event_id" = orphan."event_id";
     END LOOP;
 END $$;

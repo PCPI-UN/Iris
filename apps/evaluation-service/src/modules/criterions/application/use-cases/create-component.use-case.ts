@@ -4,7 +4,8 @@ import { status } from '@grpc/grpc-js';
 import { CriterionRepositoryPort } from '@criterions/domain/repositories/criterion.repository.port';
 import { Component } from '@criterions/domain/entities/component.entity';
 import { CreateComponentDto } from '../dto/create-component.dto';
-import { WEIGHT_SUM_TOLERANCE } from '../../../../common/utils/grade.utils';
+import { areComponentsLocked, componentsLockedMessage } from '../services/component-lock';
+import { exceedsFullWeight, exceedsFullWeightMessage } from '@criterions/domain/services/rubric';
 
 @Injectable()
 export class CreateComponentUseCase {
@@ -12,7 +13,14 @@ export class CreateComponentUseCase {
     private readonly criterionRepository: CriterionRepositoryPort,
   ) {}
 
-  async execute(createComponentDto: CreateComponentDto): Promise<Component> {
+  execute(createComponentDto: CreateComponentDto): Promise<Component> {
+    // The rubric checks and the write run under the rubric lock of the event
+    return this.criterionRepository.withRubricLock([createComponentDto.eventId], 'exclusive', () =>
+      this.create(createComponentDto),
+    );
+  }
+
+  private async create(createComponentDto: CreateComponentDto): Promise<Component> {
     const { name, weight, eventId } = createComponentDto;
 
     if (!name || name.trim().length === 0) {
@@ -36,18 +44,18 @@ export class CreateComponentUseCase {
       });
     }
 
-    if (await this.criterionRepository.hasEvaluationsForEvent(eventId)) {
+    if (await areComponentsLocked(this.criterionRepository, eventId)) {
       throw new RpcException({
         code: status.FAILED_PRECONDITION,
-        message: `Event ${eventId} already has evaluations; its components cannot be modified`,
+        message: componentsLockedMessage(eventId),
       });
     }
 
     const otherWeight = await this.criterionRepository.sumComponentWeightsByEvent(eventId);
-    if (otherWeight + weight > 1 + WEIGHT_SUM_TOLERANCE) {
+    if (exceedsFullWeight(otherWeight, weight)) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: `Total component weight for event ${eventId} would exceed 100%. Current: ${(otherWeight * 100).toFixed(2)}%, Requested: ${(weight * 100).toFixed(2)}%`,
+        message: exceedsFullWeightMessage(eventId, otherWeight, weight),
       });
     }
 

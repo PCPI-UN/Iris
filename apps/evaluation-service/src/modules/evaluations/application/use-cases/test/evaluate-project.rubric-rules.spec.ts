@@ -35,6 +35,7 @@ describe('EvaluateProjectUseCase - rubric rules', () => {
     const mockCriterionRepository = {
         findByCourseId: jest.fn(),
         findComponentsByEvent: jest.fn(),
+        withRubricLock: jest.fn((_eventIds: number[], _mode: string, work: () => Promise<unknown>) => work()),
     };
     const mockAuthService = {
         getRoles: jest.fn(),
@@ -143,6 +144,19 @@ describe('EvaluateProjectUseCase - rubric rules', () => {
             const result = await useCase.execute({ projectId: 1, userId: 1, scores: scoreAll(reportRubric, 4) });
 
             expect(result.evaluation.grade).toBe(90);
+        });
+
+        it('reads the rubric and saves the evaluation under the shared rubric lock of the event', async () => {
+            mockCriterionRepository.withRubricLock.mockImplementationOnce(async (_eventIds, _mode, work) => {
+                expect(mockCriterionRepository.findByCourseId).not.toHaveBeenCalled();
+                const result = await work();
+                expect(mockEvaluationRepository.save).toHaveBeenCalled();
+                return result;
+            });
+
+            await useCase.execute({ projectId: 1, userId: 1, scores: scoreAll(posterRubric, 4) });
+
+            expect(mockCriterionRepository.withRubricLock).toHaveBeenCalledWith([1], 'shared', expect.any(Function));
         });
 
         it('stores the effective weight with every detail and returns it', async () => {

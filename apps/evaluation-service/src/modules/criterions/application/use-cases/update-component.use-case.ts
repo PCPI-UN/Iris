@@ -4,7 +4,8 @@ import { status } from '@grpc/grpc-js';
 import { CriterionRepositoryPort } from '@criterions/domain/repositories/criterion.repository.port';
 import { Component } from '@criterions/domain/entities/component.entity';
 import { UpdateComponentDto } from '../dto/update-component.dto';
-import { WEIGHT_SUM_TOLERANCE } from '../../../../common/utils/grade.utils';
+import { areComponentsLocked, componentsLockedMessage } from '../services/component-lock';
+import { exceedsFullWeight, exceedsFullWeightMessage } from '@criterions/domain/services/rubric';
 
 @Injectable()
 export class UpdateComponentUseCase {
@@ -13,6 +14,21 @@ export class UpdateComponentUseCase {
   ) {}
 
   async execute(updateComponentDto: UpdateComponentDto): Promise<Component> {
+    const existingComponent = await this.criterionRepository.findComponentById(updateComponentDto.id);
+    if (!existingComponent) {
+      throw new RpcException({
+        code: status.NOT_FOUND,
+        message: `Component with ID ${updateComponentDto.id} not found`,
+      });
+    }
+
+    // The rubric checks and the write run under the rubric lock of the event
+    return this.criterionRepository.withRubricLock([existingComponent.eventId], 'exclusive', () =>
+      this.update(updateComponentDto),
+    );
+  }
+
+  private async update(updateComponentDto: UpdateComponentDto): Promise<Component> {
     const { id, name, weight } = updateComponentDto;
 
     // Get the existing component
@@ -45,18 +61,18 @@ export class UpdateComponentUseCase {
 
     // The weight is part of every criterion's effective weight, so changing it alters the rubric used to grade
     if (finalWeight !== existingComponent.weight) {
-      if (await this.criterionRepository.hasEvaluationsForEvent(existingComponent.eventId)) {
+      if (await areComponentsLocked(this.criterionRepository, existingComponent.eventId)) {
         throw new RpcException({
           code: status.FAILED_PRECONDITION,
-          message: `Event ${existingComponent.eventId} already has evaluations; component weights cannot be modified`,
+          message: componentsLockedMessage(existingComponent.eventId),
         });
       }
 
       const otherWeight = await this.criterionRepository.sumComponentWeightsByEvent(existingComponent.eventId, id);
-      if (otherWeight + finalWeight > 1 + WEIGHT_SUM_TOLERANCE) {
+      if (exceedsFullWeight(otherWeight, finalWeight, existingComponent.weight)) {
         throw new RpcException({
           code: status.INVALID_ARGUMENT,
-          message: `Total component weight for event ${existingComponent.eventId} would exceed 100%. Other components: ${(otherWeight * 100).toFixed(2)}%, Requested: ${(finalWeight * 100).toFixed(2)}%`,
+          message: exceedsFullWeightMessage(existingComponent.eventId, otherWeight, finalWeight),
         });
       }
     }

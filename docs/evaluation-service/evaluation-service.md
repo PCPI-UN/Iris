@@ -56,9 +56,18 @@ effectiveWeight = component.weight × criterion.weight ÷ Σ criterion.weight (s
 
 Example: Comunicación Oral `0.3` with relative weights `10 / 9 / 9` gives the first criterion `0.3 × 10 ÷ 28 = 0.1071`.
 
-A category is **ready** to be evaluated when the event components add up to 100% and every component has at least one active criterion of that category. `GetRubricReadiness` (gateway `GET /criterions/readiness?eventId=&courseId=`) reports it per category.
+A category is **ready** to be evaluated when the event components add up to 100% and every component has at least one active criterion of that category. `GetRubricReadiness` (gateway `GET /criterions/readiness?eventId=&courseId=`) reports it for every category of the event (taken from event-service), also the ones without any criterion.
 
-Once an event has evaluations, its rubric is locked: criteria cannot be created, deleted, deactivated, moved between components or courses, or change weight, and components cannot be created, deleted or change weight. Such requests are rejected with `FAILED_PRECONDITION`. Names and descriptions can still be edited. A component never changes its event, and a component with active criteria cannot be deleted. Historical grades are never recalculated.
+Once a rubric is used to grade, it is locked. Locked changes are rejected with `FAILED_PRECONDITION`; names and descriptions can always be edited, and historical grades are never recalculated.
+
+- **Criteria** are locked per category: a change is rejected only when it alters the rubric of a category that already has evaluations. The category of an evaluation is the category of the evaluated project, asked to project-service (it cannot be deduced from the scored criteria, because a criterion can be shared by several categories). Changing the weight, component, state or event of a criterion alters every category it belongs to; adding or removing a category alters only that category. Example: with Civil evaluated and Ambiental not, a criterion can still be created for Ambiental, or a criterion shared by both can stop belonging to Ambiental, but nothing that changes Civil's rubric is accepted.
+- An evaluated category is locked only **while its rubric is complete** (it is ready to be evaluated). A category that is not complete cannot be evaluated by anyone, so it can still be fixed, and it locks again once complete. Example: in an event left at `0.979` with Civil evaluated, a component "Ajuste" of `0.021` is created to reach 100%; Civil has no criterion in it, so its remaining jurors cannot evaluate, and the components can no longer change. Civil can still get its criterion in "Ajuste"; without this, the event would stay blocked.
+- **Components** are shared by every category, so they are locked per event: once the event has evaluations, components cannot be created, deleted or change weight, **while they add up to 100%**. An evaluated event whose components do not add up to 100% (e.g. an event left at `0.979` by the rubric migration) can still fix them: no grade was computed with an incomplete rubric, and each evaluation keeps the effective weights it was graded with.
+- Lowering a component weight is always allowed, so an event whose components exceed 100% can be fixed; only raising one above 100% is rejected.
+- Moving a criterion to another event requires the categories (`courseIds`) of the new event.
+- A component never changes its event, and a component with active criteria cannot be deleted (its inactive criteria are detached).
+
+Rubric changes and evaluations of an event never interleave: both run in one transaction holding a Postgres advisory lock of the event (`pg_advisory_xact_lock(86301, eventId)`). Evaluations take it shared, so jurors do not wait for each other; rubric changes take it exclusive. The repositories query through `PrismaService.db`, which is the open transaction inside `PrismaService.transaction()`.
 
 ### Rubric And Grade Rules
 
@@ -248,7 +257,7 @@ The main schema relationships are:
 
 - The evaluator identity is not stored as a single foreign key. Instead, it is represented by `memberUserId`, `memberEventId`, and `memberRoleId`, mirroring the structure of `event-service.StaffEventMember`.
 - `EvaluationDetail` and `CriterionCategory` are junction models with composite primary keys.
-- `Criterion.weight` is used by `EvaluateProjectUseCase` to calculate the final weighted grade after score mapping.
+- `Criterion.weight` is relative inside its component and category; `EvaluateProjectUseCase` turns it into the effective weight, which is stored in `EvaluationDetail.weight` and used for the grade and the statistics.
 - The schema uses `Timestamp` fields instead of `Timestamptz`, which means timezone handling depends on application and database configuration.
 - Dynamic score ranges are validated in the use case, not through DTO `@Min` or `@Max` decorators.
 - Unknown evaluation types are rejected with a controlled invalid-argument error.

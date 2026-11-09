@@ -3,6 +3,7 @@ import { CriterionRepositoryPort } from '@criterions/domain/repositories/criteri
 import { Component } from '@criterions/domain/entities/component.entity';
 import { Criterion } from '@criterions/domain/entities/criterion.entity';
 import { buildRubric } from '@criterions/domain/services/rubric';
+import { EventServicePort } from '../../infrastructure/ports/event.service.port';
 
 export interface CategoryReadiness {
   courseId: number;
@@ -22,25 +23,27 @@ export interface RubricReadiness {
 /**
  * A category (course) of an event can be evaluated when the event components
  * add up to 100% and every component has at least one criterion of that category.
+ * Every category of the event is reported, also the ones without any criterion.
  */
 @Injectable()
 export class GetRubricReadinessUseCase {
   constructor(
     private readonly criterionRepository: CriterionRepositoryPort,
+    private readonly eventService: EventServicePort,
   ) {}
 
   async execute(request: { eventId: number; courseId?: number }): Promise<RubricReadiness> {
     const { eventId, courseId } = request;
 
-    const [components, criteriaWithCourses] = await Promise.all([
+    const [components, criteriaWithCourses, eventCourseIds] = await Promise.all([
       this.criterionRepository.findComponentsByEvent(eventId),
       this.criterionRepository.findActiveByEventWithCourses(eventId),
+      courseId === undefined ? this.eventService.listCourseIdsByEvent(eventId) : Promise.resolve([courseId]),
     ]);
 
-    const criteriaByCourse = new Map<number, Criterion[]>();
-    if (courseId !== undefined) {
-      criteriaByCourse.set(courseId, []);
-    }
+    const criteriaByCourse = new Map<number, Criterion[]>(
+      eventCourseIds.map((eventCourseId) => [eventCourseId, []]),
+    );
     for (const { criterion, courseIds } of criteriaWithCourses) {
       for (const criterionCourseId of courseIds) {
         if (courseId !== undefined && criterionCourseId !== courseId) continue;

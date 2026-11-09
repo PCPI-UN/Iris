@@ -11,6 +11,8 @@ export interface FindAllFilters {
     eventId?: number;
     courseId?: number;
 }
+export type RubricLockMode = 'shared' | 'exclusive';
+
 export abstract class CriterionRepositoryPort {
   abstract create(criterion: Criterion): Promise<Criterion>;
   abstract findById(id: number): Promise<Criterion | null>;
@@ -38,4 +40,12 @@ export abstract class CriterionRepositoryPort {
 
   // An event rubric cannot change once the event has evaluations
   abstract hasEvaluationsForEvent(eventId: number): Promise<boolean>;
+  abstract findEvaluatedProjectIds(eventId: number): Promise<number[]>;
+
+  /**
+   * Runs `work` in one transaction holding the rubric lock of the given events, so a rubric
+   * change and an evaluation of the same event never interleave. Evaluations take the lock
+   * shared (they do not wait for each other); rubric changes take it exclusive.
+   */
+  abstract withRubricLock<T>(eventIds: number[], mode: RubricLockMode, work: () => Promise<T>): Promise<T>;
 }

@@ -28,6 +28,7 @@ describe('EvaluateProjectUseCase', () => {
     const mockCriterionRepository = {
         findByCourseId: jest.fn(),
         findComponentsByEvent: jest.fn(),
+        withRubricLock: jest.fn((_eventIds: number[], _mode: string, work: () => Promise<unknown>) => work()),
     };
 
     const mockAuthService = {

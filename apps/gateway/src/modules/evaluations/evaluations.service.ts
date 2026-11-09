@@ -1,4 +1,5 @@
 import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { roundGrade } from '@app/common/utils/grade-rounding';
 import { ClientGrpc } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import {
@@ -24,7 +25,6 @@ import {
 import {
   assignRankingPositions,
   filterVisiblePositions,
-  roundRankingGrade,
 } from '../events/ranking/ranking-positions';
 
 @Injectable()
@@ -203,7 +203,7 @@ export class EvaluationsService implements OnModuleInit {
       .filter((stats) => stats.evaluationCount > 0)
       .map((stats) => ({
         projectId: stats.projectId,
-        averageGrade: roundRankingGrade(stats.averageGrade),
+        averageGrade: roundGrade(stats.averageGrade),
         evaluationCount: stats.evaluationCount,
         position: 0,
       }));

@@ -156,8 +156,8 @@ import {
 import {
   assignRankingPositions,
   filterVisiblePositions,
-  roundRankingGrade,
 } from './ranking/ranking-positions';
+import { roundGrade } from '@app/common/utils/grade-rounding';
 
 type RankingScope = 'admin' | 'public';
 
@@ -425,7 +425,7 @@ export class EventService implements OnModuleInit {
         const grade = evaluatorProjectGrades.get(evaluatorId)?.get(project.id);
         if (grade !== undefined) {
           // Historical grades were stored without rounding; show them with the same 2 decimals as the average
-          individualGrades.push(roundRankingGrade(grade));
+          individualGrades.push(roundGrade(grade));
         }
       }
 
@@ -445,7 +445,7 @@ export class EventService implements OnModuleInit {
         individualGrades,
         // Rounded with the same rule used for positions, so co-winners always
         // show the same grade.
-        averageGrade: roundRankingGrade(stats.averageGrade ?? 0),
+        averageGrade: roundGrade(stats.averageGrade ?? 0),
       });
     }
 
@@ -518,7 +518,7 @@ export class EventService implements OnModuleInit {
           : '',
         averageGrade:
           item.averageGrade !== undefined
-            ? roundRankingGrade(item.averageGrade)
+            ? roundGrade(item.averageGrade)
             : '',
       });
     }
