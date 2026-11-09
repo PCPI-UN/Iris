@@ -117,7 +117,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - dokploy-network
+      - iris-network
     command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec prisma generate --schema=./apps/evaluation-service/prisma/schema.prisma && pnpm exec prisma migrate deploy --schema=./apps/evaluation-service/prisma/schema.prisma && pnpm exec nest start evaluation-service --watch"
 
   event-service:
@@ -142,7 +142,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - dokploy-network
+      - iris-network
     command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec prisma generate --schema=./apps/event-service/prisma/schema.prisma && pnpm exec prisma migrate deploy --schema=./apps/event-service/prisma/schema.prisma && pnpm exec nest start event-service --watch"
 
   invitation-service:
@@ -170,7 +170,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - dokploy-network
+      - iris-network
     command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec prisma generate --schema=./apps/invitation-service/prisma/schema.prisma && pnpm exec prisma migrate deploy --schema=./apps/invitation-service/prisma/schema.prisma && pnpm exec nest start invitation-service --watch"
 
   project-service:
@@ -196,7 +196,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - dokploy-network
+      - iris-network
     command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec prisma generate --schema=./apps/project-service/prisma/schema.prisma && pnpm exec prisma migrate deploy --schema=./apps/project-service/prisma/schema.prisma && pnpm exec nest start project-service --watch"
 
   gateway:
