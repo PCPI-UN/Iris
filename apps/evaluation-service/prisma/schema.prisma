@@ -31,6 +31,8 @@ model EvaluationDetail {
   evaluationId Int     @map("evaluation_id")
   criterionId  Int     @map("criterion_id")
   score        Float
+  // Effective weight of the criterion in the grade when it was evaluated
+  weight       Float
   evaluation   Evaluation @relation(fields: [evaluationId], references: [id])
   criterion    Criterion  @relation(fields: [criterionId], references: [id])
 
@@ -45,6 +47,7 @@ model Criterion {
   eventId     Int             @map("event_id")
   name        String             @db.VarChar(100)
   description String?            @db.Text
+  // Relative weight inside its component and category (1 by default)
   weight      Float
   active      Boolean
   category    String?            @db.VarChar(100)
@@ -75,8 +78,9 @@ model CriterionCourse {
 model Component {
   id       Int         @id @default(autoincrement())
   name     String
+  // Fraction of the grade (0-1); the components of an event add up to 1
   weight   Float
-  eventId  Int?        @map("event_id")
+  eventId  Int         @map("event_id")
   criteria Criterion[]
 }
 

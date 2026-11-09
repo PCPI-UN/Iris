@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@app/common": [
+        "libs/common/src"
+      ],
+      "@app/common/*": [
+        "libs/common/src/*"
+      ],
+      "@criterions/*": [
+        "apps/evaluation-service/src/modules/criterions/*"
+      ],
+      "@evaluations/*": [
+        "apps/evaluation-service/src/modules/evaluations/*"
+      ]
+    }
+  }
+}

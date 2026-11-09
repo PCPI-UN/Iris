@@ -90,11 +90,13 @@ export class EvaluationMapper {
     evaluationId: number;
     criterionId: number;
     score: number;
+    weight?: number;
   }): EvaluationDetailResponse {
     return {
       evaluationId: detail.evaluationId,
       criterionId: detail.criterionId,
       score: detail.score,
+      ...(detail.weight !== undefined && { weight: detail.weight }),
     };
   }
 

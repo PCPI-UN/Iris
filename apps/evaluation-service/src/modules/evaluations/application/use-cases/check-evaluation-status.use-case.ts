@@ -8,7 +8,6 @@ import { CheckEvaluationStatusDto } from '../dto/check-evaluation-status.dto';
 import { ScoreMapper } from '../../domain/ports/score-mapper.port';
 import { EventServicePort } from '../../infrastructure/ports/event.service.port';
 import { ScoreMapperFactory } from '../mappers/score-mapper.factory';
-import { FinalProjectsScoreMapper } from '../mappers/final-projects-score.mapper';
 import { EvaluationType } from '../../../../common/constants/evaluation-type.constants';
 import { EvaluationType as EventEvaluationType } from '@app/common/generated/event';
 
@@ -56,12 +55,8 @@ export class CheckEvaluationStatusUseCase {
     const event = await this.eventService.getEvent(eventId);
     const evaluationType = this.resolveEvaluationType(event.evaluationType);
 
-    const scoreMapper: ScoreMapper =
-      evaluationType === EvaluationType.FINAL_PROJECTS
-        ? new FinalProjectsScoreMapper()
-        : evaluationType === EvaluationType.ZERO_TO_FIVE
-          ? ScoreMapperFactory.create(evaluationType)
-          : null!;
+    // Every evaluation type has its own mapper (ZERO_TO_HUNDRED used to get none and crashed here)
+    const scoreMapper: ScoreMapper = ScoreMapperFactory.create(evaluationType);
 
     // Fetch all evaluations for these projects by this evaluator
     const evaluations =
@@ -92,6 +87,7 @@ export class CheckEvaluationStatusUseCase {
         evaluationId: score.evaluationId,
         criterionId: score.criterionId,
         score: scoreMapper.toOriginalValue(score.score),
+        weight: score.weight,
       }));
 
       return {

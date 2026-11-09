@@ -20,6 +20,7 @@ import {
   ListCriterionsResponse,
   FindCriterionsByCourseResponse,
   DeleteCriterionResponse,
+  GetRubricReadinessResponse,
 } from '@app/common/generated/evaluation';
 
 @Injectable()
@@ -79,6 +80,18 @@ export class CriterionsService implements OnModuleInit {
   async deleteCriterion(id: number): Promise<DeleteCriterionResponse> {
     return firstValueFrom(
       this.criterionsService.deleteCriterion({ id } as DeleteCriterionRequest),
+    );
+  }
+
+  async getRubricReadiness(
+    eventId: number,
+    courseId?: number,
+  ): Promise<GetRubricReadinessResponse> {
+    return firstValueFrom(
+      this.criterionsService.getRubricReadiness({
+        eventId,
+        ...(courseId !== undefined && { courseId }),
+      }),
     );
   }
 
