@@ -6,16 +6,53 @@ package notification;
 
 service NotificationService {
   rpc SendEmail (SendEmailRequest) returns (SendEmailResponse);
+  rpc GetEmailStatus (GetEmailStatusRequest) returns (GetEmailStatusResponse);
 }
 
 message SendEmailRequest {
   string to = 1;
   EmailTemplate template = 2;
   google.protobuf.Struct params = 3; // parameters in JSON-format
+  // Same key, same email: a repeated request returns the first delivery and sends nothing.
+  // Example: "invitation:<invitationId>:<expiresAt>". Without a key every request sends.
+  optional string idempotencyKey = 4;
 }
 
 message SendEmailResponse {
+  // true when the email was sent or is queued for a retry; false when it failed for good
   bool success = 1;
+  EmailDelivery delivery = 2;
+}
+
+enum EmailDeliveryStatus {
+  PENDING = 0; // not sent yet; a retry is scheduled
+  SENT = 1;
+  FAILED = 2;  // every attempt failed
+}
+
+message EmailDelivery {
+  string id = 1;
+  optional string idempotencyKey = 2;
+  string to = 3;
+  EmailTemplate template = 4;
+  EmailDeliveryStatus status = 5;
+  optional string provider = 6;
+  int32 attempts = 7;
+  optional string lastError = 8;
+  string createdAt = 9;  // ISO 8601
+  string updatedAt = 10;
+  optional string sentAt = 11;
+  optional string nextAttemptAt = 12;
+}
+
+// Looks deliveries up by id and/or idempotency key
+message GetEmailStatusRequest {
+  repeated string ids = 1;
+  repeated string idempotencyKeys = 2;
+}
+
+message GetEmailStatusResponse {
+  repeated EmailDelivery deliveries = 1;
 }
 
 enum EmailTemplate {

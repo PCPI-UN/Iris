@@ -24,7 +24,14 @@ export class NotificationGrpcClient implements OnModuleInit {
     this.svc = this.client.getService<NotificationServiceGrpc>(NOTIFICATION_SERVICE_NAME);
   }
 
-  async sendEmail(to: string, template: EmailTemplate, params: Record<string, any>) {
-    return firstValueFrom(this.svc.sendEmail({ to, template, params }));
+  async sendEmail(
+    to: string,
+    template: EmailTemplate,
+    params: Record<string, any>,
+    idempotencyKey?: string,
+  ) {
+    return firstValueFrom(
+      this.svc.sendEmail({ to, template, params, idempotencyKey }),
+    );
   }
 }

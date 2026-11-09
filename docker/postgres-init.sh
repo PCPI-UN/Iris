@@ -50,5 +50,6 @@ create_database_and_user "evaluation_service" "evaluation_user" "${EVALUATION_DB
 create_database_and_user "event_service" "event_user" "${EVENT_DB_PASSWORD:-postgres}"
 create_database_and_user "invitation_service" "invitation_user" "${INVITATION_DB_PASSWORD:-postgres}"
 create_database_and_user "project_service" "project_user" "${PROJECT_DB_PASSWORD:-postgres}"
+create_database_and_user "notification_service" "notification_user" "${NOTIFICATION_DB_PASSWORD:-postgres}"
 
 echo "PostgreSQL initialization completed successfully!"
