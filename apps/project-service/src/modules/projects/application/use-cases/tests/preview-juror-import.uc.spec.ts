@@ -303,6 +303,21 @@ describe('PreviewJurorImportUC', () => {
     expect(auth.findUserByEmail).not.toHaveBeenCalled();
   });
 
+  // Typos that auth-service rejects: before, they made the whole preview fail
+  it.each([
+    'ana@uninorte,edu.co',
+    'ana@uninorte.edu.co.',
+    'ana..perez@uninorte.edu.co',
+  ])('rejects %s on its row without asking auth-service', async (email) => {
+    const result = await preview([row(2, CIVIL, '6', 'Ana', email)]);
+
+    expect(result.rows[0]).toMatchObject({
+      outcome: 'ERROR',
+      message: `El correo «${email}» no es válido.`,
+    });
+    expect(auth.findUserByEmail).not.toHaveBeenCalled();
+  });
+
   it('marks a repeated row as an error and keeps the first one', async () => {
     const result = await preview([
       row(2, CIVIL, '6', 'Ana', ANA.email),

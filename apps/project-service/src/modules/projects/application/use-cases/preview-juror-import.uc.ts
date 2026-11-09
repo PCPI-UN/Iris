@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { isEmail } from 'class-validator';
 import { normalizeEmail } from '@app/common/utils/email.util';
 import { ProjectRepository } from '../../domain/repositories/project.repository';
 import {
@@ -72,7 +73,11 @@ interface ResolvedUser {
   membership: EventMembership | null;
 }
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/**
+ * Same check as the @IsEmail() of auth-service's GetUserByEmail: an email that passes here
+ * never makes that call fail, so a typo is reported on its row instead of failing the file.
+ */
+const isValidEmail = (email: string): boolean => isEmail(email);
 
 const STATE_LABELS: Record<ProjectState, string> = {
   UNDER_REVIEW: 'en revisión',
@@ -175,9 +180,7 @@ export class PreviewJurorImportUC {
 
     const emails = [
       ...new Set(
-        rows
-          .map((row) => normalizeEmail(row.email ?? ''))
-          .filter((email) => EMAIL_PATTERN.test(email)),
+        rows.map((row) => normalizeEmail(row.email ?? '')).filter(isValidEmail),
       ),
     ];
     const resolved = new Map<string, ResolvedUser>();
@@ -278,7 +281,7 @@ export class PreviewJurorImportUC {
     }
 
     // 2. Email format
-    if (!EMAIL_PATTERN.test(email)) {
+    if (!isValidEmail(email)) {
       return error(`El correo «${rawEmail}» no es válido.`);
     }
 
