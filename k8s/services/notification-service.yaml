@@ -39,6 +39,11 @@ spec:
                 configMapKeyRef:
                   name: pcpi-config
                   key: NODE_ENV
+            - name: EMAIL_PROVIDERS
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: EMAIL_PROVIDERS
             - name: EMAIL_PUBLIC_KEY
               valueFrom:
                 configMapKeyRef:
