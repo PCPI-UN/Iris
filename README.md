@@ -185,32 +185,56 @@ pnpm run proto:generate
 
 ### 🐳 Paso 3: Levantar el Entorno con Docker
 
-El archivo de orquestación para desarrollo es `docker-compose.dev.yml`.
+El archivo de orquestación para desarrollo es `docker-compose.dev.yml`, el cual organiza los microservicios mediante perfiles (`profiles`).
 
 #### 🛠️ Usando Makefile (Recomendado)
 
+Los objetivos de desarrollo utilizan la variable `PROFILES` (cuyo valor predeterminado es `all`). `make dev-up` inicia los contenedores en segundo plano (`-d`) con recarga en vivo, `make dev-logs` sigue la salida de registros en tiempo real y `make dev-down` detiene por defecto toda la suite:
+
 ```bash
-# Iniciar todos los servicios en segundo plano con hot-reload
 make dev-up
-
-# Ver el registro de logs de todos los servicios
 make dev-logs
-
-# Detener los servicios
 make dev-down
 ```
 
-#### 🐳 Usando Docker Compose Directamente
+También puede indicar uno o varios perfiles separados por espacios mediante `PROFILES`, o usar los atajos por perfil (`dev-core`, `dev-events`, `dev-eval`, `dev-notifications`), los cuales delegan en `make dev-up` y levantan el grupo correspondiente en segundo plano:
 
 ```bash
-# Iniciar servicios cargando las variables de entorno
-docker compose -f docker-compose.dev.yml --env-file .env up -d
+make dev-core
+make dev-events
+make dev-eval
+make dev-notifications
+make dev-up PROFILES="core eval"
+make dev-build PROFILES=events
+```
 
-# Consultar logs
-docker compose -f docker-compose.dev.yml --env-file .env logs -f
+#### 🧩 Perfiles de Desarrollo (`docker-compose.dev.yml`)
 
-# Detener contenedores
-docker compose -f docker-compose.dev.yml --env-file .env down
+| Perfil | Servicios Incluidos | Descripción |
+| :--- | :--- | :--- |
+| *(Siempre habilitados)* | `postgres`, `redis` | Infraestructura base sin perfil asignado; se levanta con cualquier comando |
+| `core` | `auth-service`, `gateway` | Autenticación y puerta de enlace HTTP (único grupo parcial que incluye `gateway`) |
+| `events` | `event-service`, `invitation-service` | Gestión de eventos e invitaciones |
+| `eval` | `evaluation-service`, `project-service` | Evaluación y gestión de proyectos |
+| `notifications` | `notification-service` | Envío de notificaciones por correo |
+| `all` | Los 7 microservicios + `postgres` y `redis` | Suite completa de desarrollo (9 contenedores en total, valor por defecto de `PROFILES`) |
+
+- **Grupos de desarrollo parcial y dependencias entre servicios:** Estos perfiles están pensados para levantar subconjuntos de servicios durante el desarrollo local. Tenga en cuenta que solo `core` (además de `all`) incluye `gateway`, y que existen dependencias gRPC entre grupos:
+  - En `eval`, `evaluation-service` requiere `auth-service` y `event-service`, mientras que `project-service` utiliza `event-service`, `invitation-service` y `notification-service`.
+  - En `events`, los servicios consumen `auth-service`, `project-service` y `notification-service`.
+  - En `core`, `auth-service` tiene flujos que dependen de `notification-service`.
+  - Por ejemplo, levantar `PROFILES="core eval"` aún deja fuera `event-service`, `invitation-service` y `notification-service`. Para probar flujos completos de extremo a extremo, utilice el perfil `all`.
+- **Combinación de perfiles:** Los perfiles se pueden combinar pasando múltiples banderas `--profile` a Docker Compose o asignando una lista separada por espacios en `PROFILES` (por ejemplo, `make dev-up PROFILES="core eval"`).
+- **Comportamiento al detener (`down`):** Ejecutar `down` con cualquier perfil también detiene los contenedores compartidos `postgres` y `redis`. El comando `make dev-down` sin argumentos utiliza `PROFILES=all` y detiene toda la suite de desarrollo.
+
+#### 🐳 Usando Docker Compose Directamente
+
+Para iniciar, consultar registros o detener todos los servicios de desarrollo directamente con Docker Compose, incluya `--profile all` junto con `-f docker-compose.dev.yml` y `--env-file .env`:
+
+```bash
+docker compose -f docker-compose.dev.yml --env-file .env --profile all up -d
+docker compose -f docker-compose.dev.yml --env-file .env --profile all logs -f
+docker compose -f docker-compose.dev.yml --env-file .env --profile all down
 ```
 
 ### 🔄 Comportamiento del Arranque en Desarrollo

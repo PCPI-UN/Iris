@@ -1,3 +1,19 @@
+x-dev-volumes: &dev-volumes
+  - ./apps:/app/apps
+  - ./libs:/app/libs
+  - ./package.json:/app/package.json
+  - ./pnpm-lock.yaml:/app/pnpm-lock.yaml
+  - ./tsconfig.json:/app/tsconfig.json
+  - ./nest-cli.json:/app/nest-cli.json
+  - ./tsconfig.build.json:/app/tsconfig.build.json
+  - /app/node_modules
+
+x-dev-polling-env: &dev-polling-env
+  CHOKIDAR_USEPOLLING: "true"
+  CHOKIDAR_INTERVAL: "1000"
+  WATCHPACK_POLLING: "true"
+  CI: "true"
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -17,300 +33,13 @@ services:
     ports:
       - "5432:5432"
     networks:
-      - dokploy-network
+      - iris-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 3s
       retries: 10
-
-  auth-service:
-    build:
-      context: .
-      dockerfile: apps/auth-service/Dockerfile
-      target: development
-    container_name: iris-auth-service
-    environment:
-      - DATABASE_URL=postgresql://auth_user:${AUTH_DB_PASSWORD:-postgres}@postgres:5432/auth_service
-      - GRPC_HOST=${GRPC_HOST:-0.0.0.0}
-      - GRPC_PORT=${GRPC_PORT:-50051}
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
-      - NODE_ENV=${NODE_ENV:-development}
-      - JWT_PRIVATE_KEY=${JWT_PRIVATE_KEY}
-      - JWT_REFRESH_PRIVATE_KEY=${JWT_REFRESH_PRIVATE_KEY}
-      - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY}
-      - JWT_REFRESH_PUBLIC_KEY=${JWT_REFRESH_PUBLIC_KEY}
-      - JWT_ACCESS_TOKEN_EXPIRATION=${JWT_ACCESS_TOKEN_EXPIRATION:-15m}
-      - JWT_REFRESH_TOKEN_EXPIRATION=${JWT_REFRESH_TOKEN_EXPIRATION:-7d}
-      - JWT_REFRESH_TOKEN_EXPIRATION_DAYS=${JWT_REFRESH_TOKEN_EXPIRATION_DAYS:-7}
-      - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL:-notification-service:50056}
-      - PASSWORD_RESET_TOKEN_EXPIRY_MINUTES=${PASSWORD_RESET_TOKEN_EXPIRY_MINUTES:-15}
-      - ACCOUNT_SETUP_TOKEN_EXPIRY_SECONDS=${ACCOUNT_SETUP_TOKEN_EXPIRY_SECONDS:-172800}
-      - SEED_ADMIN_PASSWORD=${SEED_ADMIN_PASSWORD:-admin123}
-      - SEED_TEST_USER_PASSWORD=${SEED_TEST_USER_PASSWORD:-test123}
-      - CHOKIDAR_USEPOLLING=true
-      - CHOKIDAR_INTERVAL=1000
-      - WATCHPACK_POLLING=true
-      - CI=true
-    ports:
-      - "50051:50051"
-    volumes:
-      - ./apps:/app/apps
-      - ./libs:/app/libs
-      - ./package.json:/app/package.json
-      - ./pnpm-lock.yaml:/app/pnpm-lock.yaml
-      - ./tsconfig.json:/app/tsconfig.json
-      - ./nest-cli.json:/app/nest-cli.json
-      - ./tsconfig.build.json:/app/tsconfig.build.json
-      - /app/node_modules
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - dokploy-network
-    command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec prisma generate --schema=./apps/auth-service/prisma/schema.prisma && pnpm exec prisma migrate deploy --schema=./apps/auth-service/prisma/schema.prisma && pnpm exec prisma db seed && pnpm exec nest start auth-service --watch"
-
-  evaluation-service:
-    build:
-      context: .
-      dockerfile: apps/evaluation-service/Dockerfile
-      target: development
-    container_name: iris-evaluation-service
-    environment:
-      - DATABASE_URL=postgresql://evaluation_user:${EVALUATION_DB_PASSWORD:-postgres}@postgres:5432/evaluation_service
-      - GRPC_HOST=${GRPC_HOST:-0.0.0.0}
-      - GRPC_PORT=${GRPC_PORT:-50052}
-      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-auth-service:50051}
-      - EVENT_SERVICE_URL=${EVENT_SERVICE_URL:-event-service:50053}
-      - PROJECT_SERVICE_URL=${PROJECT_SERVICE_URL:-project-service:50055}
-      - NODE_ENV=${NODE_ENV:-development}
-      - CHOKIDAR_USEPOLLING=true
-      - CHOKIDAR_INTERVAL=1000
-      - WATCHPACK_POLLING=true
-      - CI=true
-    ports:
-      - "50052:50052"
-    volumes:
-      - ./apps:/app/apps
-      - ./libs:/app/libs
-      - ./package.json:/app/package.json
-      - ./pnpm-lock.yaml:/app/pnpm-lock.yaml
-      - ./tsconfig.json:/app/tsconfig.json
-      - ./nest-cli.json:/app/nest-cli.json
-      - ./tsconfig.build.json:/app/tsconfig.build.json
-      - /app/node_modules
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - dokploy-network
-    command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec prisma generate --schema=./apps/evaluation-service/prisma/schema.prisma && pnpm exec prisma migrate deploy --schema=./apps/evaluation-service/prisma/schema.prisma && pnpm exec nest start evaluation-service --watch"
-
-  event-service:
-    build:
-      context: .
-      dockerfile: apps/event-service/Dockerfile
-      target: development
-    container_name: iris-event-service
-    environment:
-      - DATABASE_URL=postgresql://event_user:${EVENT_DB_PASSWORD:-postgres}@postgres:5432/event_service
-      - GRPC_HOST=${GRPC_HOST:-0.0.0.0}
-      - GRPC_PORT=${GRPC_PORT:-50053}
-      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-auth-service:50051}
-      - PROJECT_SERVICE_URL=${PROJECT_SERVICE_URL:-project-service:50055}
-      - NODE_ENV=${NODE_ENV:-development}
-      - CHOKIDAR_USEPOLLING=true
-      - CHOKIDAR_INTERVAL=1000
-      - WATCHPACK_POLLING=true
-      - CI=true
-    ports:
-      - "50053:50053"
-    volumes:
-      - ./apps:/app/apps
-      - ./libs:/app/libs
-      - ./package.json:/app/package.json
-      - ./pnpm-lock.yaml:/app/pnpm-lock.yaml
-      - ./tsconfig.json:/app/tsconfig.json
-      - ./nest-cli.json:/app/nest-cli.json
-      - ./tsconfig.build.json:/app/tsconfig.build.json
-      - /app/node_modules
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - dokploy-network
-    command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec prisma generate --schema=./apps/event-service/prisma/schema.prisma && pnpm exec prisma migrate deploy --schema=./apps/event-service/prisma/schema.prisma && pnpm exec nest start event-service --watch"
-
-  invitation-service:
-    build:
-      context: .
-      dockerfile: apps/invitation-service/Dockerfile
-      target: development
-    container_name: iris-invitation-service
-    environment:
-      - DATABASE_URL=postgresql://invitation_user:${INVITATION_DB_PASSWORD:-postgres}@postgres:5432/invitation_service
-      - GRPC_HOST=${GRPC_HOST:-0.0.0.0}
-      - GRPC_PORT=${GRPC_PORT:-50054}
-      - NODE_ENV=${NODE_ENV:-development}
-      - CI=true
-      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-auth-service:50051}
-      - EVENT_SERVICE_URL=${EVENT_SERVICE_URL:-event-service:50053}
-      - PROJECT_SERVICE_URL=${PROJECT_SERVICE_URL:-project-service:50055}
-      - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL:-notification-service:50056}
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
-      - CHOKIDAR_USEPOLLING=true
-      - CHOKIDAR_INTERVAL=1000
-      - WATCHPACK_POLLING=true
-    ports:
-      - "50054:50054"
-    volumes:
-      - ./apps:/app/apps
-      - ./libs:/app/libs
-      - ./package.json:/app/package.json
-      - ./pnpm-lock.yaml:/app/pnpm-lock.yaml
-      - ./tsconfig.json:/app/tsconfig.json
-      - ./nest-cli.json:/app/nest-cli.json
-      - ./tsconfig.build.json:/app/tsconfig.build.json
-      - /app/node_modules
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - dokploy-network
-    command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec prisma generate --schema=./apps/invitation-service/prisma/schema.prisma && pnpm exec prisma migrate deploy --schema=./apps/invitation-service/prisma/schema.prisma && pnpm exec nest start invitation-service --watch"
-
-  project-service:
-    build:
-      context: .
-      dockerfile: apps/project-service/Dockerfile
-      target: development
-    container_name: iris-project-service
-    environment:
-      - DATABASE_URL=postgresql://project_user:${PROJECT_DB_PASSWORD:-postgres}@postgres:5432/project_service
-      - GRPC_HOST=${GRPC_HOST:-0.0.0.0}
-      - GRPC_PORT=${GRPC_PORT:-50055}
-      - EVENT_SERVICE_URL=${EVENT_SERVICE_URL:-event-service:50053}
-      - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL:-notification-service:50056}
-      - INVITATION_SERVICE_URL=${INVITATION_SERVICE_URL:-invitation-service:50054}
-      - NODE_ENV=${NODE_ENV:-development}
-      - CHOKIDAR_USEPOLLING=true
-      - CHOKIDAR_INTERVAL=1000
-      - WATCHPACK_POLLING=true
-      - CI=true
-    ports:
-      - "50055:50055"
-    volumes:
-      - ./apps:/app/apps
-      - ./libs:/app/libs
-      - ./package.json:/app/package.json
-      - ./pnpm-lock.yaml:/app/pnpm-lock.yaml
-      - ./tsconfig.json:/app/tsconfig.json
-      - ./nest-cli.json:/app/nest-cli.json
-      - ./tsconfig.build.json:/app/tsconfig.build.json
-      - /app/node_modules
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - dokploy-network
-    command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec prisma generate --schema=./apps/project-service/prisma/schema.prisma && pnpm exec prisma migrate deploy --schema=./apps/project-service/prisma/schema.prisma && pnpm exec nest start project-service --watch"
-
-  gateway:
-    build:
-      context: .
-      dockerfile: apps/gateway/Dockerfile
-      target: development
-    container_name: iris-gateway
-    environment:
-      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-auth-service:50051}
-      - EVALUATION_SERVICE_URL=${EVALUATION_SERVICE_URL:-evaluation-service:50052}
-      - EVENT_SERVICE_URL=${EVENT_SERVICE_URL:-event-service:50053}
-      - INVITATION_SERVICE_URL=${INVITATION_SERVICE_URL:-invitation-service:50054}
-      - PROJECT_SERVICE_URL=${PROJECT_SERVICE_URL:-project-service:50055}
-      - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL:-notification-service:50056}
-      - NODE_ENV=${NODE_ENV:-development}
-      - ALLOW_INSECURE_COOKIES=${ALLOW_INSECURE_COOKIES:-true}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
-      - COOKIE_DOMAIN=${COOKIE_DOMAIN:-}
-      - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY}
-      - JWT_REFRESH_PUBLIC_KEY=${JWT_REFRESH_PUBLIC_KEY}
-      - JWT_ACCESS_TOKEN_EXPIRATION=${JWT_ACCESS_TOKEN_EXPIRATION:-15m}
-      - JWT_REFRESH_TOKEN_EXPIRATION=${JWT_REFRESH_TOKEN_EXPIRATION:-7d}
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
-      - AZURE_BLOB_SAS_URL=${AZURE_BLOB_SAS_URL}
-      - AZURE_ACCOUNT_NAME=${AZURE_ACCOUNT_NAME}
-      - AZURE_ACCOUNT_KEY=${AZURE_ACCOUNT_KEY}
-      - AZURE_CONTAINER=${AZURE_CONTAINER}
-      - AZURE_TENANT_ID=${AZURE_TENANT_ID}
-      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
-      - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
-      - REDIRECT_URI=${REDIRECT_URI}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_dev_password}
-      - CHOKIDAR_USEPOLLING=true
-      - CHOKIDAR_INTERVAL=1000
-      - WATCHPACK_POLLING=true
-      - CI=true
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./apps:/app/apps
-      - ./libs:/app/libs
-      - ./package.json:/app/package.json
-      - ./pnpm-lock.yaml:/app/pnpm-lock.yaml
-      - ./tsconfig.json:/app/tsconfig.json
-      - ./nest-cli.json:/app/nest-cli.json
-      - ./tsconfig.build.json:/app/tsconfig.build.json
-      - /app/node_modules
-    depends_on:
-      - auth-service
-      - evaluation-service
-      - event-service
-      - invitation-service
-      - project-service
-      - notification-service
-      - redis
-    networks:
-      - dokploy-network
-    command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec nest start gateway --watch"
-
-  notification-service:
-    build:
-      context: .
-      dockerfile: ./apps/notification-service/Dockerfile
-      target: development
-    container_name: iris-notification-service
-    environment:
-      - NODE_ENV=${NODE_ENV:-development}
-      - GRPC_HOST=${GRPC_HOST:-0.0.0.0}
-      - GRPC_PORT=${GRPC_PORT:-50056}
-      - EMAIL_PROVIDERS=${EMAIL_PROVIDERS:-acs,emailjs}
-      - ACS_CONNECTION_STRING=${ACS_CONNECTION_STRING}
-      - ACS_SENDER_ADDRESS=${ACS_SENDER_ADDRESS}
-      - EMAILJS_SERVICE_ID=${EMAILJS_SERVICE_ID}
-      - EMAILJS_TEMPLATE_ID=${EMAILJS_TEMPLATE_ID}
-      - EMAILJS_PUBLIC_KEY=${EMAILJS_PUBLIC_KEY}
-      - EMAILJS_PRIVATE_KEY=${EMAILJS_PRIVATE_KEY}
-      - CHOKIDAR_USEPOLLING=true
-      - CHOKIDAR_INTERVAL=1000
-      - WATCHPACK_POLLING=true
-      - CI=true
-    ports:
-      - "50056:50056"
-    volumes:
-      - ./apps:/app/apps
-      - ./libs:/app/libs
-      - ./package.json:/app/package.json
-      - ./pnpm-lock.yaml:/app/pnpm-lock.yaml
-      - ./tsconfig.json:/app/tsconfig.json
-      - ./nest-cli.json:/app/nest-cli.json
-      - ./tsconfig.build.json:/app/tsconfig.build.json
-      - /app/node_modules
-    networks:
-      - dokploy-network
-    command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec nest start notification-service --watch"
 
   redis:
     image: redis:7-alpine
@@ -321,7 +50,7 @@ services:
     ports:
       - "6379:6379"
     networks:
-      - dokploy-network
+      - iris-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
@@ -329,10 +58,221 @@ services:
       timeout: 3s
       retries: 10
 
+  auth-service:
+    profiles: ["core", "all"]
+    build:
+      context: .
+      dockerfile: apps/auth-service/Dockerfile
+      target: development
+    container_name: iris-auth-service
+    environment:
+      <<: *dev-polling-env
+      DATABASE_URL: postgresql://auth_user:${AUTH_DB_PASSWORD:-postgres}@postgres:5432/auth_service
+      GRPC_HOST: ${GRPC_HOST:-0.0.0.0}
+      GRPC_PORT: ${GRPC_PORT:-50051}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      NODE_ENV: ${NODE_ENV:-development}
+      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}
+      JWT_REFRESH_PRIVATE_KEY: ${JWT_REFRESH_PRIVATE_KEY}
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
+      JWT_REFRESH_PUBLIC_KEY: ${JWT_REFRESH_PUBLIC_KEY}
+      JWT_ACCESS_TOKEN_EXPIRATION: ${JWT_ACCESS_TOKEN_EXPIRATION:-15m}
+      JWT_REFRESH_TOKEN_EXPIRATION: ${JWT_REFRESH_TOKEN_EXPIRATION:-7d}
+      JWT_REFRESH_TOKEN_EXPIRATION_DAYS: ${JWT_REFRESH_TOKEN_EXPIRATION_DAYS:-7}
+      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:-notification-service:50056}
+      PASSWORD_RESET_TOKEN_EXPIRY_MINUTES: ${PASSWORD_RESET_TOKEN_EXPIRY_MINUTES:-15}
+      ACCOUNT_SETUP_TOKEN_EXPIRY_SECONDS: ${ACCOUNT_SETUP_TOKEN_EXPIRY_SECONDS:-172800}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-admin123}
+      SEED_TEST_USER_PASSWORD: ${SEED_TEST_USER_PASSWORD:-test123}
+    ports:
+      - "50051:50051"
+    volumes: *dev-volumes
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - iris-network
+    command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec prisma generate --schema=./apps/auth-service/prisma/schema.prisma && pnpm exec prisma migrate deploy --schema=./apps/auth-service/prisma/schema.prisma && pnpm exec prisma db seed && pnpm exec nest start auth-service --watch"
+
+  evaluation-service:
+    profiles: ["eval", "all"]
+    build:
+      context: .
+      dockerfile: apps/evaluation-service/Dockerfile
+      target: development
+    container_name: iris-evaluation-service
+    environment:
+      <<: *dev-polling-env
+      DATABASE_URL: postgresql://evaluation_user:${EVALUATION_DB_PASSWORD:-postgres}@postgres:5432/evaluation_service
+      GRPC_HOST: ${GRPC_HOST:-0.0.0.0}
+      GRPC_PORT: ${GRPC_PORT:-50052}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-auth-service:50051}
+      EVENT_SERVICE_URL: ${EVENT_SERVICE_URL:-event-service:50053}
+      PROJECT_SERVICE_URL: ${PROJECT_SERVICE_URL:-project-service:50055}
+      NODE_ENV: ${NODE_ENV:-development}
+    ports:
+      - "50052:50052"
+    volumes: *dev-volumes
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - dokploy-network
+    command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec prisma generate --schema=./apps/evaluation-service/prisma/schema.prisma && pnpm exec prisma migrate deploy --schema=./apps/evaluation-service/prisma/schema.prisma && pnpm exec nest start evaluation-service --watch"
+
+  event-service:
+    profiles: ["events", "all"]
+    build:
+      context: .
+      dockerfile: apps/event-service/Dockerfile
+      target: development
+    container_name: iris-event-service
+    environment:
+      <<: *dev-polling-env
+      DATABASE_URL: postgresql://event_user:${EVENT_DB_PASSWORD:-postgres}@postgres:5432/event_service
+      GRPC_HOST: ${GRPC_HOST:-0.0.0.0}
+      GRPC_PORT: ${GRPC_PORT:-50053}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-auth-service:50051}
+      PROJECT_SERVICE_URL: ${PROJECT_SERVICE_URL:-project-service:50055}
+      NODE_ENV: ${NODE_ENV:-development}
+    ports:
+      - "50053:50053"
+    volumes: *dev-volumes
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - dokploy-network
+    command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec prisma generate --schema=./apps/event-service/prisma/schema.prisma && pnpm exec prisma migrate deploy --schema=./apps/event-service/prisma/schema.prisma && pnpm exec nest start event-service --watch"
+
+  invitation-service:
+    profiles: ["events", "all"]
+    build:
+      context: .
+      dockerfile: apps/invitation-service/Dockerfile
+      target: development
+    container_name: iris-invitation-service
+    environment:
+      <<: *dev-polling-env
+      DATABASE_URL: postgresql://invitation_user:${INVITATION_DB_PASSWORD:-postgres}@postgres:5432/invitation_service
+      GRPC_HOST: ${GRPC_HOST:-0.0.0.0}
+      GRPC_PORT: ${GRPC_PORT:-50054}
+      NODE_ENV: ${NODE_ENV:-development}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-auth-service:50051}
+      EVENT_SERVICE_URL: ${EVENT_SERVICE_URL:-event-service:50053}
+      PROJECT_SERVICE_URL: ${PROJECT_SERVICE_URL:-project-service:50055}
+      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:-notification-service:50056}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    ports:
+      - "50054:50054"
+    volumes: *dev-volumes
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - dokploy-network
+    command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec prisma generate --schema=./apps/invitation-service/prisma/schema.prisma && pnpm exec prisma migrate deploy --schema=./apps/invitation-service/prisma/schema.prisma && pnpm exec nest start invitation-service --watch"
+
+  project-service:
+    profiles: ["eval", "all"]
+    build:
+      context: .
+      dockerfile: apps/project-service/Dockerfile
+      target: development
+    container_name: iris-project-service
+    environment:
+      <<: *dev-polling-env
+      DATABASE_URL: postgresql://project_user:${PROJECT_DB_PASSWORD:-postgres}@postgres:5432/project_service
+      GRPC_HOST: ${GRPC_HOST:-0.0.0.0}
+      GRPC_PORT: ${GRPC_PORT:-50055}
+      EVENT_SERVICE_URL: ${EVENT_SERVICE_URL:-event-service:50053}
+      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:-notification-service:50056}
+      INVITATION_SERVICE_URL: ${INVITATION_SERVICE_URL:-invitation-service:50054}
+      NODE_ENV: ${NODE_ENV:-development}
+    ports:
+      - "50055:50055"
+    volumes: *dev-volumes
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - dokploy-network
+    command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec prisma generate --schema=./apps/project-service/prisma/schema.prisma && pnpm exec prisma migrate deploy --schema=./apps/project-service/prisma/schema.prisma && pnpm exec nest start project-service --watch"
+
+  gateway:
+    profiles: ["core", "all"]
+    build:
+      context: .
+      dockerfile: apps/gateway/Dockerfile
+      target: development
+    container_name: iris-gateway
+    environment:
+      <<: *dev-polling-env
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-auth-service:50051}
+      EVALUATION_SERVICE_URL: ${EVALUATION_SERVICE_URL:-evaluation-service:50052}
+      EVENT_SERVICE_URL: ${EVENT_SERVICE_URL:-event-service:50053}
+      INVITATION_SERVICE_URL: ${INVITATION_SERVICE_URL:-invitation-service:50054}
+      PROJECT_SERVICE_URL: ${PROJECT_SERVICE_URL:-project-service:50055}
+      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:-notification-service:50056}
+      NODE_ENV: ${NODE_ENV:-development}
+      ALLOW_INSECURE_COOKIES: ${ALLOW_INSECURE_COOKIES:-true}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
+      JWT_REFRESH_PUBLIC_KEY: ${JWT_REFRESH_PUBLIC_KEY}
+      JWT_ACCESS_TOKEN_EXPIRATION: ${JWT_ACCESS_TOKEN_EXPIRATION:-15m}
+      JWT_REFRESH_TOKEN_EXPIRATION: ${JWT_REFRESH_TOKEN_EXPIRATION:-7d}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      AZURE_BLOB_SAS_URL: ${AZURE_BLOB_SAS_URL}
+      AZURE_ACCOUNT_NAME: ${AZURE_ACCOUNT_NAME}
+      AZURE_ACCOUNT_KEY: ${AZURE_ACCOUNT_KEY}
+      AZURE_CONTAINER: ${AZURE_CONTAINER}
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID}
+      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET}
+      REDIRECT_URI: ${REDIRECT_URI}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_dev_password}
+    ports:
+      - "3000:3000"
+    volumes: *dev-volumes
+    depends_on:
+      - auth-service
+      - redis
+    networks:
+      - iris-network
+    command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec nest start gateway --watch"
+
+  notification-service:
+    profiles: ["notifications", "all"]
+    build:
+      context: .
+      dockerfile: ./apps/notification-service/Dockerfile
+      target: development
+    container_name: iris-notification-service
+    environment:
+      <<: *dev-polling-env
+      NODE_ENV: ${NODE_ENV:-development}
+      GRPC_HOST: ${GRPC_HOST:-0.0.0.0}
+      GRPC_PORT: ${GRPC_PORT:-50056}
+      ACS_CONNECTION_STRING: ${ACS_CONNECTION_STRING}
+      ACS_SENDER_ADDRESS: ${ACS_SENDER_ADDRESS}
+      EMAILJS_SERVICE_ID: ${EMAILJS_SERVICE_ID}
+      EMAILJS_TEMPLATE_ID: ${EMAILJS_TEMPLATE_ID}
+      EMAILJS_PUBLIC_KEY: ${EMAILJS_PUBLIC_KEY}
+      EMAILJS_PRIVATE_KEY: ${EMAILJS_PRIVATE_KEY}
+    ports:
+      - "50056:50056"
+    volumes: *dev-volumes
+    networks:
+      - iris-network
+    command: sh -c "mkdir -p libs/common/src/generated && pnpm run proto:generate && pnpm exec nest start notification-service --watch"
+
 networks:
-  dokploy-network:
+  iris-network:
     driver: bridge
-    name: dokploy-network
+    name: iris-network
 
 volumes:
   postgres_data:
