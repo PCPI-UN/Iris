@@ -1,14 +1,19 @@
+import { Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AzureBlobUploadService } from '../azure-blob-upload.service';
 
 const CONTAINER = 'posters';
 
-const buildService = (account = 'acct') => {
-  const env: Record<string, string> = {
+const buildService = (
+  account = 'acct',
+  overrides: Record<string, string | undefined> = {},
+) => {
+  const env: Record<string, string | undefined> = {
     AZURE_BLOB_SAS_URL: `https://${account}.blob.core.windows.net/${CONTAINER}?sv=x&sig=y`,
     AZURE_ACCOUNT_NAME: account,
     AZURE_ACCOUNT_KEY: Buffer.from('secret').toString('base64'),
     AZURE_CONTAINER: CONTAINER,
+    ...overrides,
   };
   const config = {
     get: (key: string, fallback?: string) => env[key] ?? fallback,
@@ -103,6 +108,63 @@ describe('AzureBlobUploadService document URLs', () => {
       expect(() => service.signStoredUrl(malformed)).not.toThrow();
       expect(service.signStoredUrl(malformed)).toBe(malformed);
       expect(service.toStoredUrl(malformed)).toBe(malformed);
+    });
+  });
+
+  describe('configuration', () => {
+    let logError: jest.SpyInstance;
+    const file = {
+      originalname: 'poster.png',
+      buffer: Buffer.from('x'),
+      mimetype: 'image/png',
+      size: 1,
+    } as Express.Multer.File;
+
+    beforeEach(() => {
+      logError = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+    });
+
+    afterEach(() => logError.mockRestore());
+
+    it('starts without AZURE_BLOB_SAS_URL and rejects uploads with 503', async () => {
+      const noUploads = buildService('acct', { AZURE_BLOB_SAS_URL: undefined });
+      await expect(noUploads.uploadFile(file)).rejects.toBeInstanceOf(
+        ServiceUnavailableException,
+      );
+      expect(logError).toHaveBeenCalledWith(
+        expect.stringContaining('AZURE_BLOB_SAS_URL is not set'),
+      );
+    });
+
+    it('starts without the signing settings, logs them and serves stored values as they are', () => {
+      const unsigned = buildService('acct', {
+        AZURE_ACCOUNT_KEY: undefined,
+        AZURE_CONTAINER: '',
+      });
+      expect(unsigned.signStoredUrl('1-poster.png')).toBe('1-poster.png');
+      expect(logError).toHaveBeenCalledWith(
+        expect.stringContaining('AZURE_ACCOUNT_KEY, AZURE_CONTAINER not set'),
+      );
+    });
+
+    it('logs when uploads go to a different account or container than the signed links', () => {
+      buildService('acct', {
+        AZURE_BLOB_SAS_URL: `https://old.blob.core.windows.net/${CONTAINER}?sv=x&sig=y`,
+      });
+      buildService('acct', {
+        AZURE_BLOB_SAS_URL: 'https://acct.blob.core.windows.net/other?sv=x&sig=y',
+      });
+      expect(logError).toHaveBeenCalledTimes(2);
+      expect(logError).toHaveBeenCalledWith(
+        expect.stringContaining('new documents will not open'),
+      );
+    });
+
+    it('logs nothing when the configuration is consistent', () => {
+      buildService();
+      expect(logError).not.toHaveBeenCalled();
     });
   });
 });
