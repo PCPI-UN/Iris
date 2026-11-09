@@ -555,6 +555,29 @@ export class ProjectsService implements OnModuleInit {
     }
   }
 
+  /**
+   * Freshly signed URL of a project document's file, for the stable
+   * `/projects/:projectId/documents/:documentId/open` link.
+   */
+  async getDocumentOpenUrl(
+    projectId: number,
+    documentId: number,
+  ): Promise<string> {
+    const { items } = await lastValueFrom(
+      this.projectsService.listProjectDocuments({ projectId }),
+    );
+    const document = items?.find((item) => item.id === documentId);
+    if (!document) {
+      throw new NotFoundException('Project document not found');
+    }
+
+    const url = this.azureBlobUploadService.openUrl(document.url);
+    if (!url) {
+      throw new NotFoundException('Project document has no stored file');
+    }
+    return url;
+  }
+
   async updateProjectDocument(
     id: number,
     dto: UpdateProjectDocumentDto,
@@ -565,8 +588,6 @@ export class ProjectsService implements OnModuleInit {
     if (file) {
       const uploadResult = await this.azureBlobUploadService.uploadFile(file);
       request.url = uploadResult.blobName;
-    } else if (dto.url && dto.url.trim() !== '') {
-      request.url = this.azureBlobUploadService.toStoredUrl(dto.url.trim());
     }
     if (dto.type !== undefined) {
       request.type = this.mapDocumentTypeToProto(dto.type);

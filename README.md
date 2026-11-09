@@ -153,13 +153,15 @@ Variables a configurar en `.env`:
 
 #### 📦 Almacenamiento de Archivos (Azure Blob Storage)
 El API Gateway inicializa el cliente del SDK de Azure Blob en su constructor (`AzureBlobUploadService`) para la subida de documentos y entregables de proyectos.
-- `AZURE_BLOB_SAS_URL`: SAS URL con permisos de contenedor. En **desarrollo local** se utiliza una URI dummy sintácticamente válida (`https://dummy.blob.core.windows.net/dummy?dummy`) para permitir que el Gateway levante sin credenciales reales de Azure.
-- `AZURE_ACCOUNT_NAME`: Nombre de la cuenta de almacenamiento (usar `dummy` en local). En la base de datos los documentos guardan solo el nombre del blob; el Gateway arma la URL (`https://<cuenta>.blob.core.windows.net/<contenedor>/<blob>`) y la firma con una SAS de lectura al responder. Para cambiar de cuenta basta con actualizar esta variable y `AZURE_ACCOUNT_KEY`, siempre que los archivos se copien con el mismo nombre y contenedor.
+- `AZURE_BLOB_SAS_URL`: SAS URL del contenedor donde se suben los documentos. En **desarrollo local** se utiliza una URI dummy sintácticamente válida (`https://dummy.blob.core.windows.net/dummy?dummy`).
+- `AZURE_ACCOUNT_NAME`: Nombre de la cuenta de almacenamiento (usar `dummy` en local). En la base de datos los documentos guardan solo el nombre del blob; el Gateway arma la URL (`https://<cuenta>.blob.core.windows.net/<contenedor>/<blob>`) y la firma con una SAS de lectura al responder.
 - `AZURE_ACCOUNT_KEY`: Llave de la cuenta de almacenamiento (usar `dummy` en local).
 - `AZURE_CONTAINER`: Nombre del contenedor (usar `dummy` en local).
 
+La cuenta y el contenedor de `AZURE_BLOB_SAS_URL` deben coincidir con `AZURE_ACCOUNT_NAME` y `AZURE_CONTAINER`: los archivos se suben con la primera y los enlaces se firman con las otras. Para cambiar de cuenta se actualizan las cuatro variables, con los archivos copiados con el mismo nombre y contenedor. El Gateway arranca igual aunque falte alguna o no coincidan, y lo indica en el log al iniciar: sin `AZURE_BLOB_SAS_URL` las subidas responden 503, y sin las otras tres los enlaces no se firman.
+
 > [!NOTE]
-> El SDK de Azure valida estrictamente que la URL tenga formato válido al arrancar. Nunca dejes la variable vacía ni con corchetes literales como `<account-name>`, ya que Node.js arrojará `ERR_INVALID_URL` y detendrá el contenedor del Gateway.
+> El SDK de Azure valida que la URL tenga un formato válido. Una variable vacía o con corchetes literales como `<account-name>` ya no detiene el Gateway, pero deja las subidas en 503 hasta corregirla: revisar el log al iniciar.
 
 ---
 
