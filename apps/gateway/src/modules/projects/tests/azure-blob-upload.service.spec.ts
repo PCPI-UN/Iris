@@ -97,5 +97,12 @@ describe('AzureBlobUploadService document URLs', () => {
       expect(service.signStoredUrl(otherContainer)).toBe(otherContainer);
       expect(service.signStoredUrl('')).toBe('');
     });
+
+    it('returns an own URL with a malformed escape untouched instead of throwing', () => {
+      const malformed = urlOf('acct', '100%.png');
+      expect(() => service.signStoredUrl(malformed)).not.toThrow();
+      expect(service.signStoredUrl(malformed)).toBe(malformed);
+      expect(service.toStoredUrl(malformed)).toBe(malformed);
+    });
   });
 });

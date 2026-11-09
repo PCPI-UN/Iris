@@ -143,7 +143,13 @@ export class AzureBlobUploadService {
     ) {
       return null;
     }
-    return decodeURIComponent(parsed.pathname.slice(prefix.length));
+
+    // A malformed escape (e.g. "100%.png") is not one of our blob URLs
+    try {
+      return decodeURIComponent(parsed.pathname.slice(prefix.length));
+    } catch {
+      return null;
+    }
   }
 
   /**
