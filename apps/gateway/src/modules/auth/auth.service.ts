@@ -17,6 +17,7 @@ import {
   ForgotPasswordRequest,
   SetPasswordRequest,
   ChangePasswordRequest,
+  UpdateOwnProfileRequest,
   LoginResponse,
   SignupResponse,
   RefreshResponse,
@@ -130,6 +131,10 @@ export class AuthService implements OnModuleInit {
         newPassword,
       } as ChangePasswordRequest),
     );
+  }
+
+  async updateOwnProfile(request: UpdateOwnProfileRequest): Promise<User> {
+    return firstValueFrom(this.authService.updateOwnProfile(request));
   }
 
   getAuthorizeUrl(invitationToken?: string, redirectUrl?: string): string {

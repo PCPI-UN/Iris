@@ -23,6 +23,9 @@ export interface ProjectDocument {
   url: string;
 }
 
+/** Role id stored in project assignments for jurors */
+export const JUROR_ROLE_ID = 4;
+
 export interface JurorKey {
   memberUserId: number;
   memberEventId: number;
@@ -33,6 +36,14 @@ export interface ProjectParticipant {
   userId: number;
   projectId: number;
   studentCode: string;
+}
+
+// A confirmed participation of a user, with the academic data captured at submission
+export interface UserParticipation {
+  project: Project;
+  studentCode: string;
+  career?: string | null;
+  semester?: string | null;
 }
 
 export interface ProjectParticipantWithUserInfo {

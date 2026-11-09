@@ -38,6 +38,7 @@ import { ListProjectsByFilterDTO } from '../../application/dto/list-projects.dto
 import { UpdateProjectDocumentUC } from '../../application/use-cases/update-document.uc';
 import { RequestChangesProjectUC } from '../../application/use-cases/request-changes-project.uc';
 import { GetMyProjectByEventUC } from '../../application/use-cases/get-my-project-by-event.uc';
+import { ListUserParticipationsUC } from '../../application/use-cases/list-user-participations.uc';
 import { CheckActiveSubmissionByEmailsUC } from '../../application/use-cases/check-active-submission-by-emails.uc';
 import { ClientGrpc } from '@nestjs/microservices';
 import { INVITATION_SERVICE_NAME } from '@app/common/generated/invitation';
@@ -87,6 +88,7 @@ export class ProjectsController {
     private readonly listProjectsForReviewUC: ListProjectsForReviewUC,
     private readonly updateProjectDocumentUC: UpdateProjectDocumentUC,
     private readonly getMyProjectByEventUC: GetMyProjectByEventUC,
+    private readonly listUserParticipationsUC: ListUserParticipationsUC,
     private readonly checkActiveSubmissionByEmailsUC: CheckActiveSubmissionByEmailsUC,
     private readonly changeToUnderReviewProjectUC: ChangeToUnderReviewProjectUC,
     @Inject(INVITATION_SERVICE_NAME) private readonly client: ClientGrpc,
@@ -485,5 +487,28 @@ export class ProjectsController {
       userId: req.userId,
     });
     return { project: toProtoProjectComplete(project) };
+  }
+
+  @GrpcMethod('ProjectsService', 'ListUserParticipations')
+  async listUserParticipationsRpc(req: { userId: number; email: string; limit?: number }) {
+    const { participations, academic, total } = await this.listUserParticipationsUC.execute({
+      userId: req.userId,
+      email: req.email,
+      limit: req.limit,
+    });
+    return {
+      total,
+      academic: {
+        studentCode: academic.studentCode ?? undefined,
+        career: academic.career ?? undefined,
+        semester: academic.semester ?? undefined,
+      },
+      participations: participations.map(p => ({
+        project: toProtoProject(p.project),
+        studentCode: p.studentCode,
+        career: p.career ?? undefined,
+        semester: p.semester ?? undefined,
+      })),
+    };
   }
 }

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../common/prisma/prisma.service';
+import { normalizeEmail } from '@app/common/utils/email.util';
 
 /**
  * Checks whether any of the given emails already has a pending project participant
@@ -11,7 +12,7 @@ export class CheckActiveSubmissionByEmailsUC {
 
   async execute(input: { eventId: number; emails: string[] }): Promise<{ hasConflict: boolean; conflictEmails: string[] }> {
     const normalized = (input.emails ?? [])
-      .map((e) => String(e ?? '').trim().toLowerCase())
+      .map((e) => normalizeEmail(String(e ?? '')))
       .filter(Boolean);
 
     if (!normalized.length) return { hasConflict: false, conflictEmails: [] };

@@ -6,14 +6,16 @@ RUN apk add --no-cache protobuf-dev && \
   npm install -g pnpm
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN npm pkg delete scripts.prepare && \
-  pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+  pnpm install --frozen-lockfile --ignore-scripts
+
+COPY libs/common/src/protos ./libs/common/src/protos
+RUN mkdir -p libs/common/src/generated && \
+  pnpm run proto:generate || echo "Proto generation failed - some proto files may be missing"
 
 COPY . .
 
-RUN mkdir -p libs/common/src/generated && \
-  npm run proto:generate || echo "Proto generation failed - some proto files may be missing" && \
-  pnpm run build gateway
+RUN pnpm run build gateway
 
 # Development stage - self-contained with all dev tools
 FROM node:lts-alpine AS development
@@ -32,25 +34,26 @@ EXPOSE 3000
 FROM node:lts-alpine AS production
 WORKDIR /app
 
-RUN apk add --no-cache dumb-init wget && \
+ENV NODE_ENV=production
+
+RUN apk add --no-cache dumb-init && \
   npm install -g pnpm
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN npm pkg delete scripts.prepare && \
-    pnpm install --prod --frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+  pnpm install --prod --frozen-lockfile --ignore-scripts
 
 RUN npm uninstall -g pnpm && \
   addgroup -g 1001 -S nodejs && \
-  adduser -S nestjs -u 1001 && \
-  chown -R nestjs:nodejs /app
+  adduser -S nestjs -u 1001
 
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/libs/common/src/protos ./libs/common/src/protos
+COPY --chown=nestjs:nodejs --from=builder /app/dist/apps/gateway ./dist/apps/gateway
+COPY --chown=nestjs:nodejs --from=builder /app/libs/common/src/protos ./libs/common/src/protos
 
 USER nestjs
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+  CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" || exit 1
 
 CMD ["dumb-init", "node", "dist/apps/gateway/main"]

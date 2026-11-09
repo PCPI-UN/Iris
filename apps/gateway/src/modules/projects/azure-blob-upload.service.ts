@@ -33,34 +33,28 @@ export class AzureBlobUploadService {
   private containerName: string;
 
   constructor(private readonly configService: ConfigService) {
-  const sasUrl = this.configService.get<string>('AZURE_BLOB_SAS_URL');
-  if (!sasUrl) {
-    throw new Error('AZURE_BLOB_SAS_URL is not defined in environment variables');
+    const sasUrl = this.configService.get<string>('AZURE_BLOB_SAS_URL');
+    if (!sasUrl) {
+      throw new Error('AZURE_BLOB_SAS_URL is not defined in environment variables');
+    }
+
+    this.accountName = this.configService.get<string>('AZURE_ACCOUNT_NAME') || '';
+    this.accountKey = this.configService.get<string>('AZURE_ACCOUNT_KEY') || '';
+    this.containerName = this.configService.get<string>('AZURE_CONTAINER', '');
+
+    try {
+      const blobServiceClient = new BlobServiceClient(sasUrl);
+
+      // Esto revienta si el SAS no tiene contenedor
+      const containerClient = blobServiceClient.getContainerClient('');
+
+      this.containerClient = containerClient;
+
+    } catch (err) {
+      this.logger.error('Error al inicializar AzureBlobUploadService:', err.message);
+      throw err;
+    }
   }
-
-  console.log('🔵 SAS URL recibido:', sasUrl);
-
-
-  this.accountName = this.configService.get<string>('AZURE_ACCOUNT_NAME') || '';
-  this.accountKey = this.configService.get<string>('AZURE_ACCOUNT_KEY') || '';
-  this.containerName = this.configService.get<string>('AZURE_CONTAINER', '');
-
-  try {
-    const blobServiceClient = new BlobServiceClient(sasUrl);
-
-    // IMPRIME EL CONTENEDOR
-    console.log('🟦 Intentando extraer containerName...');
-    // Esto revienta si el SAS no tiene contenedor
-    const containerClient = blobServiceClient.getContainerClient('');
-
-    console.log('🟢 containerClient.containerName =', containerClient.containerName);
-
-    this.containerClient = containerClient;
-  } catch (err) {
-    console.error('❌ Error al inicializar AzureBlobUploadService:', err.message);
-    throw err;
-  }
-}
 
 
   /**
@@ -186,6 +180,9 @@ export class AzureBlobUploadService {
       cred,
     ).toString();
 
-    return `${containerClient.getBlockBlobClient(blobName).url}?${sas}`;
+
+
+    const signedUrl = `${containerClient.getBlockBlobClient(blobName).url}?${sas}`;
+    return signedUrl;
   }
 }

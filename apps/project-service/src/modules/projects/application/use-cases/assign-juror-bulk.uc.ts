@@ -1,6 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { ProjectRepository } from '../../domain/repositories/project.repository';
 import { AssignJurorBulkDTO } from '../dto/assign-juror-bulk.dto';
+import { JUROR_ROLE_ID } from '../../domain/entities/project.entity';
 // import { EventServicePort, EVENT_SERVICE_PORT } from '../ports/event-service.port';
 // import { NotFoundError, ValidationError } from '../../domain/errors';
 
@@ -63,7 +64,7 @@ export class AssignJurorBulkUC {
     const jurorMembership = {
       memberUserId: userId,
       memberEventId: eventId,
-      memberRoleId: 4,
+      memberRoleId: JUROR_ROLE_ID,
     };
 
     // 5. Intentamos bulk, si falla hacemos upsert uno a uno

@@ -6,14 +6,16 @@ RUN apk add --no-cache protobuf-dev && \
   npm install -g pnpm
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN npm pkg delete scripts.prepare && \
-  pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+  pnpm install --frozen-lockfile --ignore-scripts
+
+COPY libs/common/src/protos ./libs/common/src/protos
+RUN mkdir -p libs/common/src/generated && \
+  pnpm run proto:generate || echo "Proto generation failed - some proto files may be missing"
 
 COPY . .
 
-RUN mkdir -p libs/common/src/generated && \
-  cd apps/invitation-service && npx prisma generate && cd ../.. && \
-  npm run proto:generate || echo "Proto generation failed - some proto files may be missing" && \
+RUN cd apps/invitation-service && npx prisma generate && cd ../.. && \
   pnpm run build invitation-service
 
 # Development stage - self-contained with all dev tools
@@ -33,29 +35,32 @@ EXPOSE 50054
 FROM node:lts-alpine AS production
 WORKDIR /app
 
+ENV NODE_ENV=production
+
 RUN apk add --no-cache dumb-init openssl && \
-  npm install -g pnpm prisma@6.16.2
+  npm install -g pnpm
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-
-RUN npm pkg delete scripts.prepare && \
-  pnpm install --prod --frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+  pnpm install --prod --frozen-lockfile --ignore-scripts
 
 COPY --from=builder /app/apps/invitation-service/prisma ./apps/invitation-service/prisma
 
-RUN prisma generate --schema=./apps/invitation-service/prisma/schema.prisma && \
-  npm uninstall -g pnpm && \
+RUN npm install -g prisma@6.16.2 && \
+  prisma generate --schema=./apps/invitation-service/prisma/schema.prisma && \
+  npm uninstall -g pnpm prisma && \
+  npm cache clean --force && \
+  rm -rf /root/.npm && \
   addgroup -g 1001 -S nodejs && \
-  adduser -S nestjs -u 1001 && \
-  chown -R nestjs:nodejs /app
+  adduser -S nestjs -u 1001
 
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/libs/common/src/protos ./libs/common/src/protos
+COPY --chown=nestjs:nodejs --from=builder /app/dist/apps/invitation-service ./dist/apps/invitation-service
+COPY --chown=nestjs:nodejs --from=builder /app/libs/common/src/protos ./libs/common/src/protos
 
 USER nestjs
 EXPOSE 50054
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
   CMD node -e "require('net').createConnection({port:50054}).on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"
 
 CMD ["dumb-init", "node", "dist/apps/invitation-service/main"]
