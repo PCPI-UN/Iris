@@ -12,7 +12,10 @@ import {
 import { InvitationRepositoryPort } from '../../domain/repositories/invitation.repository.port';
 import { InvitationRole } from '../../domain/entities/invitation-role.entity';
 import { InvitationRoleRepositoryPort } from '../../domain/repositories/invitation-role.repository.port';
-import { NotificationServicePort } from '../../infrastructure/ports/notification-service.port';
+import {
+  NotificationServicePort,
+  invitationEmailKey,
+} from '../../infrastructure/ports/notification-service.port';
 import { ProjectServicePort } from '../../infrastructure/ports/project-service.port';
 import { AuthServicePort } from '../../infrastructure/ports/auth-service.port';
 import { EventServicePort } from '../../infrastructure/ports/event-service.port';
@@ -214,6 +217,7 @@ export class CreateInvitationUseCase {
       invitationLink = `${frontendUrl}/app/invitations`;
 
     await this.sendInvitationEmail({
+      idempotencyKey: invitationEmailKey(savedInvitation.id, expiresAt),
       targetType: rest.targetType,
       eventType,
       to: email,
@@ -232,6 +236,7 @@ export class CreateInvitationUseCase {
    * Sends invitation email based on target type using already-fetched data
    */
   private async sendInvitationEmail(params: {
+    idempotencyKey: string;
     targetType: InvitationTargetType;
     eventType: string;
     to: string;
@@ -252,6 +257,7 @@ export class CreateInvitationUseCase {
         }
 
         await this.notificationService.sendPlatformInvitationEmail({
+          idempotencyKey: params.idempotencyKey,
           to: params.to,
           firstName: params.firstName,
           lastName: params.lastName,
@@ -265,6 +271,7 @@ export class CreateInvitationUseCase {
         // NOTE: EVENT invitations use JUROR_INVITATION template
         // This is because currently just jurors receive event invitations
         await this.notificationService.sendJurorInvitationEmail({
+          idempotencyKey: params.idempotencyKey,
           to: params.to,
           firstName: params.firstName,
           lastName: params.lastName,
@@ -278,6 +285,7 @@ export class CreateInvitationUseCase {
 
       case InvitationTargetType.PROJECT: {
         await this.notificationService.sendProjectSubmittedInvitationEmail({
+          idempotencyKey: params.idempotencyKey,
           to: params.to,
           eventType: params.eventType,
           firstName: params.firstName,

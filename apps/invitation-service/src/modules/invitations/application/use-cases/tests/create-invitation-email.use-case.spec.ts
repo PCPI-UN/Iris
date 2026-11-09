@@ -98,6 +98,16 @@ describe('CreateInvitationUseCase - email normalization', () => {
     );
   });
 
+  it('sends the email with an idempotency key built from the invitation id and expiry', async () => {
+    const { invitation } = await useCase.execute(dto());
+
+    expect(notificationService.sendJurorInvitationEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        idempotencyKey: `invitation:${invitation.id}:${invitation.expiresAt.getTime()}`,
+      }),
+    );
+  });
+
   it('returns the pending invitation of the same email without sending another one', async () => {
     const pending = new Invitation(
       'inv-1',
