@@ -13,7 +13,9 @@ import {
   Query,
   HttpException,
   HttpStatus,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import {
   FileFieldsInterceptor,
   FileInterceptor,
@@ -597,6 +599,30 @@ export class ProjectsController {
   async listProjectJurors(@Param('id', ParseIntPipe) id: number) {
     const jurors = await this.projectsService.listJurorsByProjectId(id);
     return { jurors };
+  }
+
+  @Public()
+  @Get(':projectId/documents/:documentId/open')
+  @ApiOperation({
+    summary: 'Open a project document',
+    description:
+      'Stable link to a document: redirects (302) to a freshly signed, short-lived read URL of its file. ' +
+      'Use it wherever a link must keep working after the response that listed it (exported reports, open tabs). ' +
+      'Only files stored in the platform storage are served; anything else answers 404.',
+  })
+  @ApiParam({ name: 'projectId', type: Number, example: 1 })
+  @ApiParam({ name: 'documentId', type: Number, example: 1 })
+  async openDocument(
+    @Param('projectId', ParseIntPipe) projectId: number,
+    @Param('documentId', ParseIntPipe) documentId: number,
+    @Res() res: Response,
+  ) {
+    const url = await this.projectsService.getDocumentOpenUrl(
+      projectId,
+      documentId,
+    );
+    // The signature expires in minutes: never let a cache keep the redirect
+    res.set('Cache-Control', 'no-store').redirect(HttpStatus.FOUND, url);
   }
 
   @Public()

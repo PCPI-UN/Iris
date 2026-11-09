@@ -60,11 +60,15 @@ export class AzureBlobUploadService {
     this.containerName = this.setting('AZURE_CONTAINER');
 
     if (!sasUrl) {
-      this.logger.error('AZURE_BLOB_SAS_URL is not set: document uploads are disabled');
+      this.logger.error(
+        'AZURE_BLOB_SAS_URL is not set: document uploads are disabled',
+      );
     } else {
       try {
         // The SAS URL points to the container, so '' is that container
-        this.uploadContainer = new BlobServiceClient(sasUrl).getContainerClient('');
+        this.uploadContainer = new BlobServiceClient(sasUrl).getContainerClient(
+          '',
+        );
       } catch (err) {
         this.logger.error(
           `AZURE_BLOB_SAS_URL is invalid, document uploads are disabled: ${(err as Error).message}`,
@@ -85,7 +89,10 @@ export class AzureBlobUploadService {
         `${missing.join(', ')} not set: document links cannot be signed`,
       );
     } else {
-      const credential = new StorageSharedKeyCredential(accountName, accountKey);
+      const credential = new StorageSharedKeyCredential(
+        accountName,
+        accountKey,
+      );
       this.signer = {
         credential,
         container: new BlobServiceClient(
@@ -120,7 +127,10 @@ export class AzureBlobUploadService {
       // An unparsable SAS URL was already reported by the client constructor
     }
 
-    if (uploadAccount !== accountName || uploadContainer !== this.containerName) {
+    if (
+      uploadAccount !== accountName ||
+      uploadContainer !== this.containerName
+    ) {
       this.logger.error(
         `Uploads go to ${uploadAccount}/${uploadContainer} (AZURE_BLOB_SAS_URL) ` +
           `but links are signed for ${accountName}/${this.containerName} ` +
@@ -199,6 +209,24 @@ export class AzureBlobUploadService {
   }
 
   /**
+   * Short-lived signed URL for a stored document value, or null when the value
+   * is not a file of our container (external URL, empty). Never returns an
+   * external URL, so the stable document link cannot redirect elsewhere.
+   */
+  openUrl(value: string): string | null {
+    if (!this.signer)
+      throw new ServiceUnavailableException(STORAGE_UNAVAILABLE);
+    if (!value) return null;
+
+    const blobName = ABSOLUTE_URL.test(value)
+      ? this.extractBlobName(value)
+      : value;
+    return blobName
+      ? this.generateReadSasUrl(blobName, OPEN_SAS_TTL_SEC)
+      : null;
+  }
+
+  /**
    * Blob name of a URL that points to our container on an Azure blob host,
    * or null for any other URL.
    */
@@ -230,7 +258,8 @@ export class AzureBlobUploadService {
 
   /** Read-only signed URL of a blob in our container. */
   private generateReadSasUrl(blobName: string, ttlSec: number): string {
-    if (!this.signer) throw new ServiceUnavailableException(STORAGE_UNAVAILABLE);
+    if (!this.signer)
+      throw new ServiceUnavailableException(STORAGE_UNAVAILABLE);
 
     const sas = generateBlobSASQueryParameters(
       {

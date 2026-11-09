@@ -111,6 +111,44 @@ describe('AzureBlobUploadService document URLs', () => {
     });
   });
 
+  describe('openUrl', () => {
+    it('signs a stored blob name with a short-lived read SAS', () => {
+      const signed = new URL(service.openUrl('1-poster.png')!);
+      expect(`${signed.origin}${signed.pathname}`).toBe(
+        urlOf('acct', '1-poster.png'),
+      );
+      expect(signed.searchParams.get('sp')).toBe('r');
+      const expiresIn =
+        new Date(signed.searchParams.get('se')!).getTime() - Date.now();
+      expect(expiresIn).toBeGreaterThan(0);
+      expect(expiresIn).toBeLessThanOrEqual(5 * 60 * 1000);
+    });
+
+    it('signs a legacy URL of our container on the configured account', () => {
+      const signed = new URL(
+        service.openUrl(urlOf('old', '1-poster.png', '?sig=old'))!,
+      );
+      expect(signed.hostname).toBe('acct.blob.core.windows.net');
+    });
+
+    it('never returns an external URL or another container', () => {
+      expect(service.openUrl('https://example.com/poster.png')).toBeNull();
+      expect(
+        service.openUrl('https://acct.blob.core.windows.net/private/a.png'),
+      ).toBeNull();
+      expect(service.openUrl('')).toBeNull();
+    });
+
+    it('answers 503 when links cannot be signed', () => {
+      jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      const unsigned = buildService('acct', { AZURE_ACCOUNT_KEY: undefined });
+      expect(() => unsigned.openUrl('1-poster.png')).toThrow(
+        ServiceUnavailableException,
+      );
+      jest.restoreAllMocks();
+    });
+  });
+
   describe('configuration', () => {
     let logError: jest.SpyInstance;
     const file = {
@@ -154,7 +192,8 @@ describe('AzureBlobUploadService document URLs', () => {
         AZURE_BLOB_SAS_URL: `https://old.blob.core.windows.net/${CONTAINER}?sv=x&sig=y`,
       });
       buildService('acct', {
-        AZURE_BLOB_SAS_URL: 'https://acct.blob.core.windows.net/other?sv=x&sig=y',
+        AZURE_BLOB_SAS_URL:
+          'https://acct.blob.core.windows.net/other?sv=x&sig=y',
       });
       expect(logError).toHaveBeenCalledTimes(2);
       expect(logError).toHaveBeenCalledWith(
