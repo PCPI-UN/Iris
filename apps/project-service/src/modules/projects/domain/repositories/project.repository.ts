@@ -1,4 +1,4 @@
-import {TypedDocument, JurorKey, Project, ProjectDocument, ProjectState, ProjectParticipant, StudentStatus, PendingProjectParticipant, Status } from '../entities/project.entity';
+import {TypedDocument, JurorKey, Project, UserParticipation, ProjectDocument, ProjectState, ProjectParticipant, StudentStatus, PendingProjectParticipant, Status } from '../entities/project.entity';
 
 export interface ProjectRepository {
   create(input: {
@@ -81,4 +81,5 @@ export interface ProjectRepository {
   }): Promise<ProjectDocument>;
 
   findByEventIdAndUserId(eventId:number, userId: number): Promise<Project | null>;
+  listParticipationsByUser(userId: number, email: string): Promise<UserParticipation[]>;
 }

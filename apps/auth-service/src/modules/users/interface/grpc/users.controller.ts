@@ -17,6 +17,8 @@ import { GetUsersDto } from '@users/application/dto/get-users.dto';
 import { GetUsersUseCase } from '@users/application/use-cases/get-users.use-case';
 import { UpdateUserDto } from '@users/application/dto/update-user.dto';
 import { UpdateUserUseCase } from '@users/application/use-cases/update-user.use-case';
+import { UpdateOwnProfileDto } from '@users/application/dto/update-own-profile.dto';
+import { UpdateOwnProfileUseCase } from '@users/application/use-cases/update-own-profile.use-case';
 import { DeactivateUserDto } from '@users/application/dto/deactivate-user.dto';
 import { DeactivateUserUseCase } from '@users/application/use-cases/deactivate-user.use-case';
 import { GetUserByEmailUseCase } from '@users/application/use-cases/get-user-by-email.use-case';
@@ -36,6 +38,7 @@ export class UsersController {
     private readonly getUserByEmailUseCase: GetUserByEmailUseCase,
     private readonly getUsersUseCase: GetUsersUseCase,
     private readonly updateUserUseCase: UpdateUserUseCase,
+    private readonly updateOwnProfileUseCase: UpdateOwnProfileUseCase,
     private readonly deactivateUserUseCase: DeactivateUserUseCase,
     private readonly activateUserUseCase: ActivateUserUseCase,
     private readonly activateUserWithMicrosoftUseCase: ActivateUserWithMicrosoftUseCase,
@@ -86,6 +89,12 @@ export class UsersController {
   @GrpcMethod(AUTH_SERVICE_NAME, 'UpdateUser')
   async updateUser(request: UpdateUserDto): Promise<UserProto> {
     const updatedUser = await this.updateUserUseCase.execute(request);
+    return UserMapper.toGetUserResponse(updatedUser);
+  }
+
+  @GrpcMethod(AUTH_SERVICE_NAME, 'UpdateOwnProfile')
+  async updateOwnProfile(request: UpdateOwnProfileDto): Promise<UserProto> {
+    const updatedUser = await this.updateOwnProfileUseCase.execute(request);
     return UserMapper.toGetUserResponse(updatedUser);
   }
 

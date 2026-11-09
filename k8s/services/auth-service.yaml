@@ -56,8 +56,8 @@ spec:
                   key: NODE_ENV
             - name: JWT_PRIVATE_KEY
               valueFrom:
-                configMapKeyRef:
-                  name: pcpi-config
+                secretKeyRef:
+                  name: pcpi-secrets
                   key: JWT_PRIVATE_KEY
             - name: JWT_PUBLIC_KEY
               valueFrom:
