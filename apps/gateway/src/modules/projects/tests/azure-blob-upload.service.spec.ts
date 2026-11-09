@@ -112,7 +112,7 @@ describe('AzureBlobUploadService document URLs', () => {
   });
 
   describe('openUrl', () => {
-    it('signs a stored blob name with a short-lived read SAS', () => {
+    it('signs a stored blob name with a read SAS that outlasts a long PDF reading', () => {
       const signed = new URL(service.openUrl('1-poster.png')!);
       expect(`${signed.origin}${signed.pathname}`).toBe(
         urlOf('acct', '1-poster.png'),
@@ -121,7 +121,8 @@ describe('AzureBlobUploadService document URLs', () => {
       const expiresIn =
         new Date(signed.searchParams.get('se')!).getTime() - Date.now();
       expect(expiresIn).toBeGreaterThan(0);
-      expect(expiresIn).toBeLessThanOrEqual(5 * 60 * 1000);
+      expect(expiresIn).toBeGreaterThan(55 * 60 * 1000);
+      expect(expiresIn).toBeLessThanOrEqual(60 * 60 * 1000);
     });
 
     it('signs a legacy URL of our container on the configured account', () => {

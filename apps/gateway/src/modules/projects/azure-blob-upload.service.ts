@@ -20,8 +20,12 @@ const ABSOLUTE_URL = /^[a-z][a-z0-9+.-]*:\/\//i;
 /** Lifetime of the read signature added when a document is served */
 const READ_SAS_TTL_SEC = 3600;
 
-/** Lifetime of the signature behind a stable document link: used right away */
-const OPEN_SAS_TTL_SEC = 300;
+/**
+ * Lifetime of the signature behind a stable document link. The redirect is
+ * followed right away, but PDF viewers and media players keep requesting byte
+ * ranges of the same URL while the document stays open.
+ */
+const OPEN_SAS_TTL_SEC = 3600;
 
 const STORAGE_UNAVAILABLE = 'Document storage is not configured';
 
@@ -206,31 +210,33 @@ export class AzureBlobUploadService {
    * - any other value (external URL, empty) is returned untouched
    */
   signStoredUrl(value: string, ttlSec: number = READ_SAS_TTL_SEC): string {
-    if (!value || !this.signer) return value;
-
-    const blobName = ABSOLUTE_URL.test(value)
-      ? this.extractBlobName(value)
-      : value;
-
+    if (!this.signer) return value;
+    const blobName = this.blobNameOf(value);
     return blobName ? this.generateReadSasUrl(blobName, ttlSec) : value;
   }
 
   /**
-   * Short-lived signed URL for a stored document value, or null when the value
-   * is not a file of our container (external URL, empty). Never returns an
-   * external URL, so the stable document link cannot redirect elsewhere.
+   * Signed URL for the stable document link, or null when the stored value is
+   * not a file of our container (external URL, empty). Never returns an
+   * external URL, so the stable link cannot redirect elsewhere.
    */
   openUrl(value: string): string | null {
-    if (!this.signer)
+    if (!this.signer) {
       throw new ServiceUnavailableException(STORAGE_UNAVAILABLE);
-    if (!value) return null;
-
-    const blobName = ABSOLUTE_URL.test(value)
-      ? this.extractBlobName(value)
-      : value;
+    }
+    const blobName = this.blobNameOf(value);
     return blobName
       ? this.generateReadSasUrl(blobName, OPEN_SAS_TTL_SEC)
       : null;
+  }
+
+  /**
+   * Blob name behind a stored document value: the value itself when it is a
+   * bare name, the name inside a URL of our container, or null otherwise.
+   */
+  private blobNameOf(value: string): string | null {
+    if (!value) return null;
+    return ABSOLUTE_URL.test(value) ? this.extractBlobName(value) : value;
   }
 
   /**

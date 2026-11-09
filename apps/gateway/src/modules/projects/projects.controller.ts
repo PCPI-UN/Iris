@@ -606,7 +606,7 @@ export class ProjectsController {
   @ApiOperation({
     summary: 'Open a project document',
     description:
-      'Stable link to a document: redirects (302) to a freshly signed, short-lived read URL of its file. ' +
+      'Stable link to a document: redirects (302) to a freshly signed read URL of its file (valid for 1 hour). ' +
       'Use it wherever a link must keep working after the response that listed it (exported reports, open tabs). ' +
       'Only files stored in the platform storage are served; anything else answers 404.',
   })
@@ -621,7 +621,7 @@ export class ProjectsController {
       projectId,
       documentId,
     );
-    // The signature expires in minutes: never let a cache keep the redirect
+    // Each click signs a new URL: never let a cache keep the redirect
     res.set('Cache-Control', 'no-store').redirect(HttpStatus.FOUND, url);
   }
 
