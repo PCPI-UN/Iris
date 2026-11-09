@@ -161,7 +161,7 @@ El API Gateway inicializa el cliente del SDK de Azure Blob en su constructor (`A
 La cuenta y el contenedor de `AZURE_BLOB_SAS_URL` deben coincidir con `AZURE_ACCOUNT_NAME` y `AZURE_CONTAINER`: los archivos se suben con la primera y los enlaces se firman con las otras. Para cambiar de cuenta se actualizan las cuatro variables, con los archivos copiados con el mismo nombre y contenedor. El Gateway arranca igual aunque falte alguna o no coincidan, y lo indica en el log al iniciar: sin `AZURE_BLOB_SAS_URL` las subidas responden 503, y sin las otras tres los enlaces no se firman.
 
 > [!NOTE]
-> El SDK de Azure valida estrictamente que la URL tenga formato válido al arrancar. Nunca dejes la variable vacía ni con corchetes literales como `<account-name>`, ya que Node.js arrojará `ERR_INVALID_URL` y detendrá el contenedor del Gateway.
+> El SDK de Azure valida que la URL tenga un formato válido. Una variable vacía o con corchetes literales como `<account-name>` ya no detiene el Gateway, pero deja las subidas en 503 hasta corregirla: revisar el log al iniciar.
 
 ---
 

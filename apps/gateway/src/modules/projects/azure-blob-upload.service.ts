@@ -89,17 +89,23 @@ export class AzureBlobUploadService {
         `${missing.join(', ')} not set: document links cannot be signed`,
       );
     } else {
-      const credential = new StorageSharedKeyCredential(
-        accountName,
-        accountKey,
-      );
-      this.signer = {
-        credential,
-        container: new BlobServiceClient(
-          `https://${accountName}.blob.core.windows.net`,
+      try {
+        const credential = new StorageSharedKeyCredential(
+          accountName,
+          accountKey,
+        );
+        this.signer = {
           credential,
-        ).getContainerClient(this.containerName),
-      };
+          container: new BlobServiceClient(
+            `https://${accountName}.blob.core.windows.net`,
+            credential,
+          ).getContainerClient(this.containerName),
+        };
+      } catch (err) {
+        this.logger.error(
+          `AZURE_ACCOUNT_NAME or AZURE_CONTAINER is invalid, document links cannot be signed: ${(err as Error).message}`,
+        );
+      }
     }
 
     if (sasUrl && this.uploadContainer && this.signer) {
@@ -127,8 +133,9 @@ export class AzureBlobUploadService {
       // An unparsable SAS URL was already reported by the client constructor
     }
 
+    // Host names are case-insensitive; container names are always lowercase
     if (
-      uploadAccount !== accountName ||
+      uploadAccount !== accountName.toLowerCase() ||
       uploadContainer !== this.containerName
     ) {
       this.logger.error(

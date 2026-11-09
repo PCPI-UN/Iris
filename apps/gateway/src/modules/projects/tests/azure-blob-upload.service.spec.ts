@@ -140,12 +140,17 @@ describe('AzureBlobUploadService document URLs', () => {
     });
 
     it('answers 503 when links cannot be signed', () => {
-      jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
-      const unsigned = buildService('acct', { AZURE_ACCOUNT_KEY: undefined });
-      expect(() => unsigned.openUrl('1-poster.png')).toThrow(
-        ServiceUnavailableException,
-      );
-      jest.restoreAllMocks();
+      const logError = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+      try {
+        const unsigned = buildService('acct', { AZURE_ACCOUNT_KEY: undefined });
+        expect(() => unsigned.openUrl('1-poster.png')).toThrow(
+          ServiceUnavailableException,
+        );
+      } finally {
+        logError.mockRestore();
+      }
     });
   });
 
@@ -199,6 +204,21 @@ describe('AzureBlobUploadService document URLs', () => {
       expect(logError).toHaveBeenCalledWith(
         expect.stringContaining('new documents will not open'),
       );
+    });
+
+    it('starts when the account name is not a valid host and logs it', () => {
+      const invalid = buildService('my acct');
+      expect(invalid.signStoredUrl('1-poster.png')).toBe('1-poster.png');
+      expect(logError).toHaveBeenCalledWith(
+        expect.stringContaining('document links cannot be signed'),
+      );
+    });
+
+    it('compares the account name without case', () => {
+      buildService('acct', {
+        AZURE_ACCOUNT_NAME: 'Acct',
+      });
+      expect(logError).not.toHaveBeenCalled();
     });
 
     it('logs nothing when the configuration is consistent', () => {
