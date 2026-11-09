@@ -1,4 +1,4 @@
-import {TypedDocument, JurorKey, Project, ProjectDocument, ProjectState, ProjectParticipant, StudentStatus, PendingProjectParticipant, Status, ProjectWithJurorIds } from '../entities/project.entity';
+import {TypedDocument, JurorKey, Project, UserParticipation, ProjectDocument, ProjectState, ProjectParticipant, StudentStatus, PendingProjectParticipant, Status, ProjectWithJurorIds } from '../entities/project.entity';
 
 export interface ProjectRepository {
   create(input: {
@@ -84,4 +84,5 @@ export interface ProjectRepository {
 
   /** Every project of the event, in any state, with the user ids assigned as jurors */
   listWithJurorsByEvent(eventId: number): Promise<ProjectWithJurorIds[]>;
+  listParticipationsByUser(userId: number, email: string): Promise<UserParticipation[]>;
 }

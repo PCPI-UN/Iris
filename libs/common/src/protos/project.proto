@@ -35,6 +35,7 @@ service ProjectsService {
   rpc ListProjectJurors (ListProjectJurorsRequest) returns (ListProjectJurorsResponse);  
   rpc ListAssignedProjects(ListAssignedProjectsRequest) returns (ListAssignedProjectsResponse);
   rpc GetMyProjectByEvent (GetMyProjectByEventRequest) returns (GetMyProjectByEventResponse);
+  rpc ListUserParticipations (ListUserParticipationsRequest) returns (ListUserParticipationsResponse);
 
   rpc ListProjectsForReview(ListProjectsForReviewRequest) returns (ListProjectsForReviewResponse);
   rpc DeleteProject (DeleteProjectRequest) returns (DeleteProjectResponse);
@@ -371,6 +372,37 @@ message GetMyProjectByEventRequest {
 
 message GetMyProjectByEventResponse {
   ProjectComplete project = 1;
+}
+
+message ListUserParticipationsRequest {
+  int32 userId = 1;
+  // Used to match the participant data captured at submission (unique per project)
+  string email = 2;
+  // Max participations to return, most recent first (default 10, max 50)
+  optional int32 limit = 3;
+}
+
+// One confirmed participation of a user. career and semester come from the
+// participant data captured at submission and may be empty.
+message UserParticipation {
+  Project project = 1;
+  string studentCode = 2;
+  optional string career = 3;
+  optional string semester = 4;
+}
+
+// Academic data derived from all the user's participations: each field takes
+// the most recent informative value. Not stored on the user.
+message AcademicInfo {
+  optional string studentCode = 1;
+  optional string career = 2;
+  optional string semester = 3;
+}
+
+message ListUserParticipationsResponse {
+  repeated UserParticipation participations = 1;
+  AcademicInfo academic = 2;
+  int32 total = 3;
 }
 
 /************** Juror import **************/

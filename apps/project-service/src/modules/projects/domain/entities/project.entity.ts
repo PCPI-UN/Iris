@@ -43,6 +43,14 @@ export interface ProjectParticipant {
   studentCode: string;
 }
 
+// A confirmed participation of a user, with the academic data captured at submission
+export interface UserParticipation {
+  project: Project;
+  studentCode: string;
+  career?: string | null;
+  semester?: string | null;
+}
+
 export interface ProjectParticipantWithUserInfo {
   userId: number;
   projectId: number;

@@ -12,6 +12,7 @@ import { CreateBasicUserUseCase } from './application/use-cases/create-basic-use
 import { GetUserUseCase } from './application/use-cases/get-user.use-case';
 import { GetUsersUseCase } from './application/use-cases/get-users.use-case';
 import { UpdateUserUseCase } from './application/use-cases/update-user.use-case';
+import { UpdateOwnProfileUseCase } from './application/use-cases/update-own-profile.use-case';
 import { DeactivateUserUseCase } from './application/use-cases/deactivate-user.use-case';
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { GetUserByEmailUseCase } from './application/use-cases/get-user-by-email.use-case';
@@ -30,6 +31,7 @@ import { ActivateUserWithMicrosoftUseCase } from './application/use-cases/activa
     GetUserByEmailUseCase,
     GetUsersUseCase,
     UpdateUserUseCase,
+    UpdateOwnProfileUseCase,
     DeactivateUserUseCase,
     {
       provide: UserRepositoryPort,
