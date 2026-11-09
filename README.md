@@ -289,18 +289,16 @@ El backend utiliza una sola instancia de PostgreSQL 16 en el puerto `5432`. El s
 
 Cada microservicio gestiona su propio esquema de base de datos bajo `apps/<servicio>/prisma/schema.prisma`.
 
-- **Auth Service:** Utiliza migraciones formales versionadas:
+Todos los microservicios con base de datos (`auth-service`, `evaluation-service`, `event-service`, `invitation-service`, `project-service`) utilizan migraciones formales versionadas gestionadas con Prisma:
+
+- **Aplicar migraciones pendientes:**
   ```bash
-  pnpm exec prisma migrate deploy --schema=./apps/auth-service/prisma/schema.prisma
-  ```
-  Para crear una nueva migración al modificar el esquema:
-  ```bash
-  pnpm exec prisma migrate dev --name <nombre_cambio> --schema=./apps/auth-service/prisma/schema.prisma
+  pnpm exec prisma migrate deploy --schema=./apps/<servicio>/prisma/schema.prisma
   ```
 
-- **Servicios de Event, Evaluation, Invitation y Project:** Sincronizan su esquema mediante push:
+- **Crear una nueva migración al modificar un esquema:**
   ```bash
-  pnpm exec prisma db push --schema=./apps/<servicio>/prisma/schema.prisma
+  pnpm exec prisma migrate dev --name <nombre_cambio> --schema=./apps/<servicio>/prisma/schema.prisma
   ```
 
 ### 🌱 Datos Iniciales (Seed)
