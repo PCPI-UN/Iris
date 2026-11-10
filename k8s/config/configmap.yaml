@@ -6,8 +6,8 @@ metadata:
 data:
   # Common
   NODE_ENV: "production"
-  FRONTEND_URL: "http://localhost:3001"
-  ALLOWED_ORIGINS: "http://localhost:3001"
+  FRONTEND_URL: "http://localhost"
+  ALLOWED_ORIGINS: "http://localhost,http://localhost:3000,http://localhost:3001,http://iris.local"
   ALLOW_INSECURE_COOKIES: "true"
   COOKIE_DOMAIN: ""
   REDIRECT_URI: ""

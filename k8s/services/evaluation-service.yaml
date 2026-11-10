@@ -28,6 +28,41 @@ spec:
         app: evaluation-service
     spec:
       automountServiceAccountToken: false
+      initContainers:
+        - name: evaluation-migration
+          image: pcpi/evaluation-service:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - "prisma migrate deploy --schema=./apps/evaluation-service/prisma/schema.prisma"
+          env:
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: NODE_ENV
+            - name: EVALUATION_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: EVALUATION_DB_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://evaluation_user:$(EVALUATION_DB_PASSWORD)@evaluation-db:5432/evaluation_service"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
       containers:
         - name: evaluation-service
           image: pcpi/evaluation-service:latest
@@ -65,11 +100,13 @@ spec:
                 configMapKeyRef:
                   name: pcpi-config
                   key: EVENT_SERVICE_URL
-            - name: DATABASE_URL
+            - name: EVALUATION_DB_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: pcpi-secrets
-                  key: EVALUATION_DATABASE_URL
+                  key: EVALUATION_DB_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://evaluation_user:$(EVALUATION_DB_PASSWORD)@evaluation-db:5432/evaluation_service"
           securityContext:
             runAsNonRoot: true
             runAsUser: 1001
@@ -77,6 +114,13 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
           startupProbe:
             tcpSocket:
               port: 50052

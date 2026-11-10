@@ -28,6 +28,41 @@ spec:
         app: event-service
     spec:
       automountServiceAccountToken: false
+      initContainers:
+        - name: event-migration
+          image: pcpi/event-service:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - "prisma migrate deploy --schema=./apps/event-service/prisma/schema.prisma"
+          env:
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: NODE_ENV
+            - name: EVENT_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: EVENT_DB_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://event_user:$(EVENT_DB_PASSWORD)@event-db:5432/event_service"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
       containers:
         - name: event-service
           image: pcpi/event-service:latest
@@ -60,11 +95,13 @@ spec:
                 configMapKeyRef:
                   name: pcpi-config
                   key: PROJECT_SERVICE_URL
-            - name: DATABASE_URL
+            - name: EVENT_DB_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: pcpi-secrets
-                  key: EVENT_DATABASE_URL
+                  key: EVENT_DB_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://event_user:$(EVENT_DB_PASSWORD)@event-db:5432/event_service"
           securityContext:
             runAsNonRoot: true
             runAsUser: 1001
@@ -72,6 +109,13 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
           startupProbe:
             tcpSocket:
               port: 50053

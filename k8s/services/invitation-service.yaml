@@ -28,6 +28,41 @@ spec:
         app: invitation-service
     spec:
       automountServiceAccountToken: false
+      initContainers:
+        - name: invitation-migration
+          image: pcpi/invitation-service:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - "prisma migrate deploy --schema=./apps/invitation-service/prisma/schema.prisma"
+          env:
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: NODE_ENV
+            - name: INVITATION_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: INVITATION_DB_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://invitation_user:$(INVITATION_DB_PASSWORD)@invitation-db:5432/invitation_service"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
       containers:
         - name: invitation-service
           image: pcpi/invitation-service:latest
@@ -80,11 +115,13 @@ spec:
                 configMapKeyRef:
                   name: pcpi-config
                   key: INVITATION_EXPIRATION_SECONDS
-            - name: DATABASE_URL
+            - name: INVITATION_DB_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: pcpi-secrets
-                  key: INVITATION_DATABASE_URL
+                  key: INVITATION_DB_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://invitation_user:$(INVITATION_DB_PASSWORD)@invitation-db:5432/invitation_service"
           securityContext:
             runAsNonRoot: true
             runAsUser: 1001
@@ -92,6 +129,13 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
           startupProbe:
             tcpSocket:
               port: 50054

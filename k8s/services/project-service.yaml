@@ -28,6 +28,41 @@ spec:
         app: project-service
     spec:
       automountServiceAccountToken: false
+      initContainers:
+        - name: project-migration
+          image: pcpi/project-service:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - "prisma migrate deploy --schema=./apps/project-service/prisma/schema.prisma"
+          env:
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: NODE_ENV
+            - name: PROJECT_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: PROJECT_DB_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://project_user:$(PROJECT_DB_PASSWORD)@project-db:5432/project_service"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
       containers:
         - name: project-service
           image: pcpi/project-service:latest
@@ -70,11 +105,13 @@ spec:
                 configMapKeyRef:
                   name: pcpi-config
                   key: NOTIFICATION_SERVICE_URL
-            - name: DATABASE_URL
+            - name: PROJECT_DB_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: pcpi-secrets
-                  key: PROJECT_DATABASE_URL
+                  key: PROJECT_DB_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://project_user:$(PROJECT_DB_PASSWORD)@project-db:5432/project_service"
           securityContext:
             runAsNonRoot: true
             runAsUser: 1001
@@ -82,6 +119,13 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
           startupProbe:
             tcpSocket:
               port: 50055

@@ -37,10 +37,7 @@ spec:
             - name: POSTGRES_DB
               value: evaluation_service
             - name: POSTGRES_USER
-              valueFrom:
-                secretKeyRef:
-                  name: pcpi-secrets
-                  key: POSTGRES_USER
+              value: evaluation_user
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
