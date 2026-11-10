@@ -27,6 +27,7 @@ spec:
       labels:
         app: event-service
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: event-service
           image: pcpi/event-service:latest
@@ -34,11 +35,11 @@ spec:
           ports:
             - containerPort: 50053
           env:
-            - name: DATABASE_URL
+            - name: NODE_ENV
               valueFrom:
                 configMapKeyRef:
                   name: pcpi-config
-                  key: EVENT_DATABASE_URL
+                  key: NODE_ENV
             - name: GRPC_HOST
               valueFrom:
                 configMapKeyRef:
@@ -49,11 +50,33 @@ spec:
                 configMapKeyRef:
                   name: pcpi-config
                   key: EVENT_GRPC_PORT
-            - name: NODE_ENV
+            - name: AUTH_SERVICE_URL
               valueFrom:
                 configMapKeyRef:
                   name: pcpi-config
-                  key: NODE_ENV
+                  key: AUTH_SERVICE_URL
+            - name: PROJECT_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: PROJECT_SERVICE_URL
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: EVENT_DATABASE_URL
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          startupProbe:
+            tcpSocket:
+              port: 50053
+            failureThreshold: 30
+            periodSeconds: 5
           readinessProbe:
             tcpSocket:
               port: 50053

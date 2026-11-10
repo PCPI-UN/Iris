@@ -27,6 +27,7 @@ spec:
       labels:
         app: invitation-service
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: invitation-service
           image: pcpi/invitation-service:latest
@@ -34,11 +35,11 @@ spec:
           ports:
             - containerPort: 50054
           env:
-            - name: DATABASE_URL
+            - name: NODE_ENV
               valueFrom:
                 configMapKeyRef:
                   name: pcpi-config
-                  key: INVITATION_DATABASE_URL
+                  key: NODE_ENV
             - name: GRPC_HOST
               valueFrom:
                 configMapKeyRef:
@@ -49,11 +50,53 @@ spec:
                 configMapKeyRef:
                   name: pcpi-config
                   key: INVITATION_GRPC_PORT
-            - name: NODE_ENV
+            - name: AUTH_SERVICE_URL
               valueFrom:
                 configMapKeyRef:
                   name: pcpi-config
-                  key: NODE_ENV
+                  key: AUTH_SERVICE_URL
+            - name: EVENT_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: EVENT_SERVICE_URL
+            - name: PROJECT_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: PROJECT_SERVICE_URL
+            - name: NOTIFICATION_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: NOTIFICATION_SERVICE_URL
+            - name: FRONTEND_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: FRONTEND_URL
+            - name: INVITATION_EXPIRATION_SECONDS
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: INVITATION_EXPIRATION_SECONDS
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: INVITATION_DATABASE_URL
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          startupProbe:
+            tcpSocket:
+              port: 50054
+            failureThreshold: 30
+            periodSeconds: 5
           readinessProbe:
             tcpSocket:
               port: 50054

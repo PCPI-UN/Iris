@@ -27,6 +27,7 @@ spec:
       labels:
         app: evaluation-db
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: postgres
           image: postgres:16-alpine
@@ -37,14 +38,29 @@ spec:
               value: evaluation_service
             - name: POSTGRES_USER
               valueFrom:
-                configMapKeyRef:
-                  name: pcpi-config
+                secretKeyRef:
+                  name: pcpi-secrets
                   key: POSTGRES_USER
             - name: POSTGRES_PASSWORD
               valueFrom:
-                configMapKeyRef:
-                  name: pcpi-config
-                  key: POSTGRES_PASSWORD
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: EVALUATION_DB_PASSWORD
+          readinessProbe:
+            exec:
+              command: ["sh", "-ec", 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
+            periodSeconds: 5
+          startupProbe:
+            exec:
+              command: ["sh", "-ec", 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
+            periodSeconds: 5
+            failureThreshold: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
           volumeMounts:
             - name: evaluation-db-storage
               mountPath: /var/lib/postgresql/data
