@@ -194,4 +194,24 @@ describe('CheckEvaluationStatusUseCase', () => {
         expect(result[0].evaluation!.evaluation.comments).toBe('Very good project');
         expect(result[0].evaluation!.evaluation.date).toEqual(testDate);
     });
+
+    it.each([
+        [EventEvaluationType.ZERO_TO_HUNDRED, [100, 80, 60, 40]],
+        // 1.5 is the value ZERO_TO_FIVE stored for level 1 before it was aligned with the rubric (2)
+        [EventEvaluationType.ZERO_TO_FIVE, [5, 4, 3, 1.5]],
+        [EventEvaluationType.ZERO_TO_FIVE, [5, 4, 3, 2]],
+    ])('reverse-maps the stored points of a %p event back to levels 4..1', async (evaluationType, stored) => {
+        mockEventService.getEvent.mockResolvedValue({ id: 1, evaluationType });
+        mockEvaluationRepository.findByProjectIdsAndEvaluator.mockResolvedValue([
+            {
+                evaluation: new Evaluation(1, 1, 1, 1, 1, 80, null, new Date()),
+                scores: stored.map((points, index) => new EvaluationDetail(1, index + 1, points, 0.25)),
+            },
+        ]);
+
+        const [status] = await useCase.execute({ userId: 1, eventId: 1, projectIds: [1] });
+
+        expect(status.evaluation!.scores.map((score) => score.score)).toEqual([4, 3, 2, 1]);
+        expect(status.evaluation!.scores.every((score) => score.weight === 0.25)).toBe(true);
+    });
 });

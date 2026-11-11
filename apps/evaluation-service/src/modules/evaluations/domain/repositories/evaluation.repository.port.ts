@@ -44,6 +44,11 @@ export abstract class EvaluationRepositoryPort {
     abstract findByEvaluator(userId: number, eventId: number, page: number, limit: number): Promise<PaginatedEvaluations>;
     abstract findByProjectAndEvaluator(projectId: number, memberUserId: number, memberEventId: number, memberRoleId: number): Promise<Evaluation | null>;
     abstract existsByProjectAndEvaluator(projectId: number, memberUserId: number, memberEventId: number): Promise<boolean>;
+    /**
+     * Serializes the evaluations of one juror for one project until the current transaction ends,
+     * so two simultaneous submissions cannot both pass the "already evaluated" check.
+     */
+    abstract lockProjectEvaluator(projectId: number, memberUserId: number, memberEventId: number): Promise<void>;
     abstract findEvaluationDetails(evaluationId: number): Promise<EvaluationDetail[]>;
     abstract getProjectStats(projectId: number): Promise<ProjectStats>;
     abstract countAll(): Promise<number>;

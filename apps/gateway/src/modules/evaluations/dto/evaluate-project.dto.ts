@@ -23,10 +23,10 @@ export class EvaluationScoreDto {
 
   @ApiProperty({
     description:
-      'Score value. Validated server-side against the evaluation type of the event. ' +
-      'For FINAL_PROJECTS (default): integer 1–4 where 4 = Excelente (90), 3 = Bueno (75), ' +
-      '2 = Aceptable (55), 1 = Insuficiente (25). The mapped value (0–100 scale) is stored and ' +
-      'used for grade calculation.',
+      'Level chosen by the juror: integer 1–4 (4 = Excelente, 3 = Bueno, 2 = Aceptable, 1 = Insuficiente). ' +
+      'The event evaluation type maps it to points: FINAL_PROJECTS 90 / 75 / 55 / 25, ' +
+      'ZERO_TO_FIVE 5 / 4 / 3 / 2, ZERO_TO_HUNDRED 100 / 80 / 60 / 40. The points are stored and used ' +
+      'for the grade.',
     example: 4,
   })
   @IsInt()

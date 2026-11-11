@@ -2,7 +2,7 @@
 
 Source of truth: `apps/evaluation-service/prisma/schema.prisma` (PostgreSQL, one database per service). Physical names use `snake_case` via `@map`/`@@map`, except the `Component` table, which has no `@@map` and keeps its PascalCase name. The application layer uses `camelCase`.
 
-The five migrations (`init`, `added_category_field_for_criterions`, `add_components`, `add_event_id_to_component`, `add_tiebreak_table`) were applied in order to an empty PostgreSQL 16 database on 2026-11-02. The resulting tables, columns, types, nullability, defaults and foreign keys match this document and `schema.prisma`.
+The six migrations (`init`, `added_category_field_for_criterions`, `add_components`, `add_event_id_to_component`, `add_tiebreak_table`, `rubric_effective_weights_and_event_components`) were applied in order with `prisma migrate deploy` to an empty PostgreSQL 16 database on 2026-11-10, and `prisma migrate diff` against `schema.prisma` found no drift. The resulting tables, columns, types, nullability, defaults and foreign keys match this document. The data steps of `rubric_effective_weights_and_event_components` were checked on a database with sample data (shared and misassigned components, components without event, criteria without component, the 0.979 rubric of the report).
 
 ## ER diagram
 
@@ -27,6 +27,7 @@ erDiagram
         int evaluation_id PK, FK
         int criterion_id PK, FK
         float score
+        float weight
     }
 
     criterions {
@@ -51,7 +52,7 @@ erDiagram
         int id PK
         text name
         float weight
-        int event_id "nullable"
+        int event_id
     }
 
     tiebreaks {
@@ -85,7 +86,7 @@ One juror's evaluation of one project.
 | `member_user_id` | `INTEGER` | no | evaluator's user id in `auth-service` |
 | `member_event_id` | `INTEGER` | no | event of the evaluator's membership |
 | `member_role_id` | `INTEGER` | no | evaluator's role id (the `Juror` role) |
-| `grade` | `DOUBLE PRECISION` | no | weighted sum of the stored scores |
+| `grade` | `DOUBLE PRECISION` | no | weighted sum of the stored scores, rounded to 2 decimals |
 | `comments` | `TEXT` | yes | |
 | `date` | `TIMESTAMP` | no | `CURRENT_TIMESTAMP` |
 | `created_at` | `TIMESTAMP` | no | `CURRENT_TIMESTAMP` |
@@ -95,13 +96,14 @@ Relations: 1:N `evaluation_detail`.
 
 ### `evaluation_detail` (`EvaluationDetail`)
 
-Score of one criterion inside one evaluation. Primary key is composite (`evaluation_id`, `criterion_id`), so a criterion is scored at most once per evaluation. `score` is the stored (mapped) value, not the juror's raw 1–4 input; see the evaluation types in [README.md](./README.md#evaluation-types).
+Score of one criterion inside one evaluation. Primary key is composite (`evaluation_id`, `criterion_id`), so a criterion is scored at most once per evaluation. `score` is the stored (mapped) value, not the juror's raw 1–4 input; see the evaluation types in [README.md](./README.md#evaluation-types). `weight` is the effective weight the criterion had when it was scored ([Rubric and grade](./README.md#rubric-and-grade)); it is never recalculated.
 
 | Column | Type | Null | Default / constraint |
 | --- | --- | --- | --- |
 | `evaluation_id` | `INTEGER` | no | PK, FK → `evaluations.id` |
 | `criterion_id` | `INTEGER` | no | PK, FK → `criterions.id` |
 | `score` | `DOUBLE PRECISION` | no | |
+| `weight` | `DOUBLE PRECISION` | no | effective weight, between 0 and 1 |
 
 ### `criterions` (`Criterion`)
 
@@ -111,12 +113,12 @@ Score of one criterion inside one evaluation. Primary key is composite (`evaluat
 | `event_id` | `INTEGER` | no | event in `event-service` |
 | `name` | `VARCHAR(100)` | no | |
 | `description` | `TEXT` | yes | |
-| `weight` | `DOUBLE PRECISION` | no | fraction between 0 and 1, checked in application code |
+| `weight` | `DOUBLE PRECISION` | no | relative weight inside its component and category, greater than 0 (1 when not sent), checked in application code |
 | `active` | `BOOLEAN` | no | no default |
 | `category` | `VARCHAR(100)` | yes | free-text grouping label |
 | `created_at` | `TIMESTAMP` | no | `CURRENT_TIMESTAMP` |
 | `updated_at` | `TIMESTAMP` | no | `@updatedAt` |
-| `component_id` | `INTEGER` | yes | FK → `Component.id` |
+| `component_id` | `INTEGER` | yes | FK → `Component.id`; required by the application for active criteria |
 
 In the database, `category` and `component_id` are the last two columns because they were added by later migrations.
 
@@ -131,14 +133,14 @@ Association between a criterion and the courses (categories of an event in `even
 
 ### `Component` (`Component`)
 
-Named, weighted group of criteria. It has no timestamps.
+Named, weighted group of criteria of one event. The weights of an event's components add up to 1 before the event can be evaluated. It has no timestamps.
 
 | Column | Type | Null | Default / constraint |
 | --- | --- | --- | --- |
 | `id` | `SERIAL` | no | PK |
 | `name` | `TEXT` | no | |
-| `weight` | `DOUBLE PRECISION` | no | fraction between 0 and 1, checked in application code |
-| `event_id` | `INTEGER` | yes | event in `event-service` |
+| `weight` | `DOUBLE PRECISION` | no | fraction of the grade, greater than 0 and at most 1, checked in application code |
+| `event_id` | `INTEGER` | no | event in `event-service`; never changes |
 
 ### `tiebreaks` (`TieBreak`)
 

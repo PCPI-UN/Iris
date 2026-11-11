@@ -11,6 +11,7 @@ import { GetComponentUseCase } from '@criterions/application/use-cases/get-compo
 import { ListComponentsUseCase } from '@criterions/application/use-cases/list-components.use-case';
 import { UpdateComponentUseCase } from '@criterions/application/use-cases/update-component.use-case';
 import { DeleteComponentUseCase } from '@criterions/application/use-cases/delete-component.use-case';
+import { GetRubricReadinessUseCase } from '@criterions/application/use-cases/get-rubric-readiness.use-case';
 import { CreateCriterionDto } from '@criterions/application/dto/create-criterion.dto';
 import { UpdateCriterionDto } from '@criterions/application/dto/update-criterion.dto';
 import { DeleteCriterionDto } from '@criterions/application/dto/delete-criterion.dto';
@@ -21,12 +22,14 @@ import { CreateComponentDto } from '@criterions/application/dto/create-component
 import { GetComponentDto } from '@criterions/application/dto/get-component.dto';
 import { UpdateComponentDto } from '@criterions/application/dto/update-component.dto';
 import { DeleteComponentDto } from '@criterions/application/dto/delete-component.dto';
+import { GetRubricReadinessDto } from '@criterions/application/dto/get-rubric-readiness.dto';
 import {
   CRITERIONS_SERVICE_NAME,
   CriterionProto,
   ListCriterionsResponse,
   DeleteCriterionResponse,
   FindCriterionsByCourseResponse,
+  GetRubricReadinessResponse,
 } from '@app/common/generated/evaluation';
 import { CriterionMapper } from '@criterions/application/mappers/criterion.mapper';
 import { Component } from '@criterions/domain/entities/component.entity';
@@ -45,6 +48,7 @@ export class CriterionsController {
     private readonly listComponentsUseCase: ListComponentsUseCase,
     private readonly updateComponentUseCase: UpdateComponentUseCase,
     private readonly deleteComponentUseCase: DeleteComponentUseCase,
+    private readonly getRubricReadinessUseCase: GetRubricReadinessUseCase,
   ) { }
 
   @GrpcMethod(CRITERIONS_SERVICE_NAME, 'CreateCriterion')
@@ -114,6 +118,17 @@ export class CriterionsController {
   async deleteComponent(request: DeleteComponentDto): Promise<DeleteCriterionResponse> {
     await this.deleteComponentUseCase.execute(request);
     return CriterionMapper.toDeleteCriterionResponse(true);
+  }
+
+  @GrpcMethod(CRITERIONS_SERVICE_NAME, 'GetRubricReadiness')
+  async getRubricReadiness(request: GetRubricReadinessDto): Promise<GetRubricReadinessResponse> {
+    const readiness = await this.getRubricReadinessUseCase.execute(request);
+    return {
+      eventId: readiness.eventId,
+      componentsWeight: readiness.componentsWeight,
+      components: readiness.components.map((c) => this.componentToProto(c)),
+      categories: readiness.categories,
+    };
   }
 
   private componentToProto(component: Component): any {
