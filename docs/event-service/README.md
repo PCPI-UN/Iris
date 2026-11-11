@@ -41,10 +41,11 @@ sequenceDiagram
 
     C->>E: CreateEventMember {eventId, userId, roleId}
     E->>DB: find event
-    E->>E: event is active, publicly joinable and not ended
+    E->>E: event is active
     E->>A: GetUser
     E->>A: GetRolesByIds
     E->>E: role scope must be EVENT
+    E->>E: event has not ended
     E->>DB: find active membership of the user in the event
     alt already a member
         E-->>C: existing membership
@@ -56,6 +57,7 @@ sequenceDiagram
 
 - A user has at most one role per event: the primary key of `event_members` is (`user_id`, `event_id`).
 - Removing a member is a soft delete (`active = false`); the row stays.
+- `is_publicly_joinable` does not apply here: accepting an invitation adds the member even to a private event. The flag only gates public project submissions (project-service `CreateProject`).
 
 ## Related
 

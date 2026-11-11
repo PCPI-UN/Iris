@@ -14,7 +14,8 @@ Owns evaluation criteria, the components that group them, jurors' evaluations of
 | Validate and map raw scores according to the event's evaluation type, and compute the grade | Decide the evaluation type: `event-service` owns it per event |
 | Reject an evaluation when evaluations are closed, the event is out of its dates, the juror is not assigned or already evaluated | Assign jurors to projects: that belongs to `project-service` |
 | Return the average grade and evaluation count per project | Sort the ranking or apply tiebreaks: the gateway does it with the averages and the tiebreak rows |
-| Check that a criterion's courses belong to its event and that active weights per course do not exceed 100% | Decide whether a caller may invoke an RPC: authorization is enforced in the gateway |
+| Check that a criterion's courses and component belong to its event, and refuse to grade with an incomplete rubric | Decide whether a caller may invoke an RPC: authorization is enforced in the gateway |
+| Lock the rubric of a category once it is used to grade | Know a project's category: it asks `project-service` |
 
 ## Modules
 
@@ -33,20 +34,40 @@ The event's `evaluationType` is never sent in the evaluation request. The servic
 | Type | Raw score | Stored score |
 | --- | --- | --- |
 | `FINAL_PROJECTS` (default when the event has none) | 1, 2, 3, 4 | 25, 55, 75, 90 |
-| `ZERO_TO_FIVE` | 1, 2, 3, 4 | 1.5, 3, 4, 5 |
+| `ZERO_TO_FIVE` | 1, 2, 3, 4 | 2, 3, 4, 5 |
 | `ZERO_TO_HUNDRED` | 1, 2, 3, 4 | 40, 60, 80, 100 |
 
-The grade of one evaluation is a weighted sum of the stored scores:
+Raw scores must be integers. In `ZERO_TO_FIVE`, a stored `1.5` is also read back as raw score 1.
+
+## Rubric and grade
+
+An event has one rubric for all its categories (courses). **Components** belong to the event and carry the fraction of the grade they are worth; they must add up to 1. **Criteria** belong to one component and one or more categories, with a `weight` relative to the other criteria of the same component and category (1 by default).
 
 ```txt
-grade = Σ storedScore × criterion.weight
+effectiveWeight = component.weight × criterion.weight ÷ Σ criterion.weight (same component, same category)
+grade           = round2(Σ storedScore × effectiveWeight)
 ```
 
-`criterion.weight` is a fraction (0 to 1) and the active criteria of a course add up to at most 1, so the grade stays on the scale of the stored scores. A project's ranking value is the average `grade` of all its evaluations. Component weights are only returned for display; they are not part of the calculation.
+Example: a `0.3` component with criteria weighted 10, 9 and 9 gives them `0.107`, `0.096` and `0.096`. Each score is saved with its effective weight (`evaluation_detail.weight`), so a saved grade never changes.
+
+A category is **ready** when the components add up to 1 and each one has an active criterion in that category. Evaluations of a category that is not ready are rejected, and every criterion must be scored exactly once. `GET /criterions/readiness` shows what each category is missing.
+
+A project's ranking value is the average of its grades, rounded with `roundGrade` (`libs/common/src/utils/grade-rounding.ts`), which the gateway also uses.
+
+### Changing a rubric in use
+
+All projects of a category are graded with the same rubric, so once grading starts only names and descriptions can change:
+
+- **Criteria** lock per category as soon as a project of that category has evaluations. Other categories can still be completed.
+- **Components** lock per event as soon as it has evaluations.
+
+There is no exception for an incomplete rubric: fixing it would grade the remaining jurors with a different rubric than the ones who already evaluated, and historical grades are never recalculated. Evaluations of deleted projects are ignored when deciding which categories are locked.
+
+Rubric changes and evaluations of an event never interleave: both run in a transaction holding a Postgres advisory lock on the event (shared for evaluations, exclusive for changes). If the lock cannot be taken in time the call fails with `ABORTED` and can be retried. Inside that transaction an evaluation also locks its (project, juror, event), so two simultaneous submissions of the same juror cannot both be saved. Repositories must query through `this.prisma.db`, which points to that transaction.
 
 ## Dependencies
 
-- **Uses**: PostgreSQL, `project-service` (project and its jurors), `event-service` (event and its courses) and `auth-service` (role catalog, to find the `Juror` role id).
+- **Uses**: PostgreSQL, `project-service` (project, its jurors, and the category of each project of an event), `event-service` (event and its courses) and `auth-service` (role catalog, to find the `Juror` role id).
 - **Used by**: `gateway`.
 
 ## Main flow: evaluating a project
@@ -65,20 +86,22 @@ sequenceDiagram
     J->>GW: POST /evaluations/projects/evaluate {projectId, scores, comments}
     GW->>EV: EvaluateProject (userId from the session)
     EV->>P: GetProject
-    P-->>EV: project (eventId)
+    P-->>EV: project (eventId, courseId)
     EV->>A: GetRoles
     A-->>EV: Juror role id
     EV->>E: GetEvent
     E-->>EV: evaluationsOpened, dates, evaluationType
     EV->>P: ListProjectJurors
     P-->>EV: is the juror assigned?
-    EV->>DB: already evaluated by this juror?
-    loop each score
-        EV->>DB: find criterion (weight)
-        EV->>EV: validate raw score, map it, add score × weight
+    rect rgba(128, 128, 128, 0.1)
+        Note over EV,DB: one transaction holding the event's rubric lock (shared)
+        EV->>DB: already evaluated by this juror?
+        EV->>DB: active criteria of the course in the event, components of the event
+        EV->>EV: check the rubric is ready and every criterion is scored once
+        EV->>EV: map raw scores, compute effective weights and grade
+        EV->>DB: insert evaluation and evaluation_detail rows (score and effective weight)
     end
-    EV->>DB: insert evaluation and evaluation_detail rows
-    EV-->>GW: evaluation with stored scores
+    EV-->>GW: evaluation with stored scores and weights
     GW-->>J: response
 ```
 

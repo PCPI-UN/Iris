@@ -153,13 +153,15 @@ Variables a configurar en `.env`:
 
 #### 📦 Almacenamiento de Archivos (Azure Blob Storage)
 El API Gateway inicializa el cliente del SDK de Azure Blob en su constructor (`AzureBlobUploadService`) para la subida de documentos y entregables de proyectos.
-- `AZURE_BLOB_SAS_URL`: SAS URL con permisos de contenedor. En **desarrollo local** se utiliza una URI dummy sintácticamente válida (`https://dummy.blob.core.windows.net/dummy?dummy`) para permitir que el Gateway levante sin credenciales reales de Azure.
-- `AZURE_ACCOUNT_NAME`: Nombre de la cuenta de almacenamiento (usar `dummy` en local).
+- `AZURE_BLOB_SAS_URL`: SAS URL del contenedor donde se suben los documentos. En **desarrollo local** se utiliza una URI dummy sintácticamente válida (`https://dummy.blob.core.windows.net/dummy?dummy`).
+- `AZURE_ACCOUNT_NAME`: Nombre de la cuenta de almacenamiento (usar `dummy` en local). En la base de datos los documentos guardan solo el nombre del blob; el Gateway arma la URL (`https://<cuenta>.blob.core.windows.net/<contenedor>/<blob>`) y la firma con una SAS de lectura al responder.
 - `AZURE_ACCOUNT_KEY`: Llave de la cuenta de almacenamiento (usar `dummy` en local).
 - `AZURE_CONTAINER`: Nombre del contenedor (usar `dummy` en local).
 
+La cuenta y el contenedor de `AZURE_BLOB_SAS_URL` deben coincidir con `AZURE_ACCOUNT_NAME` y `AZURE_CONTAINER`: los archivos se suben con la primera y los enlaces se firman con las otras. Para cambiar de cuenta se actualizan las cuatro variables, con los archivos copiados con el mismo nombre y contenedor. El Gateway arranca igual aunque falte alguna o no coincidan, y lo indica en el log al iniciar: sin `AZURE_BLOB_SAS_URL` las subidas responden 503, y sin las otras tres los enlaces no se firman.
+
 > [!NOTE]
-> El SDK de Azure valida estrictamente que la URL tenga formato válido al arrancar. Nunca dejes la variable vacía ni con corchetes literales como `<account-name>`, ya que Node.js arrojará `ERR_INVALID_URL` y detendrá el contenedor del Gateway.
+> El SDK de Azure valida que la URL tenga un formato válido. Una variable vacía o con corchetes literales como `<account-name>` ya no detiene el Gateway, pero deja las subidas en 503 hasta corregirla: revisar el log al iniciar.
 
 ---
 
@@ -185,32 +187,56 @@ pnpm run proto:generate
 
 ### 🐳 Paso 3: Levantar el Entorno con Docker
 
-El archivo de orquestación para desarrollo es `docker-compose.dev.yml`.
+El archivo de orquestación para desarrollo es `docker-compose.dev.yml`, el cual organiza los microservicios mediante perfiles (`profiles`).
 
 #### 🛠️ Usando Makefile (Recomendado)
 
+Los objetivos de desarrollo utilizan la variable `PROFILES` (cuyo valor predeterminado es `all`). `make dev-up` inicia los contenedores en segundo plano (`-d`) con recarga en vivo, `make dev-logs` sigue la salida de registros en tiempo real y `make dev-down` detiene por defecto toda la suite:
+
 ```bash
-# Iniciar todos los servicios en segundo plano con hot-reload
 make dev-up
-
-# Ver el registro de logs de todos los servicios
 make dev-logs
-
-# Detener los servicios
 make dev-down
 ```
 
-#### 🐳 Usando Docker Compose Directamente
+También puede indicar uno o varios perfiles separados por espacios mediante `PROFILES`, o usar los atajos por perfil (`dev-core`, `dev-events`, `dev-eval`, `dev-notifications`), los cuales delegan en `make dev-up` y levantan el grupo correspondiente en segundo plano:
 
 ```bash
-# Iniciar servicios cargando las variables de entorno
-docker compose -f docker-compose.dev.yml --env-file .env up -d
+make dev-core
+make dev-events
+make dev-eval
+make dev-notifications
+make dev-up PROFILES="core eval"
+make dev-build PROFILES=events
+```
 
-# Consultar logs
-docker compose -f docker-compose.dev.yml --env-file .env logs -f
+#### 🧩 Perfiles de Desarrollo (`docker-compose.dev.yml`)
 
-# Detener contenedores
-docker compose -f docker-compose.dev.yml --env-file .env down
+| Perfil | Servicios Incluidos | Descripción |
+| :--- | :--- | :--- |
+| *(Siempre habilitados)* | `postgres`, `redis` | Infraestructura base sin perfil asignado; se levanta con cualquier comando |
+| `core` | `auth-service`, `gateway` | Autenticación y puerta de enlace HTTP (único grupo parcial que incluye `gateway`) |
+| `events` | `event-service`, `invitation-service` | Gestión de eventos e invitaciones |
+| `eval` | `evaluation-service`, `project-service` | Evaluación y gestión de proyectos |
+| `notifications` | `notification-service` | Envío de notificaciones por correo |
+| `all` | Los 7 microservicios + `postgres` y `redis` | Suite completa de desarrollo (9 contenedores en total, valor por defecto de `PROFILES`) |
+
+- **Grupos de desarrollo parcial y dependencias entre servicios:** Estos perfiles están pensados para levantar subconjuntos de servicios durante el desarrollo local. Tenga en cuenta que solo `core` (además de `all`) incluye `gateway`, y que existen dependencias gRPC entre grupos:
+  - En `eval`, `evaluation-service` requiere `auth-service` y `event-service`, mientras que `project-service` utiliza `event-service`, `invitation-service` y `notification-service`.
+  - En `events`, los servicios consumen `auth-service`, `project-service` y `notification-service`.
+  - En `core`, `auth-service` tiene flujos que dependen de `notification-service`.
+  - Por ejemplo, levantar `PROFILES="core eval"` aún deja fuera `event-service`, `invitation-service` y `notification-service`. Para probar flujos completos de extremo a extremo, utilice el perfil `all`.
+- **Combinación de perfiles:** Los perfiles se pueden combinar pasando múltiples banderas `--profile` a Docker Compose o asignando una lista separada por espacios en `PROFILES` (por ejemplo, `make dev-up PROFILES="core eval"`).
+- **Comportamiento al detener (`down`):** Ejecutar `down` con cualquier perfil también detiene los contenedores compartidos `postgres` y `redis`. El comando `make dev-down` sin argumentos utiliza `PROFILES=all` y detiene toda la suite de desarrollo.
+
+#### 🐳 Usando Docker Compose Directamente
+
+Para iniciar, consultar registros o detener todos los servicios de desarrollo directamente con Docker Compose, incluya `--profile all` junto con `-f docker-compose.dev.yml` y `--env-file .env`:
+
+```bash
+docker compose -f docker-compose.dev.yml --env-file .env --profile all up -d
+docker compose -f docker-compose.dev.yml --env-file .env --profile all logs -f
+docker compose -f docker-compose.dev.yml --env-file .env --profile all down
 ```
 
 ### 🔄 Comportamiento del Arranque en Desarrollo
@@ -265,18 +291,16 @@ El backend utiliza una sola instancia de PostgreSQL 16 en el puerto `5432`. El s
 
 Cada microservicio gestiona su propio esquema de base de datos bajo `apps/<servicio>/prisma/schema.prisma`.
 
-- **Auth Service:** Utiliza migraciones formales versionadas:
+Todos los microservicios con base de datos (`auth-service`, `evaluation-service`, `event-service`, `invitation-service`, `project-service`) utilizan migraciones formales versionadas gestionadas con Prisma:
+
+- **Aplicar migraciones pendientes:**
   ```bash
-  pnpm exec prisma migrate deploy --schema=./apps/auth-service/prisma/schema.prisma
-  ```
-  Para crear una nueva migración al modificar el esquema:
-  ```bash
-  pnpm exec prisma migrate dev --name <nombre_cambio> --schema=./apps/auth-service/prisma/schema.prisma
+  pnpm exec prisma migrate deploy --schema=./apps/<servicio>/prisma/schema.prisma
   ```
 
-- **Servicios de Event, Evaluation, Invitation y Project:** Sincronizan su esquema mediante push:
+- **Crear una nueva migración al modificar un esquema:**
   ```bash
-  pnpm exec prisma db push --schema=./apps/<servicio>/prisma/schema.prisma
+  pnpm exec prisma migrate dev --name <nombre_cambio> --schema=./apps/<servicio>/prisma/schema.prisma
   ```
 
 ### 🌱 Datos Iniciales (Seed)
