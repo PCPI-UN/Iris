@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { RpcException } from '@nestjs/microservices';
+import { status } from '@grpc/grpc-js';
 import { CriterionRepositoryPort } from '@criterions/domain/repositories/criterion.repository.port';
 import { Component } from '@criterions/domain/entities/component.entity';
 import { Criterion } from '@criterions/domain/entities/criterion.entity';
@@ -34,6 +36,16 @@ export class GetRubricReadinessUseCase {
 
   async execute(request: { eventId: number; courseId?: number }): Promise<RubricReadiness> {
     const { eventId, courseId } = request;
+
+    if (courseId !== undefined) {
+      const { valid } = await this.eventService.validateCoursesBelongToEvent([courseId], eventId);
+      if (!valid) {
+        throw new RpcException({
+          code: status.INVALID_ARGUMENT,
+          message: `Course ${courseId} does not belong to event ${eventId}`,
+        });
+      }
+    }
 
     const [components, criteriaWithCourses, eventCourseIds] = await Promise.all([
       this.criterionRepository.findComponentsByEvent(eventId),

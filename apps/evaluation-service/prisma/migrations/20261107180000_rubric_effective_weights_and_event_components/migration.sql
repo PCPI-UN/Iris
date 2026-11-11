@@ -29,7 +29,26 @@ FROM (
 WHERE comp."id" = used."component_id"
   AND comp."event_id" IS NULL;
 
--- 2b. Components shared by criteria of several events are copied once per extra event,
+-- 2b. A component whose own event has no criteria in it, but that is used by criteria of
+-- other events, moves to the first of those events instead of being copied: a copy would
+-- leave the original empty and its event could never be evaluated.
+UPDATE "public"."Component" AS comp
+SET "event_id" = used."event_id"
+FROM (
+    SELECT "component_id", MIN("event_id") AS "event_id"
+    FROM "public"."criterions"
+    WHERE "component_id" IS NOT NULL
+    GROUP BY "component_id"
+) AS used
+WHERE comp."id" = used."component_id"
+  AND NOT EXISTS (
+      SELECT 1
+      FROM "public"."criterions" AS own
+      WHERE own."component_id" = comp."id"
+        AND own."event_id" = comp."event_id"
+  );
+
+-- 2c. Components still shared by criteria of several events are copied once per extra event,
 -- and the criteria of that event are moved to their copy.
 DO $$
 DECLARE
@@ -55,7 +74,7 @@ BEGIN
     END LOOP;
 END $$;
 
--- 2c. Active criteria without component go to a "General" component of their event.
+-- 2d. Active criteria without component go to a "General" component of their event.
 -- Inactive (deleted) criteria are not part of any rubric: they keep no component, otherwise
 -- "General" would have no active criterion and no category of the event could be evaluated.
 DO $$
@@ -81,7 +100,7 @@ BEGIN
     END LOOP;
 END $$;
 
--- 2d. Components still without event are not used by any criterion.
+-- 2e. Components still without event are not used by any criterion.
 DELETE FROM "public"."Component" WHERE "event_id" IS NULL;
 
 -- 3. The component weight is now configured, not the sum of its criteria across
@@ -102,5 +121,23 @@ FROM (
     GROUP BY "component_id"
 ) AS per_component
 WHERE comp."id" = per_component."component_id";
+
+-- 4. Criterion weights become relative to the other criteria of their component, and a new
+-- criterion gets 1 by default. Rescale the old absolute weights (e.g. 0.1 / 0.09 / 0.09) so
+-- the average active criterion of each component weighs 1 (1.07 / 0.96 / 0.96): proportions
+-- are kept and a new criterion enters as an average one, not with most of the component.
+-- Evaluation details keep the absolute weights they were graded with (step 1).
+UPDATE "public"."criterions" AS c
+SET "weight" = c."weight" * per_component."active_count" / per_component."total"
+FROM (
+    SELECT "component_id", COUNT(*) AS "active_count", SUM("weight") AS "total"
+    FROM "public"."criterions"
+    WHERE "active" = true
+      AND "component_id" IS NOT NULL
+    GROUP BY "component_id"
+) AS per_component
+WHERE c."component_id" = per_component."component_id"
+  AND c."active" = true
+  AND per_component."total" > 0;
 
 ALTER TABLE "public"."Component" ALTER COLUMN "event_id" SET NOT NULL;

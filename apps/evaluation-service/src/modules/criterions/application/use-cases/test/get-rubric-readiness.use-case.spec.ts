@@ -25,6 +25,12 @@ describe('GetRubricReadinessUseCase', () => {
         } as unknown as CriterionRepositoryPort;
         const eventService = {
             listCourseIdsByEvent: jest.fn().mockResolvedValue(eventCourseIds),
+            validateCoursesBelongToEvent: jest.fn().mockImplementation((courseIds: number[]) =>
+                Promise.resolve({
+                    valid: courseIds.every((id) => id !== 99),
+                    invalidCourses: courseIds.filter((id) => id === 99),
+                }),
+            ),
         } as unknown as EventServicePort;
         return new GetRubricReadinessUseCase(repository, eventService);
     };
@@ -105,5 +111,15 @@ describe('GetRubricReadinessUseCase', () => {
             expect.objectContaining({ courseId: 10, ready: true }),
             { courseId: 30, ready: false, criteriaCount: 0, missingComponentIds: [11, 12, 13], criteriaWithoutComponent: [] },
         ]);
+    });
+
+    it('rejects a course that does not belong to the event', async () => {
+        const useCase = buildUseCase(components, []);
+
+        await expect(useCase.execute({ eventId: 1, courseId: 99 })).rejects.toEqual(
+            expect.objectContaining({
+                error: expect.objectContaining({ message: 'Course 99 does not belong to event 1' }),
+            }),
+        );
     });
 });

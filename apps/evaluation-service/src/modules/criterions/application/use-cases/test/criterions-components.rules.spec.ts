@@ -305,14 +305,16 @@ describe('Criteria and components CRUD - rules', () => {
             );
         });
 
-        it('rejects any change when the category of an evaluated project is unknown', async () => {
+        it('ignores the evaluations of deleted projects instead of locking every category', async () => {
+            // Project 101 was evaluated and then deleted: project-service no longer lists it
+            criterionRepository.findEvaluatedProjectIds.mockResolvedValue([100, 101]);
             projectService.getProjectCategories.mockResolvedValue(new Map([[100, 10]]));
 
             const useCase = new CreateCriterionUseCase(criterionRepository, eventService, categoryLock);
 
             await expect(
                 useCase.execute({ eventId: 1, name: 'Oral', courseIds: [12], componentId: 5 }),
-            ).rejects.toEqual(rpcError(status.FAILED_PRECONDITION, 'whose category is unknown'));
+            ).resolves.toEqual(expect.objectContaining({ courseIds: [12] }));
         });
 
         it('detects a change of courses hidden behind duplicated ids', async () => {
@@ -375,94 +377,63 @@ describe('Criteria and components CRUD - rules', () => {
         });
     });
 
-    describe('evaluated category whose rubric is not complete', () => {
-        // Report event: category 10 was evaluated with Diseño / Escrito / Oral; then a component
-        // "Ajuste" (id 9) was created to reach 100%. Category 10 has no criterion in it, so nobody
-        // can evaluate it, and the components can no longer change (they add up to 100%).
+    describe('no way out for an evaluated rubric, even when it is not complete', () => {
+        // Report event left at 0.399 / 0.30 / 0.28 = 0.979 by the rubric migration, with evaluations
+        // of category 10. Changing it would grade the remaining jurors out of 90 and the earlier
+        // ones stay out of 88.11, so it stays as it is (historical grades are not recalculated).
         const diseno = new Component(5, 'Diseño', 0.399, 1);
-        const ajuste = new Component(9, 'Ajuste', 0.021, 1);
-        const components = [diseno, new Component(6, 'Escrito', 0.3, 1), new Component(7, 'Oral', 0.28, 1), ajuste];
-        const evaluatedRubric = [
-            { criterion: buildCriterion({ id: 1, componentId: 5 }), courseIds: [10] },
-            { criterion: buildCriterion({ id: 2, componentId: 6 }), courseIds: [10] },
-            { criterion: buildCriterion({ id: 3, componentId: 7 }), courseIds: [10] },
-        ];
+        const components = [diseno, new Component(6, 'Escrito', 0.3, 1), new Component(7, 'Oral', 0.28, 1)];
 
         beforeEach(() => {
             criterionRepository.findEvaluatedProjectIds.mockResolvedValue([100]);
             projectService.getProjectCategories.mockResolvedValue(new Map([[100, 10]]));
             criterionRepository.hasEvaluationsForEvent.mockResolvedValue(true);
-            criterionRepository.sumComponentWeightsByEvent.mockResolvedValue(1);
             criterionRepository.findComponentsByEvent.mockResolvedValue(components);
-            criterionRepository.findActiveByEventWithCourses.mockResolvedValue(evaluatedRubric);
-            criterionRepository.findComponentById.mockResolvedValue(ajuste);
-        });
-
-        it('allows adding the criterion the evaluated category is missing in the new component', async () => {
-            const useCase = new CreateCriterionUseCase(criterionRepository, eventService, categoryLock);
-
-            await expect(
-                useCase.execute({ eventId: 1, name: 'Ajuste Civil', courseIds: [10], componentId: 9 }),
-            ).resolves.toEqual(expect.objectContaining({ courseIds: [10] }));
-        });
-
-        it('locks the category again once its rubric is complete', async () => {
-            criterionRepository.findActiveByEventWithCourses.mockResolvedValue([
-                ...evaluatedRubric,
-                { criterion: buildCriterion({ id: 4, componentId: 9 }), courseIds: [10] },
-            ]);
-
-            const useCase = new CreateCriterionUseCase(criterionRepository, eventService, categoryLock);
-
-            await expect(
-                useCase.execute({ eventId: 1, name: 'Otro', courseIds: [10], componentId: 9 }),
-            ).rejects.toEqual(rpcError(status.FAILED_PRECONDITION, 'Categories [10] of event 1 already have evaluations and a complete rubric'));
-        });
-
-        it('allows fixing the criteria of a category while the components of the event do not add up to 100%', async () => {
-            // Event left at 0.979 by the rubric migration: no category is complete
-            criterionRepository.findComponentsByEvent.mockResolvedValue(components.slice(0, 3));
             criterionRepository.findComponentById.mockResolvedValue(diseno);
-
-            const useCase = new UpdateCriterionUseCase(criterionRepository, eventService, categoryLock);
-
-            await expect(useCase.execute({ id: 1, weight: 2 })).resolves.toEqual(
-                expect.objectContaining({ criterion: expect.objectContaining({ weight: 2 }) }),
-            );
-        });
-    });
-
-    describe('evaluated event whose components do not add up to 100%', () => {
-        beforeEach(() => {
-            // Event evaluated before the migration and left at 0.399 / 0.30 / 0.28 = 0.979
-            criterionRepository.hasEvaluationsForEvent.mockResolvedValue(true);
-            criterionRepository.findComponentById.mockResolvedValue(new Component(5, 'Diseño', 0.399, 1));
             criterionRepository.sumComponentWeightsByEvent.mockImplementation((_eventId, excludeComponentId) =>
                 Promise.resolve(excludeComponentId === undefined ? 0.979 : 0.58),
             );
         });
 
-        it('allows fixing a component weight so the remaining jurors can evaluate', async () => {
+        it('rejects fixing a component weight', async () => {
             const useCase = new UpdateComponentUseCase(criterionRepository);
 
-            await expect(useCase.execute({ id: 5, weight: 0.42 })).resolves.toEqual(
-                expect.objectContaining({ id: 5, weight: 0.42 }),
+            await expect(useCase.execute({ id: 5, weight: 0.42 })).rejects.toEqual(
+                rpcError(status.FAILED_PRECONDITION, 'already has evaluations'),
             );
         });
 
-        it('allows creating a missing component', async () => {
-            criterionRepository.createComponent.mockResolvedValue(new Component(9, 'Extra', 0.021, 1));
-
+        it('rejects creating a missing component', async () => {
             const useCase = new CreateComponentUseCase(criterionRepository);
 
-            await expect(useCase.execute({ name: 'Extra', weight: 0.021, eventId: 1 })).resolves.toBeInstanceOf(Component);
+            await expect(useCase.execute({ name: 'Extra', weight: 0.021, eventId: 1 })).rejects.toEqual(
+                rpcError(status.FAILED_PRECONDITION, 'already has evaluations'),
+            );
         });
 
-        it('allows deleting an empty component', async () => {
+        it('rejects deleting an empty component', async () => {
             const useCase = new DeleteComponentUseCase(criterionRepository);
-            await useCase.execute({ id: 5 });
 
-            expect(criterionRepository.deleteComponent).toHaveBeenCalledWith(5);
+            await expect(useCase.execute({ id: 5 })).rejects.toEqual(
+                rpcError(status.FAILED_PRECONDITION, 'already has evaluations'),
+            );
+            expect(criterionRepository.deleteComponent).not.toHaveBeenCalled();
+        });
+
+        it('rejects changing the criteria of the evaluated category', async () => {
+            const useCase = new UpdateCriterionUseCase(criterionRepository, eventService, categoryLock);
+
+            await expect(useCase.execute({ id: 1, weight: 2 })).rejects.toEqual(
+                rpcError(status.FAILED_PRECONDITION, 'Categories [10] of event 1 already have evaluations'),
+            );
+        });
+
+        it('rejects adding a criterion to the evaluated category', async () => {
+            const useCase = new CreateCriterionUseCase(criterionRepository, eventService, categoryLock);
+
+            await expect(
+                useCase.execute({ eventId: 1, name: 'Otro', courseIds: [10], componentId: 5 }),
+            ).rejects.toEqual(rpcError(status.FAILED_PRECONDITION, 'Categories [10] of event 1 already have evaluations'));
         });
     });
 

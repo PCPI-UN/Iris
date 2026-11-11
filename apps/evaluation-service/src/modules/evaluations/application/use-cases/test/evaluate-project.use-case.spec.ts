@@ -13,6 +13,7 @@ describe('EvaluateProjectUseCase', () => {
 
     const mockEvaluationRepository = {
         existsByProjectAndEvaluator: jest.fn(),
+        lockProjectEvaluator: jest.fn(),
         save: jest.fn(),
     };
 
@@ -213,6 +214,24 @@ describe('EvaluateProjectUseCase', () => {
         });
 
         expect(result.evaluation.grade).toBe(expected);
+    });
+
+    it('locks (project, juror, event) before checking for a previous evaluation', async () => {
+        const order: string[] = [];
+        mockEvaluationRepository.lockProjectEvaluator.mockImplementation(() => {
+            order.push('lock');
+            return Promise.resolve();
+        });
+        mockEvaluationRepository.existsByProjectAndEvaluator.mockImplementation(() => {
+            order.push('exists');
+            return Promise.resolve(false);
+        });
+        withRubric([{ id: 1, weight: 1 }]);
+
+        await useCase.execute({ projectId: 1, userId: 7, scores: [{ criterionId: 1, score: 4 }] });
+
+        expect(mockEvaluationRepository.lockProjectEvaluator).toHaveBeenCalledWith(1, 7, 1);
+        expect(order).toEqual(['lock', 'exists']);
     });
 
     it('should reject when same juror tries to evaluate same project twice', async () => {

@@ -215,6 +215,12 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
         return count > 0;
     }
 
+    async lockProjectEvaluator(projectId: number, memberUserId: number, memberEventId: number): Promise<void> {
+        // Transaction-scoped advisory lock keyed by (project, juror, event); released on commit or rollback
+        const key = `evaluation:${projectId}:${memberUserId}:${memberEventId}`;
+        await this.prisma.db.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
+    }
+
     async findEvaluationDetails(evaluationId: number): Promise<EvaluationDetail[]> {
         const results = await this.prisma.db.evaluationDetail.findMany({
             where: { evaluationId },

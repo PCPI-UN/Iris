@@ -2,7 +2,7 @@
 
 Source of truth: `apps/evaluation-service/prisma/schema.prisma` (PostgreSQL, one database per service). Physical names use `snake_case` via `@map`/`@@map`, except the `Component` table, which has no `@@map` and keeps its PascalCase name. The application layer uses `camelCase`.
 
-The six migrations (`init`, `added_category_field_for_criterions`, `add_components`, `add_event_id_to_component`, `add_tiebreak_table`, `rubric_effective_weights_and_event_components`) were applied in order to an empty PostgreSQL 16 database on 2026-11-09. The resulting tables, columns, types, nullability, defaults and foreign keys match this document and `schema.prisma`.
+The six migrations (`init`, `added_category_field_for_criterions`, `add_components`, `add_event_id_to_component`, `add_tiebreak_table`, `rubric_effective_weights_and_event_components`) were applied in order with `prisma migrate deploy` to an empty PostgreSQL 16 database on 2026-11-10, and `prisma migrate diff` against `schema.prisma` found no drift. The resulting tables, columns, types, nullability, defaults and foreign keys match this document. The data steps of `rubric_effective_weights_and_event_components` were checked on a database with sample data (shared and misassigned components, components without event, criteria without component, the 0.979 rubric of the report).
 
 ## ER diagram
 

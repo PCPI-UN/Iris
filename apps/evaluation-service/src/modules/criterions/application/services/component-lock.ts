@@ -1,27 +1,19 @@
 import { CriterionRepositoryPort } from '@criterions/domain/repositories/criterion.repository.port';
-import { isFullWeight } from '../../../../common/utils/grade.utils';
 
 /**
- * The components of an event are locked once it has evaluations, except while their
- * weights do not add up to 100%. Evaluating requires a complete rubric, so no grade was
- * computed with incomplete components and fixing them cannot change any grade (each
- * evaluation keeps the effective weights it was graded with).
- *
- * This is the way out for an event that was being evaluated when the rubric migration
- * ran: its components are left at the sum of its criteria (e.g. 0.979) and must be
- * adjusted before the remaining jurors can evaluate.
+ * The components of an event are locked once it has evaluations, with no exception:
+ * any change would grade the remaining jurors with a different rubric than the ones who
+ * already evaluated (e.g. an event left at 0.979 by the rubric migration would let early
+ * jurors grade out of 88.11 and later ones out of 90), and the ranking would compare both.
+ * Historical grades are never recalculated, so the rubric they were graded with must stay.
  */
 export async function areComponentsLocked(
   criterionRepository: CriterionRepositoryPort,
   eventId: number,
 ): Promise<boolean> {
-  if (!(await criterionRepository.hasEvaluationsForEvent(eventId))) {
-    return false;
-  }
-
-  return isFullWeight(await criterionRepository.sumComponentWeightsByEvent(eventId));
+  return criterionRepository.hasEvaluationsForEvent(eventId);
 }
 
 export function componentsLockedMessage(eventId: number): string {
-  return `Event ${eventId} already has evaluations and its components add up to 100%; its components cannot be modified`;
+  return `Event ${eventId} already has evaluations; its components cannot be modified`;
 }

@@ -1,4 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { RpcException } from '@nestjs/microservices';
+import { status } from '@grpc/grpc-js';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '@common/prisma/prisma.service';
 import { CriterionRepositoryPort, PaginatedCriterions, FindAllFilters, RubricLockMode } from '@criterions/domain/repositories/criterion.repository.port';
 import { Criterion } from '@criterions/domain/entities/criterion.entity';
@@ -45,19 +48,30 @@ export class PrismaCriterionRepository implements CriterionRepositoryPort {
       .filter((eventId) => Number.isInteger(eventId) && eventId > 0)
       .sort((a, b) => a - b);
 
-    return this.prisma.transaction(
-      async (tx) => {
-        for (const eventId of lockedEventIds) {
-          if (mode === 'shared') {
-            await tx.$executeRaw`SELECT pg_advisory_xact_lock_shared(${RUBRIC_LOCK_NAMESPACE}::int, ${eventId}::int)`;
-          } else {
-            await tx.$executeRaw`SELECT pg_advisory_xact_lock(${RUBRIC_LOCK_NAMESPACE}::int, ${eventId}::int)`;
+    try {
+      return await this.prisma.transaction(
+        async (tx) => {
+          for (const eventId of lockedEventIds) {
+            if (mode === 'shared') {
+              await tx.$executeRaw`SELECT pg_advisory_xact_lock_shared(${RUBRIC_LOCK_NAMESPACE}::int, ${eventId}::int)`;
+            } else {
+              await tx.$executeRaw`SELECT pg_advisory_xact_lock(${RUBRIC_LOCK_NAMESPACE}::int, ${eventId}::int)`;
+            }
           }
-        }
-        return work();
-      },
-      { maxWait: RUBRIC_LOCK_MAX_WAIT_MS, timeout: RUBRIC_LOCK_TIMEOUT_MS },
-    );
+          return work();
+        },
+        { maxWait: RUBRIC_LOCK_MAX_WAIT_MS, timeout: RUBRIC_LOCK_TIMEOUT_MS },
+      );
+    } catch (error) {
+      // P2028: the transaction could not start in time or expired while waiting for the lock
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2028') {
+        throw new RpcException({
+          code: status.ABORTED,
+          message: `The evaluation rubric of event ${lockedEventIds.join(', ')} is busy with another change; try again`,
+        });
+      }
+      throw error;
+    }
   }
 
   async findEvaluatedProjectIds(eventId: number): Promise<number[]> {

@@ -58,10 +58,12 @@ A project's ranking value is the average of its grades, rounded with `roundGrade
 
 All projects of a category are graded with the same rubric, so once grading starts only names and descriptions can change:
 
-- **Criteria** lock per category, when it has evaluations and is ready. Other categories can still be completed.
-- **Components** lock per event, when it has evaluations and they add up to 1.
+- **Criteria** lock per category as soon as a project of that category has evaluations. Other categories can still be completed.
+- **Components** lock per event as soon as it has evaluations.
 
-Rubric changes and evaluations of an event never interleave: both run in a transaction holding a Postgres advisory lock on the event (shared for evaluations, exclusive for changes). Repositories must query through `this.prisma.db`, which points to that transaction.
+There is no exception for an incomplete rubric: fixing it would grade the remaining jurors with a different rubric than the ones who already evaluated, and historical grades are never recalculated. Evaluations of deleted projects are ignored when deciding which categories are locked.
+
+Rubric changes and evaluations of an event never interleave: both run in a transaction holding a Postgres advisory lock on the event (shared for evaluations, exclusive for changes). If the lock cannot be taken in time the call fails with `ABORTED` and can be retried. Inside that transaction an evaluation also locks its (project, juror, event), so two simultaneous submissions of the same juror cannot both be saved. Repositories must query through `this.prisma.db`, which points to that transaction.
 
 ## Dependencies
 

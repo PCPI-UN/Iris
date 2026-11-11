@@ -23,6 +23,7 @@ describe('EvaluateProjectUseCase - rubric rules', () => {
 
     const mockEvaluationRepository = {
         existsByProjectAndEvaluator: jest.fn(),
+        lockProjectEvaluator: jest.fn(),
         save: jest.fn(),
     };
     const mockProjectService = {

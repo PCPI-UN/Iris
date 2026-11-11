@@ -158,7 +158,10 @@ export class EvaluateProjectUseCase {
     ): Promise<{ savedEvaluation: Evaluation; evaluationDetails: EvaluationDetail[] }> {
         const { projectId, userId: memberUserId, scores, comments } = request;
 
-        // 3. Check if already evaluated
+        // 3. Check if already evaluated. The rubric lock is shared, so two simultaneous submissions of the
+        // same juror would both pass this check: lock (project, juror) first, inside the same transaction.
+        await this.evaluationRepository.lockProjectEvaluator(projectId, memberUserId, memberEventId);
+
         const alreadyEvaluated = await this.evaluationRepository.existsByProjectAndEvaluator(
             projectId,
             memberUserId,
