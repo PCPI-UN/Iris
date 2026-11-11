@@ -5,6 +5,7 @@ import {
   DeleteEventResponse,
   ListMyEventsResponse,
   ListEventsResponse,
+  ListEventsByIdsResponse,
   EventProto,
   EventWithRole,
   PaginationMetadata,
@@ -79,6 +80,12 @@ export class EventMapper {
   static toGetEventResponse(event: Event): GetEventResponse {
     return {
       event: this.toEventProto(event),
+    };
+  }
+
+  static toListEventsByIdsResponse(events: Event[]): ListEventsByIdsResponse {
+    return {
+      events: events.map((event) => this.toEventProto(event)),
     };
   }
 

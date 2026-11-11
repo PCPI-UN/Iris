@@ -17,6 +17,7 @@ import {
   protoToTypedDocument,
   toProtoProjectComplete,
   protoToDocumentStatus,
+  toProtoStudentParticipationStats,
 } from './mappers';
 import { UpdateProjectUC } from '../../application/use-cases/update-project.uc';
 import { ApproveProjectUC } from '../../application/use-cases/approve-project.uc';
@@ -39,6 +40,8 @@ import { UpdateProjectDocumentUC } from '../../application/use-cases/update-docu
 import { RequestChangesProjectUC } from '../../application/use-cases/request-changes-project.uc';
 import { GetMyProjectByEventUC } from '../../application/use-cases/get-my-project-by-event.uc';
 import { ListUserParticipationsUC } from '../../application/use-cases/list-user-participations.uc';
+import { GetStudentParticipationStatsUC } from '../../application/use-cases/get-student-participation-stats.uc';
+import { GetStudentParticipationStatsDTO } from '../../application/dto/get-student-participation-stats.dto';
 import { CheckActiveSubmissionByEmailsUC } from '../../application/use-cases/check-active-submission-by-emails.uc';
 import { ClientGrpc } from '@nestjs/microservices';
 import { INVITATION_SERVICE_NAME } from '@app/common/generated/invitation';
@@ -91,6 +94,7 @@ export class ProjectsController {
     private readonly listUserParticipationsUC: ListUserParticipationsUC,
     private readonly checkActiveSubmissionByEmailsUC: CheckActiveSubmissionByEmailsUC,
     private readonly changeToUnderReviewProjectUC: ChangeToUnderReviewProjectUC,
+    private readonly getStudentParticipationStatsUC: GetStudentParticipationStatsUC,
     @Inject(INVITATION_SERVICE_NAME) private readonly client: ClientGrpc,
   ) {}
 
@@ -510,5 +514,11 @@ export class ProjectsController {
         semester: p.semester ?? undefined,
       })),
     };
+  }
+
+  @GrpcMethod('ProjectsService', 'GetStudentParticipationStats')
+  async getStudentParticipationStatsRpc(req: GetStudentParticipationStatsDTO) {
+    const stats = await this.getStudentParticipationStatsUC.execute({ userId: req.userId });
+    return toProtoStudentParticipationStats(stats);
   }
 }

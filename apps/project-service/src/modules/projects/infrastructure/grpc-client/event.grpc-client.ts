@@ -7,6 +7,8 @@ interface EventServiceGrpc {
   getEvent(data: { id: number }): Observable<any>;
   getCourse(data: { id: number }): Observable<any>;
   getJurorMembership(data: { userId: number; eventId: number }): Observable<any>;
+  listEventsByIds(data: { ids: number[] }): Observable<any>;
+  listAwardsByProjects(data: { projectIds: number[] }): Observable<any>;
   // si luego quieres: listCoursesByEvent ...
 }
 
@@ -36,5 +38,13 @@ export class EventGrpcClient implements OnModuleInit {
 
   async getJurorMembership(userId: number, eventId: number) {
     return firstValueFrom(this.svc.getJurorMembership({ userId, eventId }));
+  }
+
+  async listEventsByIds(ids: number[]) {
+    return firstValueFrom(this.svc.listEventsByIds({ ids }));
+  }
+
+  async listAwardsByProjects(projectIds: number[]) {
+    return firstValueFrom(this.svc.listAwardsByProjects({ projectIds }));
   }
 }

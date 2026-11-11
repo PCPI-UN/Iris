@@ -36,6 +36,8 @@ service ProjectsService {
   rpc ListAssignedProjects(ListAssignedProjectsRequest) returns (ListAssignedProjectsResponse);
   rpc GetMyProjectByEvent (GetMyProjectByEventRequest) returns (GetMyProjectByEventResponse);
   rpc ListUserParticipations (ListUserParticipationsRequest) returns (ListUserParticipationsResponse);
+  // Participation statistics of a student for their dashboard (IRIS-V3-STD-01)
+  rpc GetStudentParticipationStats (GetStudentParticipationStatsRequest) returns (GetStudentParticipationStatsResponse);
 
   rpc ListProjectsForReview(ListProjectsForReviewRequest) returns (ListProjectsForReviewResponse);
   rpc DeleteProject (DeleteProjectRequest) returns (DeleteProjectResponse);
@@ -398,4 +400,75 @@ message ListUserParticipationsResponse {
   repeated UserParticipation participations = 1;
   AcademicInfo academic = 2;
   int32 total = 3;
+}
+
+// ===== STUDENT DASHBOARD (IRIS-V3-STD-01) =====
+// Statistics and history only count approved projects of events that were not deleted.
+// currentProject is the project of an event that has not ended, in any review state.
+
+message GetStudentParticipationStatsRequest {
+  int32 userId = 1;
+}
+
+message StudentAward {
+  int32 awardId = 1;
+  string title = 2;
+  int32 position = 3;
+  string categoryName = 4;
+}
+
+message StudentParticipation {
+  int32 projectId = 1;
+  string projectName = 2;
+  int32 eventId = 3;
+  string eventName = 4;
+  string eventStartDate = 5;
+  string eventEndDate = 6;
+  // Derived from the event start date (Bogota time): AAAA-10 (January to June) or AAAA-30 (July to December)
+  string semester = 7;
+  // true when the event already ended (historical); false while it is upcoming or in progress
+  bool finished = 8;
+  repeated StudentAward awards = 9;
+  string projectCode = 10;
+  // Category of the project in the event (course)
+  string courseName = 11;
+}
+
+message StudentCurrentProject {
+  int32 projectId = 1;
+  int32 eventId = 2;
+  string eventName = 3;
+  string eventStartDate = 4;
+  string semester = 5;
+  string projectCode = 6;
+  string name = 7;
+  string description = 8;
+  string courseName = 9;
+  // UNDER_REVIEW, APPROVED, REJECTED or REQUEST_CHANGES
+  string state = 10;
+  // true only while the event is not over and changes were requested
+  bool canEdit = 11;
+  int32 participantsCount = 12;
+  int32 documentsCount = 13;
+}
+
+message SemesterParticipation {
+  string semester = 1;
+  int32 events = 2;
+  int32 projects = 3;
+  int32 awards = 4;
+}
+
+message GetStudentParticipationStatsResponse {
+  int32 totalEvents = 1;
+  int32 finishedEvents = 2;
+  int32 ongoingEvents = 3;
+  int32 totalProjects = 4;
+  int32 totalAwards = 5;
+  // Oldest semester first, so it can be drawn as the evolution over time
+  repeated SemesterParticipation bySemester = 6;
+  // Most recent event first
+  repeated StudentParticipation participations = 7;
+  // Not set when the student has no project in an event that has not ended
+  StudentCurrentProject currentProject = 8;
 }

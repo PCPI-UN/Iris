@@ -82,4 +82,6 @@ export interface ProjectRepository {
 
   findByEventIdAndUserId(eventId:number, userId: number): Promise<Project | null>;
   listParticipationsByUser(userId: number, email: string): Promise<UserParticipation[]>;
+  /** Projects where the user is a confirmed participant, filtered by state. */
+  listProjectsByParticipant(userId: number, states: ProjectState[]): Promise<Project[]>;
 }

@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { EventServicePort, JurorMembership } from '../../application/ports/event-service.port';
 import { EventGrpcClient } from './event.grpc-client';
+import { EventStatus } from '@app/common/generated/event';
+import {
+  ParticipationAward,
+  ParticipationEvent,
+} from '../../domain/student-participation-stats';
 
 @Injectable()
 export class EventServiceAdapter implements EventServicePort {
@@ -30,5 +35,33 @@ export class EventServiceAdapter implements EventServicePort {
       memberEventId: res.memberEventId,
       memberRoleId: res.memberRoleId,
     };
+  }
+
+  // This client has no loader options: proto3 defaults (false, 0, '') arrive undefined
+  // and enums arrive as numbers, so every field is normalized here
+  async listEventsByIds(ids: number[]): Promise<ParticipationEvent[]> {
+    if (!ids.length) return [];
+    const res = await this.grpc.listEventsByIds(ids);
+    return (res?.events ?? []).map((e: any) => ({
+      id: Number(e.id),
+      name: e.name ?? '',
+      startDate: e.startDate ?? '',
+      endDate: e.endDate ?? '',
+      active: e.active === true,
+      finished: e.status === EventStatus.CLOSED || e.status === 'CLOSED',
+    }));
+  }
+
+  async listAwardsByProjects(projectIds: number[]): Promise<ParticipationAward[]> {
+    if (!projectIds.length) return [];
+    const res = await this.grpc.listAwardsByProjects(projectIds);
+    return (res?.awards ?? []).map((a: any) => ({
+      projectId: Number(a.projectId),
+      awardId: Number(a.awardId),
+      title: a.title ?? '',
+      position: Number(a.position ?? 0),
+      categoryName: a.categoryName ?? '',
+      eventId: Number(a.eventId),
+    }));
   }
 }

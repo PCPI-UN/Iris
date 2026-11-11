@@ -28,6 +28,7 @@ import {
   ListAssignedProjectsRequest,
   ListAssignedProjectsResponse,
   GetMyProjectByEventRequest,
+  GetStudentParticipationStatsResponse,
   GetMyProjectByEventResponse,
   ListUserParticipationsResponse,
   AddPendingParticipantRequest,
@@ -936,6 +937,15 @@ export class ProjectsService implements OnModuleInit {
   ): Promise<ListUserParticipationsResponse> {
     return lastValueFrom(
       this.projectsService.listUserParticipations({ userId, email, limit }),
+    );
+  }
+
+  /** Participation statistics of the student dashboard; userId must come from the session */
+  async getStudentParticipationStats(
+    userId: number,
+  ): Promise<GetStudentParticipationStatsResponse> {
+    return lastValueFrom(
+      this.projectsService.getStudentParticipationStats({ userId }),
     );
   }
 }

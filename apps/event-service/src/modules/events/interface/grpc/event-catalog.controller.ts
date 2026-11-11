@@ -2,10 +2,16 @@ import { Controller } from '@nestjs/common';
 import { GrpcMethod } from '@nestjs/microservices';
 import { EVENT_SERVICE_NAME } from '@app/common/generated/event';
 import { EventCatalogService } from '@events/application/event-catalog.service';
+import { ListAwardsByProjectsUC } from '@events/application/use-cases/list-awards-by-projects.uc';
+import { ListAwardsByProjectsDTO } from '@events/application/dto/list-awards-by-projects.dto';
+import { ProjectAwardMapper } from '@events/application/mappers/project-award.mapper';
 
 @Controller()
 export class EventCatalogController {
-  constructor(private readonly catalogService: EventCatalogService) {}
+  constructor(
+    private readonly catalogService: EventCatalogService,
+    private readonly listAwardsByProjectsUC: ListAwardsByProjectsUC,
+  ) {}
 
   @GrpcMethod(EVENT_SERVICE_NAME, 'CreateCategory')
   createCategory(request: any) {
@@ -135,5 +141,11 @@ export class EventCatalogController {
   @GrpcMethod(EVENT_SERVICE_NAME, 'DeleteEventRecap')
   deleteEventRecap(request: any) {
     return this.catalogService.deleteEventRecap(request);
+  }
+
+  @GrpcMethod(EVENT_SERVICE_NAME, 'ListAwardsByProjects')
+  async listAwardsByProjects(request: ListAwardsByProjectsDTO) {
+    const awards = await this.listAwardsByProjectsUC.execute(request);
+    return ProjectAwardMapper.toListResponse(awards);
   }
 }
