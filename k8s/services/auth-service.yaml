@@ -27,6 +27,60 @@ spec:
       labels:
         app: auth-service
     spec:
+      automountServiceAccountToken: false
+      initContainers:
+        - name: auth-migration
+          image: pcpi/auth-service:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - "prisma migrate deploy --schema=./apps/auth-service/prisma/schema.prisma && node dist/apps/auth-service/prisma/seed.js"
+          env:
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: NODE_ENV
+            - name: AUTH_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: AUTH_DB_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://auth_user:$(AUTH_DB_PASSWORD)@auth-db:5432/auth_service"
+            - name: SEED_ADMIN_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: SEED_ADMIN_EMAIL
+                  optional: true
+            - name: SEED_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: SEED_ADMIN_PASSWORD
+                  optional: true
+            - name: SEED_TEST_USER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: SEED_TEST_USER_PASSWORD
+                  optional: true
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
       containers:
         - name: auth-service
           image: pcpi/auth-service:latest
@@ -34,11 +88,11 @@ spec:
           ports:
             - containerPort: 50051
           env:
-            - name: DATABASE_URL
+            - name: NODE_ENV
               valueFrom:
                 configMapKeyRef:
                   name: pcpi-config
-                  key: AUTH_DATABASE_URL
+                  key: NODE_ENV
             - name: GRPC_HOST
               valueFrom:
                 configMapKeyRef:
@@ -49,21 +103,87 @@ spec:
                 configMapKeyRef:
                   name: pcpi-config
                   key: AUTH_GRPC_PORT
-            - name: NODE_ENV
+            - name: NOTIFICATION_SERVICE_URL
               valueFrom:
                 configMapKeyRef:
                   name: pcpi-config
-                  key: NODE_ENV
+                  key: NOTIFICATION_SERVICE_URL
+            - name: FRONTEND_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: FRONTEND_URL
+            - name: JWT_ACCESS_TOKEN_EXPIRATION
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: JWT_ACCESS_TOKEN_EXPIRATION
+            - name: JWT_REFRESH_TOKEN_EXPIRATION
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: JWT_REFRESH_TOKEN_EXPIRATION
+            - name: JWT_REFRESH_TOKEN_EXPIRATION_DAYS
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: JWT_REFRESH_TOKEN_EXPIRATION_DAYS
+            - name: PASSWORD_RESET_TOKEN_EXPIRY_MINUTES
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: PASSWORD_RESET_TOKEN_EXPIRY_MINUTES
+            - name: ACCOUNT_SETUP_TOKEN_EXPIRY_SECONDS
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: ACCOUNT_SETUP_TOKEN_EXPIRY_SECONDS
+            - name: AUTH_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: AUTH_DB_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://auth_user:$(AUTH_DB_PASSWORD)@auth-db:5432/auth_service"
+            - name: JWT_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: JWT_PUBLIC_KEY
+            - name: JWT_REFRESH_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: JWT_REFRESH_PUBLIC_KEY
             - name: JWT_PRIVATE_KEY
               valueFrom:
                 secretKeyRef:
                   name: pcpi-secrets
                   key: JWT_PRIVATE_KEY
-            - name: JWT_PUBLIC_KEY
+            - name: JWT_REFRESH_PRIVATE_KEY
               valueFrom:
-                configMapKeyRef:
-                  name: pcpi-config
-                  key: JWT_PUBLIC_KEY
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: JWT_REFRESH_PRIVATE_KEY
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          startupProbe:
+            tcpSocket:
+              port: 50051
+            failureThreshold: 30
+            periodSeconds: 5
           readinessProbe:
             tcpSocket:
               port: 50051

@@ -15,5 +15,6 @@ export default {
     '^@app/(.*)$': '<rootDir>/libs/$1',
     '^@criterions/(.*)$': '<rootDir>/apps/evaluation-service/src/modules/criterions/$1',
     '^@evaluations/(.*)$': '<rootDir>/apps/evaluation-service/src/modules/evaluations/$1',
+    '^@events/(.*)$': '<rootDir>/apps/event-service/src/modules/events/$1',
   },
 };
