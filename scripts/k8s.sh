@@ -14,6 +14,7 @@ LOG_TAIL="100"
 LOG_FOLLOW=true
 SECRETS_TEMPLATE=""
 FORCE_INIT=false
+SELECTED_SERVICES=()
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -221,7 +222,24 @@ validate_config() {
     validation_errors+=("[EMAIL_PROVIDERS] Debes configurar las credenciales de al menos un proveedor de correo (ACS o EmailJS) en secrets.yaml.")
   fi
 
-  # 6. Reporte Consolidado si hay errores
+  # 6. Validar Servicios Seleccionados si se especificó --service
+  if (( ${#SELECTED_SERVICES[@]} > 0 )); then
+    local svc valid
+    for svc in "${SELECTED_SERVICES[@]}"; do
+      valid=false
+      for valid_svc in "${BACKEND_SERVICES[@]}"; do
+        if [[ "$svc" == "$valid_svc" ]]; then
+          valid=true
+          break
+        fi
+      done
+      if [[ "$valid" == false ]]; then
+        validation_errors+=("[-s, --service] Servicio desconocido: '$svc'. Servicios válidos: ${BACKEND_SERVICES[*]}")
+      fi
+    done
+  fi
+
+  # 7. Reporte Consolidado si hay errores
   if (( ${#validation_errors[@]} > 0 )); then
     echo ""
     log_error "Se encontraron ${#validation_errors[@]} error(es) de configuración antes de continuar:"
@@ -357,10 +375,35 @@ ensure_cluster() {
   "${KUBECTL_COMMAND[@]}" wait --for=condition=Ready nodes --all --timeout=120s
 }
 
+get_target_services() {
+  if (( ${#SELECTED_SERVICES[@]} > 0 )); then
+    local target_list=()
+    local svc valid
+    for svc in "${SELECTED_SERVICES[@]}"; do
+      valid=false
+      for valid_svc in "${BACKEND_SERVICES[@]}"; do
+        if [[ "$svc" == "$valid_svc" ]]; then
+          valid=true
+          break
+        fi
+      done
+      if [[ "$valid" == false ]]; then
+        log_error "Servicio desconocido: '$svc'. Servicios válidos: ${BACKEND_SERVICES[*]}"
+        exit 1
+      fi
+      target_list+=("$svc")
+    done
+    echo "${target_list[@]}"
+  else
+    echo "${BACKEND_SERVICES[@]}"
+  fi
+}
+
 build_images() {
-  log_info "Compilando Backend (Producción)..."
+  local target_services=($(get_target_services))
+  log_info "Compilando Backend (Producción) para: ${target_services[*]}..."
   local service
-  for service in "${BACKEND_SERVICES[@]}"; do
+  for service in "${target_services[@]}"; do
     docker build --target production -t "pcpi/$service:latest" \
       -f "$BACKEND_DIR/apps/$service/Dockerfile" "$BACKEND_DIR"
   done
@@ -369,11 +412,12 @@ build_images() {
 }
 
 load_images() {
+  local target_services=($(get_target_services))
   local images=()
   local s image
 
-  log_info "Cargando imágenes de Backend en el clúster ($ENGINE)..."
-  for s in "${BACKEND_SERVICES[@]}"; do
+  log_info "Cargando imágenes de Backend en el clúster ($ENGINE) para: ${target_services[*]}..."
+  for s in "${target_services[@]}"; do
     images+=("pcpi/$s:latest")
   done
 
@@ -422,30 +466,55 @@ deploy_infra() {
 }
 
 run_migrations() {
+  local target_services=($(get_target_services))
+  local migration_services=()
+  local s db_s
+  for s in "${target_services[@]}"; do
+    for db_s in "${DB_SERVICES[@]}"; do
+      if [[ "$s" == "$db_s" ]]; then
+        migration_services+=("$s")
+        break
+      fi
+    done
+  done
+
+  if (( ${#migration_services[@]} == 0 )); then
+    log_info "Ninguno de los servicios seleccionados requiere migraciones."
+    return 0
+  fi
+
   log_info "Las migraciones se ejecutan automáticamente en los initContainers de cada servicio."
-  log_info "Reiniciando deployments para asegurar la ejecución de migraciones..."
-  local s
-  for s in "${DB_SERVICES[@]}"; do
+  log_info "Reiniciando deployments para asegurar la ejecución de migraciones (${migration_services[*]})..."
+  for s in "${migration_services[@]}"; do
     "${KUBECTL_COMMAND[@]}" rollout restart "deployment/$s" -n "$NAMESPACE"
   done
-  for s in "${DB_SERVICES[@]}"; do
+  for s in "${migration_services[@]}"; do
     "${KUBECTL_COMMAND[@]}" rollout status "deployment/$s" -n "$NAMESPACE" --timeout=180s
   done
   log_success "Migraciones completadas vía initContainers."
 }
 
 deploy_apps() {
+  local target_services=($(get_target_services))
   local service
-  log_info "Desplegando microservicios de Backend..."
-  "${KUBECTL_COMMAND[@]}" apply -f "$K8S_DIR/services/"
+
+  if (( ${#SELECTED_SERVICES[@]} > 0 )); then
+    log_info "Desplegando microservicios específicos de Backend: ${target_services[*]}..."
+    for service in "${target_services[@]}"; do
+      "${KUBECTL_COMMAND[@]}" apply -f "$K8S_DIR/services/$service.yaml"
+    done
+  else
+    log_info "Desplegando microservicios de Backend..."
+    "${KUBECTL_COMMAND[@]}" apply -f "$K8S_DIR/services/"
+  fi
 
   deploy_ingress
 
-  log_info "Actualizando pods para cargar las imágenes y la configuración..."
-  for service in "${BACKEND_SERVICES[@]}"; do
+  log_info "Actualizando pods para cargar las imágenes y la configuración (${target_services[*]})..."
+  for service in "${target_services[@]}"; do
     "${KUBECTL_COMMAND[@]}" rollout restart "deployment/$service" -n "$NAMESPACE"
   done
-  for service in "${BACKEND_SERVICES[@]}"; do
+  for service in "${target_services[@]}"; do
     if ! "${KUBECTL_COMMAND[@]}" rollout status "deployment/$service" -n "$NAMESPACE" --timeout=180s; then
       log_error "Falló el despliegue de $service."
       "${KUBECTL_COMMAND[@]}" get pods -n "$NAMESPACE"
@@ -454,7 +523,7 @@ deploy_apps() {
       exit 1
     fi
   done
-  log_success "Todos los servicios de Backend están arriba y saludables."
+  log_success "Servicios de Backend (${target_services[*]}) arriba y saludables."
 }
 
 show_logs() {
@@ -571,6 +640,7 @@ Opciones / Parámetros:
   --cluster <nombre>       Nombre del clúster Kind/K3d (Default: iris-local)
   --public-url <url>       URL pública del frontend (Default: http://localhost)
   --node-env <ambiente>    Entorno de ejecución: production o development (Default: valor en configmap.yaml)
+  -s, --service <servicio> Microservicio específico (auth-service, gateway, etc. o separados por comas)
   --template <archivo>     Plantilla base para 'init' (ej. secrets/secrets.dev.yaml)
   --force                  Fuerza la regeneración de secrets.yaml al ejecutar 'init'
   -c, --container <nombre> Nombre del contenedor (ej. auth-migration, auth-service, postgres)
@@ -617,7 +687,7 @@ fi
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --engine|--cluster|--public-url|--node-env|--env|--template|--tail|-c|--container)
+    --engine|--cluster|--public-url|--node-env|--env|--template|--tail|-c|--container|-s|--service)
       if [[ $# -lt 2 || -z "$2" || "$2" == --* ]]; then
         log_error "La opción $1 requiere un valor."
         exit 1
@@ -626,6 +696,14 @@ while [[ $# -gt 0 ]]; do
   esac
 
   case "$1" in
+    -s|--service)
+      IFS=',' read -ra ADDR <<< "$2"
+      for svc in "${ADDR[@]}"; do
+        svc="$(echo "$svc" | tr -d ' ')"
+        [[ -n "$svc" ]] && SELECTED_SERVICES+=("$svc")
+      done
+      shift 2
+      ;;
     --skip-build)     SKIP_BUILD=true; shift ;;
     --force)          FORCE_INIT=true; shift ;;
     --template)       SECRETS_TEMPLATE="$2"; shift 2 ;;
