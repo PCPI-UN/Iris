@@ -13,5 +13,6 @@ export default {
     '^@app/common$': '<rootDir>/libs/common/src',
     '^@app/common/(.*)$': '<rootDir>/libs/common/src/$1',
     '^@app/(.*)$': '<rootDir>/libs/$1',
+    '^@events/(.*)$': '<rootDir>/apps/event-service/src/modules/events/$1',
   },
 };
