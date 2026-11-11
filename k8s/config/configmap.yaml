@@ -5,35 +5,33 @@ metadata:
   namespace: pcpi
 data:
   # Common
-  NODE_ENV: "development"
-
-  # Database configurations
-  POSTGRES_USER: "postgres"
-  POSTGRES_PASSWORD: "postgres"
+  NODE_ENV: "production"
+  FRONTEND_URL: "http://localhost"
+  ALLOWED_ORIGINS: "http://localhost,http://localhost:3000,http://localhost:3001,http://iris.local"
+  ALLOW_INSECURE_COOKIES: "true"
+  COOKIE_DOMAIN: ""
+  REDIRECT_URI: ""
 
   # Auth Service
-  AUTH_DATABASE_URL: "postgresql://postgres:postgres@auth-db:5432/auth_service"
   AUTH_GRPC_HOST: "0.0.0.0"
   AUTH_GRPC_PORT: "50051"
-  JWT_PUBLIC_KEY: "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUlJQklqQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FROEFNSUlCQ2dLQ0FRRUEyRndEVVdMaDZwdVZ0RE9ZUG5XeQp1YmZpSm1nbmFmNVZxZHgrVGhIRmc5a1BZZDRlN0RTNUpZd0ZXdTQ2VU5ZTk0zaThOUzU1UjZmblpxdWdzL2hNClR3NEozcUVCbXBwRWI2NG9QbnlybExWaTFaVmlwSURyVjJFdEhsbjd6L1UyMy8rREk5MG91c25CeGZTZldaYVkKMzlTd1JFUE9ycFhaRm9kc1hwMUpIdXFBRVZETVRZbURGTUhUbXdnS2FQdGlGRy9WNnZDMElta2hSMzdTRVNaUQpLMkxrdHFLcVA3d3gxendkOUpVaHFGM1lCMzhieldjSU1BaC9mYTJhZUJBZHhNRnVZTVp2dnBrMmEzRkpqbFo1CkxXRWZVTFkrZnhXajZGVWFheWtGMnlrRElENU1RM05tQTlxNXkyL3FaUmIyMGx2MFRaQlRHMWpwQTlxUWlsQ1EKTHdJREFRQUIKLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tCg=="
+  PASSWORD_RESET_TOKEN_EXPIRY_MINUTES: "15"
+  ACCOUNT_SETUP_TOKEN_EXPIRY_SECONDS: "86400"
 
   # Evaluation Service
-  EVALUATION_DATABASE_URL: "postgresql://postgres:postgres@evaluation-db:5432/evaluation_service"
   EVALUATION_GRPC_HOST: "0.0.0.0"
   EVALUATION_GRPC_PORT: "50052"
 
   # Event Service
-  EVENT_DATABASE_URL: "postgresql://postgres:postgres@event-db:5432/event_service"
   EVENT_GRPC_HOST: "0.0.0.0"
   EVENT_GRPC_PORT: "50053"
 
   # Invitation Service
-  INVITATION_DATABASE_URL: "postgresql://postgres:postgres@invitation-db:5432/invitation_service"
   INVITATION_GRPC_HOST: "0.0.0.0"
   INVITATION_GRPC_PORT: "50054"
+  INVITATION_EXPIRATION_SECONDS: "172800"
 
   # Project Service
-  PROJECT_DATABASE_URL: "postgresql://postgres:postgres@project-db:5432/project_service"
   PROJECT_GRPC_HOST: "0.0.0.0"
   PROJECT_GRPC_PORT: "50055"
 
@@ -43,7 +41,15 @@ data:
   EVENT_SERVICE_URL: "event-service:50053"
   INVITATION_SERVICE_URL: "invitation-service:50054"
   PROJECT_SERVICE_URL: "project-service:50055"
+  NOTIFICATION_SERVICE_URL: "notification-service:50056"
+
+  # JWT
+  JWT_ACCESS_TOKEN_EXPIRATION: "15m"
+  JWT_REFRESH_TOKEN_EXPIRATION: "7d"
+  JWT_REFRESH_TOKEN_EXPIRATION_DAYS: "7"
 
   # Notification Service
+  NOTIFICATION_GRPC_HOST: "0.0.0.0"
+  NOTIFICATION_GRPC_PORT: "50056"
   # Ordered email providers: primary first, then fallback (acs, emailjs)
   EMAIL_PROVIDERS: "acs,emailjs"
