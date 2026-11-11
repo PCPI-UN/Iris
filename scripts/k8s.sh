@@ -49,6 +49,37 @@ configure_public_url() {
   fi
 }
 
+deploy_ingress() {
+  if [[ ! -f "$K8S_DIR/ingress.yaml" ]]; then
+    return 0
+  fi
+
+  local public_host="${PUBLIC_URL#http://}"
+  public_host="${public_host#https://}"
+  if [[ "$public_host" != \[*\]* ]]; then
+    public_host="${public_host%%:*}"
+  else
+    public_host="${public_host%%\]*}]"
+  fi
+
+  log_info "Desplegando Ingress (Host: $public_host)..."
+  local ipv4_pattern='^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'
+  local http_paths='{"paths":[{"path":"/api/docs","pathType":"Prefix","backend":{"service":{"name":"gateway","port":{"number":3000}}}},{"path":"/","pathType":"Prefix","backend":{"service":{"name":"frontend","port":{"number":3000}}}}]}'
+
+  if [[ "$public_host" == "localhost" || "$public_host" == "iris.local" ]]; then
+    "${KUBECTL_COMMAND[@]}" apply -f "$K8S_DIR/ingress.yaml"
+  elif [[ "$public_host" =~ $ipv4_pattern || "$public_host" == \[*\] ]]; then
+    # Kubernetes Ingress no permite direcciones IP en el campo 'host', se usa regla comodín sin host
+    kubectl patch --local --type merge -f "$K8S_DIR/ingress.yaml" \
+      -p "{\"spec\":{\"rules\":[{\"http\":$http_paths}]}}" \
+      -o yaml | "${KUBECTL_COMMAND[@]}" apply -f -
+  else
+    kubectl patch --local --type merge -f "$K8S_DIR/ingress.yaml" \
+      -p "{\"spec\":{\"rules\":[{\"host\":\"$public_host\",\"http\":$http_paths},{\"host\":\"localhost\",\"http\":$http_paths}]}}" \
+      -o yaml | "${KUBECTL_COMMAND[@]}" apply -f -
+  fi
+}
+
 read_local_secret() {
   local value
   value=$(kubectl patch --local --type merge -f "$SECRETS_FILE" -p '{}' -o "jsonpath={.stringData.$1}")
@@ -408,10 +439,7 @@ deploy_apps() {
   log_info "Desplegando microservicios de Backend..."
   "${KUBECTL_COMMAND[@]}" apply -f "$K8S_DIR/services/"
 
-  if [ -f "$K8S_DIR/ingress.yaml" ]; then
-    log_info "Desplegando Ingress..."
-    "${KUBECTL_COMMAND[@]}" apply -f "$K8S_DIR/ingress.yaml"
-  fi
+  deploy_ingress
 
   log_info "Actualizando pods para cargar las imágenes y la configuración..."
   for service in "${BACKEND_SERVICES[@]}"; do
