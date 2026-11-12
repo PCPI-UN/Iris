@@ -31,12 +31,15 @@ const SUBTITLE_FONT = 'FF595959';
 const MUTED_FONT = 'FF808080';
 const TUTOR_FILL = 'FFF8CBAD';
 const TUTOR_FONT = 'FF9C0006';
+/** Notas sobre los datos: free text of decanatura that IRIS does not read */
+const NOTES_HEADER = 'FF375623';
+const NOTES_FILL = 'FFE2EFDA';
 
 /** The template of decanatura uses Arial 10 everywhere */
 const FONT: Partial<ExcelJS.Font> = { name: 'Arial', size: 10 };
 
 const LEGEND =
-  'Gris: datos del proyecto (no editar). Amarillo: decanatura escribe nombre(s), apellido(s) y correo de cada jurado. La columna Revisión avisa si un jurado parece ser tutor del proyecto. Departamento y Número coinciden con IRIS.';
+  'Gris: datos del proyecto (no editar). Amarillo: decanatura escribe nombre(s), apellido(s) y correo de cada jurado. Verde: notas libres, IRIS no las lee. La columna Revisión avisa si un jurado parece ser tutor del proyecto. Departamento y Número coinciden con IRIS.';
 
 const LAST_COLUMN = 6 + JUROR_SLOTS * 3 + 2; // F + jurors + Revisión + Notas
 const col = (n: number) => String.fromCharCode(64 + n);
@@ -117,7 +120,13 @@ function styleHeader(row: ExcelJS.Row) {
   row.height = 30;
   row.eachCell((cell, n) => {
     cell.font = { ...FONT, bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.fill = fill(n > 6 && n <= 6 + JUROR_SLOTS * 3 ? OLIVE : NAVY);
+    cell.fill = fill(
+      n > 6 && n <= 6 + JUROR_SLOTS * 3
+        ? OLIVE
+        : n === LAST_COLUMN
+          ? NOTES_HEADER
+          : NAVY,
+    );
     cell.border = border;
     cell.alignment = {
       horizontal: 'center',
@@ -211,6 +220,7 @@ export async function buildJurorImportTemplate(
       cell.border = border;
       if (c <= 6) cell.fill = fill(AUTO_FILL);
       else if (input) cell.fill = fill(INPUT_FILL);
+      else if (c === LAST_COLUMN) cell.fill = fill(NOTES_FILL);
       cell.font =
         c === LAST_COLUMN - 1
           ? { ...FONT, bold: true }
