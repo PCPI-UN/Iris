@@ -4,6 +4,8 @@ import { status } from '@grpc/grpc-js';
 import { CriterionRepositoryPort } from '@criterions/domain/repositories/criterion.repository.port';
 import { Component } from '@criterions/domain/entities/component.entity';
 import { CreateComponentDto } from '../dto/create-component.dto';
+import { areComponentsLocked, componentsLockedMessage } from '../services/component-lock';
+import { exceedsFullWeight, exceedsFullWeightMessage } from '@criterions/domain/services/rubric';
 
 @Injectable()
 export class CreateComponentUseCase {
@@ -11,7 +13,14 @@ export class CreateComponentUseCase {
     private readonly criterionRepository: CriterionRepositoryPort,
   ) {}
 
-  async execute(createComponentDto: CreateComponentDto): Promise<Component> {
+  execute(createComponentDto: CreateComponentDto): Promise<Component> {
+    // The rubric checks and the write run under the rubric lock of the event
+    return this.criterionRepository.withRubricLock([createComponentDto.eventId], 'exclusive', () =>
+      this.create(createComponentDto),
+    );
+  }
+
+  private async create(createComponentDto: CreateComponentDto): Promise<Component> {
     const { name, weight, eventId } = createComponentDto;
 
     if (!name || name.trim().length === 0) {
@@ -21,13 +30,35 @@ export class CreateComponentUseCase {
       });
     }
 
-    if (weight < 0 || weight > 1) {
+    if (!eventId) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: 'Weight must be between 0 and 1',
+        message: 'A component must belong to an event',
       });
     }
 
-    return await this.criterionRepository.createComponent(name, weight, eventId);
+    if (!(weight > 0) || weight > 1) {
+      throw new RpcException({
+        code: status.INVALID_ARGUMENT,
+        message: 'Weight must be greater than 0 and at most 1',
+      });
+    }
+
+    if (await areComponentsLocked(this.criterionRepository, eventId)) {
+      throw new RpcException({
+        code: status.FAILED_PRECONDITION,
+        message: componentsLockedMessage(eventId),
+      });
+    }
+
+    const otherWeight = await this.criterionRepository.sumComponentWeightsByEvent(eventId);
+    if (exceedsFullWeight(otherWeight, weight)) {
+      throw new RpcException({
+        code: status.INVALID_ARGUMENT,
+        message: exceedsFullWeightMessage(eventId, otherWeight, weight),
+      });
+    }
+
+    return await this.criterionRepository.createComponent(name.trim(), weight, eventId);
   }
 }

@@ -10,6 +10,7 @@ import { ListDocumentsUC } from './application/use-cases/list-documents.uc';
 import { DeleteProjectUC } from './application/use-cases/delete-project.uc';
 import { GetMyProjectByEventUC } from './application/use-cases/get-my-project-by-event.uc';
 import { ListUserParticipationsUC } from './application/use-cases/list-user-participations.uc';
+import { GetStudentParticipationStatsUC } from './application/use-cases/get-student-participation-stats.uc';
 import { UpdateProjectUC } from './application/use-cases/update-project.uc';
 import { ApproveProjectUC } from './application/use-cases/approve-project.uc';
 import { RejectProjectUC } from './application/use-cases/reject-project.uc';
@@ -66,6 +67,7 @@ import { AuthServiceAdapter } from './infrastructure/grpc-client/auth-service.ad
     DeleteProjectUC,
     GetMyProjectByEventUC,
     ListUserParticipationsUC,
+    GetStudentParticipationStatsUC,
     UpdateProjectUC,
     ApproveProjectUC,
     RejectProjectUC,

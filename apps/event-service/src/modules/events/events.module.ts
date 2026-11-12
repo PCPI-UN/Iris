@@ -34,6 +34,13 @@ import { GetRankingEventUseCase } from '@events/application/use-cases/ranking-ev
 import { GetRankingEventByEventIdUseCase } from '@events/application/use-cases/ranking-event/get-ranking-event-by-event-id.use-case';
 import { DeleteRankingEventUseCase } from '@events/application/use-cases/ranking-event/delete-ranking-event.use-case';
 import { GetEventsForARUseCase } from './application/use-cases/get-events-for-ar.use-case';
+import { ListEventsByIdsUC } from '@events/application/use-cases/list-events-by-ids.uc';
+import { ListAwardsByProjectsUC } from '@events/application/use-cases/list-awards-by-projects.uc';
+import { AwardWinnerRepository } from '@events/domain/repositories/award-winner.repository';
+import { PrismaAwardWinnerRepository } from '@events/infrastructure/prisma/prisma-award-winner.repository';
+import { ListCategoriesByIdsUC } from '@events/application/use-cases/list-categories-by-ids.uc';
+import { CategoryRepository } from '@events/domain/repositories/category.repository';
+import { PrismaCategoryRepository } from '@events/infrastructure/prisma/prisma-category.repository';
 
 
 @Module({
@@ -76,6 +83,18 @@ import { GetEventsForARUseCase } from './application/use-cases/get-events-for-ar
     GetEventStatusesUC,
     GetEventDashboardStatsUC,
     GetEventsForARUseCase,
+    ListEventsByIdsUC,
+    // Award winners (student dashboard)
+    {
+      provide: AwardWinnerRepository,
+      useClass: PrismaAwardWinnerRepository,
+    },
+    ListAwardsByProjectsUC,
+    {
+      provide: CategoryRepository,
+      useClass: PrismaCategoryRepository,
+    },
+    ListCategoriesByIdsUC,
     // Ranking event
     {
       provide: RankingEventRepository,

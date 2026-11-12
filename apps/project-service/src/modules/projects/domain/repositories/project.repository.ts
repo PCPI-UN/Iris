@@ -85,4 +85,6 @@ export interface ProjectRepository {
   /** Every project of the event, in any state, with the user ids assigned as jurors */
   listWithJurorsByEvent(eventId: number): Promise<ProjectWithJurorIds[]>;
   listParticipationsByUser(userId: number, email: string): Promise<UserParticipation[]>;
+  /** Projects where the user is a confirmed participant, filtered by state. */
+  listProjectsByParticipant(userId: number, states: ProjectState[]): Promise<Project[]>;
 }

@@ -20,7 +20,7 @@ import { TieBreaksService } from './tiebreaks.service';
 import { CreateTieBreakDto } from './dto/create-tiebreak.dto';
 import { UpdateTieBreakDto } from './dto/update-tiebreak.dto';
 import { ListTieBreaksDto } from './dto/list-tiebreaks.dto';
-import { RequirePermission } from '@common/decorators/require-permission.decorator';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 
 @ApiTags('tiebreaks')
 @ApiSecurity('JWT-auth')
@@ -43,26 +43,26 @@ export class TieBreaksController {
     }
 
     @Get()
-    @RequirePermission('manage:events')
+    @RequirePermission('read:grades')
     @ApiOperation({
         summary: 'List tiebreaks',
         description: 'Retrieves tiebreaks, optionally filtered by eventId, categoryId, or projectId. Results are ordered by tiebreakOrder ascending.',
     })
     @ApiResponse({ status: 200, description: 'TieBreaks retrieved successfully' })
-    @ApiResponse({ status: 403, description: 'Forbidden - Requires manage:events permission' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Requires read:grades permission' })
     async listTieBreaks(@Query() query: ListTieBreaksDto) {
         return this.tieBreaksService.listTieBreaks(query);
     }
 
     @Get(':id')
-    @RequirePermission('manage:events')
+    @RequirePermission('read:grades')
     @ApiOperation({
         summary: 'Get tiebreak by ID',
         description: 'Retrieves a single tiebreak record by its ID.',
     })
     @ApiParam({ name: 'id', description: 'TieBreak ID', example: 1 })
     @ApiResponse({ status: 200, description: 'TieBreak retrieved successfully' })
-    @ApiResponse({ status: 403, description: 'Forbidden - Requires manage:events permission' })
+    @ApiResponse({ status: 403, description: 'Forbidden - Requires read:grades permission' })
     @ApiResponse({ status: 404, description: 'TieBreak not found' })
     async getTieBreak(@Param('id', ParseIntPipe) id: number) {
         return this.tieBreaksService.getTieBreak(id);

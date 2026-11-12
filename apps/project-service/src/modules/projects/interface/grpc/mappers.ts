@@ -11,6 +11,7 @@ import {
   JurorImportUserStatus,
 } from '../../application/use-cases/preview-juror-import.uc';
 import { JurorImportTemplate } from '../../application/use-cases/get-juror-import-template.uc';
+import { StudentDashboardData } from '../../application/use-cases/get-student-participation-stats.uc';
 
 // Mapear enum de dominio a enum del proto (numérico)
 const stateToProto = (s: ProjectState): number => {
@@ -194,4 +195,59 @@ export const toGetJurorImportTemplateResponse = (
   eventName: template.eventName,
   departments: template.departments,
   projects: template.projects,
+});
+
+/** Maps the student dashboard statistics to GetStudentParticipationStatsResponse */
+export const toProtoStudentParticipationStats = (stats: StudentDashboardData) => ({
+  totalEvents: stats.totalEvents,
+  finishedEvents: stats.finishedEvents,
+  ongoingEvents: stats.ongoingEvents,
+  totalProjects: stats.totalProjects,
+  totalAwards: stats.totalAwards,
+  bySemester: stats.bySemester.map((s) => ({
+    semester: s.semester,
+    events: s.events,
+    projects: s.projects,
+    awards: s.awards,
+  })),
+  participations: stats.participations.map((p) => ({
+    projectId: p.projectId,
+    projectName: p.projectName,
+    eventId: p.eventId,
+    eventName: p.eventName,
+    eventStartDate: p.eventStartDate,
+    eventEndDate: p.eventEndDate,
+    semester: p.semester,
+    finished: p.finished,
+    projectCode: p.projectCode,
+    courseName: p.courseName,
+    awards: p.awards.map((a) => ({
+      awardId: a.awardId,
+      title: a.title,
+      position: a.position,
+      categoryName: a.categoryName,
+    })),
+  })),
+  academic: {
+    studentCode: stats.academic.studentCode ?? undefined,
+    career: stats.academic.career ?? undefined,
+    semester: stats.academic.semester ?? undefined,
+  },
+  currentProject: stats.currentProject
+    ? {
+        projectId: stats.currentProject.projectId,
+        eventId: stats.currentProject.eventId,
+        eventName: stats.currentProject.eventName,
+        eventStartDate: stats.currentProject.eventStartDate,
+        semester: stats.currentProject.semester,
+        projectCode: stats.currentProject.projectCode,
+        name: stats.currentProject.name,
+        description: stats.currentProject.description,
+        courseName: stats.currentProject.courseName,
+        state: stats.currentProject.state,
+        canEdit: stats.currentProject.canEdit,
+        participantsCount: stats.currentProject.participantsCount,
+        documentsCount: stats.currentProject.documentsCount,
+      }
+    : undefined,
 });

@@ -15,6 +15,7 @@ import {
   ApiResponse,
   ApiSecurity,
   ApiParam,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { CriterionsService } from './criterions.service';
 import { CreateCriterionDto } from './dto/create-criterion.dto';
@@ -22,8 +23,8 @@ import { UpdateCriterionDto } from './dto/update-criterion.dto';
 import { ListCriterionsDto } from './dto/list-criterions.dto';
 import { CreateComponentDto } from './dto/create-component.dto';
 import { UpdateComponentDto } from './dto/update-component.dto';
-import { RequirePermission } from '@common/decorators/require-permission.decorator';
-import { InvalidateCache } from '@common/cache/invalidate-cache.decorator';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
+import { InvalidateCache } from '../../common/cache/invalidate-cache.decorator';
 
 @ApiTags('criterions')
 @ApiSecurity('JWT-auth')
@@ -62,7 +63,7 @@ export class CriterionsController {
   }
 
   @Get('components')
-  @RequirePermission('manage:events')
+  @RequirePermission('read:events')
   @ApiOperation({
     summary: 'List all components',
     description:
@@ -74,14 +75,14 @@ export class CriterionsController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - Requires manage:events permission',
+    description: 'Forbidden - Requires read:events permission',
   })
   async listComponents() {
     return this.criterionsService.listComponents();
   }
 
   @Get('components/:id')
-  @RequirePermission('manage:events')
+  @RequirePermission('read:events')
   @ApiOperation({
     summary: 'Get component by ID',
     description:
@@ -98,7 +99,7 @@ export class CriterionsController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - Requires manage:events permission',
+    description: 'Forbidden - Requires read:events permission',
   })
   @ApiResponse({
     status: 404,
@@ -208,7 +209,7 @@ export class CriterionsController {
   }
 
   @Get()
-  @RequirePermission('manage:events')
+  @RequirePermission('read:events')
   @ApiOperation({
     summary: 'List criterions with pagination and filters',
     description:
@@ -220,10 +221,34 @@ export class CriterionsController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - Requires manage:events permission',
+    description: 'Forbidden - Requires read:events permission',
   })
   async listCriterions(@Query() query: ListCriterionsDto) {
     return this.criterionsService.listCriterions(query);
+  }
+
+  @Get('readiness')
+  @RequirePermission('manage:events')
+  @ApiOperation({
+    summary: 'Check whether the rubric of an event can be evaluated',
+    description:
+      'For each category (course) of the event, tells whether its rubric is ready: the event components ' +
+      'add up to 100% and every component has at least one criterion of that category. ' +
+      'Evaluations of a category whose rubric is not ready are rejected.',
+  })
+  @ApiQuery({ name: 'eventId', type: Number, example: 1 })
+  @ApiQuery({
+    name: 'courseId',
+    type: Number,
+    required: false,
+    description: 'Only return this category',
+  })
+  @ApiResponse({ status: 200, description: 'Rubric readiness per category' })
+  async getRubricReadiness(
+    @Query('eventId', ParseIntPipe) eventId: number,
+    @Query('courseId', new ParseIntPipe({ optional: true })) courseId?: number,
+  ) {
+    return this.criterionsService.getRubricReadiness(eventId, courseId);
   }
 
   @Get('course/:courseId')
@@ -252,7 +277,7 @@ export class CriterionsController {
   }
 
   @Get(':id')
-  @RequirePermission('manage:events')
+  @RequirePermission('read:events')
   @ApiOperation({
     summary: 'Get criterion by ID',
     description:
@@ -269,7 +294,7 @@ export class CriterionsController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - Requires manage:events permission',
+    description: 'Forbidden - Requires read:events permission',
   })
   @ApiResponse({
     status: 404,

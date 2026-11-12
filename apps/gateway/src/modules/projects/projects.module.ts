@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { join } from 'path';
@@ -9,6 +10,7 @@ import {
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
 import { AzureBlobUploadService } from './azure-blob-upload.service';
+import { SignBlobUrlsInterceptor } from './sign-blob-urls.interceptor';
 import { FetchProjectJurorsUseCase } from './use-cases/fetch-project-jurors.use-case';
 import { FetchUserProfilesUseCase } from './use-cases/fetch-user-profiles.use-case';
 import { EnrichProjectsWithJurorsUseCase } from './use-cases/enrich-projects-with-jurors.use-case';
@@ -119,6 +121,7 @@ import { AuthModule } from '../auth/auth.module';
     RemoveJurorFromProjectUseCase,
     UpdateProjectCodeUseCase,
     JurorImportsService,
+    { provide: APP_INTERCEPTOR, useClass: SignBlobUrlsInterceptor },
   ],
   exports: [ProjectsService],
 })

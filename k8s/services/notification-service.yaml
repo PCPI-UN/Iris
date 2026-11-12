@@ -27,6 +27,7 @@ spec:
       labels:
         app: notification-service
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: notification-service
           image: pcpi/notification-service:latest
@@ -39,6 +40,16 @@ spec:
                 configMapKeyRef:
                   name: pcpi-config
                   key: NODE_ENV
+            - name: GRPC_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: NOTIFICATION_GRPC_HOST
+            - name: GRPC_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: NOTIFICATION_GRPC_PORT
             - name: EMAIL_PROVIDERS
               valueFrom:
                 configMapKeyRef:
@@ -82,6 +93,25 @@ spec:
                   name: pcpi-secrets
                   key: ACS_SENDER_ADDRESS
                   optional: true
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          startupProbe:
+            tcpSocket:
+              port: 50056
+            failureThreshold: 30
+            periodSeconds: 5
           readinessProbe:
             tcpSocket:
               port: 50056

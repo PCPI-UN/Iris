@@ -21,7 +21,7 @@ Each module follows the layering described in `LLM_RULES.md` (`domain`, `applica
 
 | Module | Responsibility |
 | --- | --- |
-| `events` | Event CRUD and listings, dashboard stats, AR listing, event members, ranking configuration, and the catalog (categories, awards, award winners, inscription details, recaps) |
+| `events` | Event CRUD and listings, dashboard stats, AR listing, event members, ranking configuration, and the catalog (categories, awards, award winners, inscription details, recaps). For the student dashboard: `ListEventsByIds` (deleted events included, with `active = false`), `ListAwardsByProjects` (awards won by a set of projects in active categories, with their category, event and whether the event ranking is published) and `ListCategoriesByIds` |
 | `courses` | Legacy "course" API. There is no courses table: it reads and writes `categories` (`code` maps to `name`) |
 
 ## Dependencies
@@ -41,10 +41,11 @@ sequenceDiagram
 
     C->>E: CreateEventMember {eventId, userId, roleId}
     E->>DB: find event
-    E->>E: event is active, publicly joinable and not ended
+    E->>E: event is active
     E->>A: GetUser
     E->>A: GetRolesByIds
     E->>E: role scope must be EVENT
+    E->>E: event has not ended
     E->>DB: find active membership of the user in the event
     alt already a member
         E-->>C: existing membership
@@ -56,6 +57,7 @@ sequenceDiagram
 
 - A user has at most one role per event: the primary key of `event_members` is (`user_id`, `event_id`).
 - Removing a member is a soft delete (`active = false`); the row stays.
+- `is_publicly_joinable` does not apply here: accepting an invitation adds the member even to a private event. The flag only gates public project submissions (project-service `CreateProject`).
 
 ## Related
 

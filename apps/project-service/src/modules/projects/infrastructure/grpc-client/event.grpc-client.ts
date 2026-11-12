@@ -16,6 +16,9 @@ interface EventServiceGrpc {
     page: number;
     limit: number;
   }): Observable<ListCategoriesResponse>;
+  listEventsByIds(data: { ids: number[] }): Observable<any>;
+  listAwardsByProjects(data: { projectIds: number[] }): Observable<any>;
+  listCategoriesByIds(data: { ids: number[] }): Observable<any>;
   // si luego quieres: listCoursesByEvent ...
 }
 
@@ -59,5 +62,17 @@ export class EventGrpcClient implements OnModuleInit {
     return firstValueFrom(
       this.svc.listCategoriesByEvent({ eventId, page, limit }),
     );
+  }
+
+  async listEventsByIds(ids: number[]) {
+    return firstValueFrom(this.svc.listEventsByIds({ ids }));
+  }
+
+  async listAwardsByProjects(projectIds: number[]) {
+    return firstValueFrom(this.svc.listAwardsByProjects({ projectIds }));
+  }
+
+  async listCategoriesByIds(ids: number[]) {
+    return firstValueFrom(this.svc.listCategoriesByIds({ ids }));
   }
 }

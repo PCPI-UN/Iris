@@ -1,3 +1,5 @@
+import { roundGrade } from '@app/common/utils/grade-rounding';
+
 /**
  * Ranking position rules (decision of the 27 Oct meeting: no tie-break,
  * tied projects are co-winners).
@@ -17,22 +19,13 @@ export interface RankableRow {
 }
 
 /**
- * Rounds half up to 2 decimals. The intermediate toFixed(6) drops floating
- * point noise first, so 11.685 and 11.684999999999999 (same sum in a
- * different order) both round to 11.69.
- */
-export function roundRankingGrade(grade: number): number {
-  return Math.round(Number((grade * 100).toFixed(6))) / 100;
-}
-
-/**
  * Sorts rows by rounded average (descending) and assigns dense positions.
  * Returns a new array; the given rows are updated in place with their position.
  */
 export function assignRankingPositions<T extends RankableRow>(rows: T[]): T[] {
   const sorted = [...rows].sort((a, b) => {
     const gradeDiff =
-      roundRankingGrade(b.averageGrade) - roundRankingGrade(a.averageGrade);
+      roundGrade(b.averageGrade) - roundGrade(a.averageGrade);
     if (gradeDiff !== 0) {
       return gradeDiff;
     }
@@ -42,7 +35,7 @@ export function assignRankingPositions<T extends RankableRow>(rows: T[]): T[] {
   let position = 0;
   let previousGrade: number | undefined;
   for (const row of sorted) {
-    const grade = roundRankingGrade(row.averageGrade);
+    const grade = roundGrade(row.averageGrade);
     if (grade !== previousGrade) {
       position += 1;
       previousGrade = grade;

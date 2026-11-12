@@ -74,13 +74,15 @@ export class EvaluationsController {
         return this.evaluationsService.getProjectStats(projectId);
     }
 
-    @RequirePermission('manage:events')
+    @RequirePermission('read:grades')
     @Get('courses/:courseId/top-projects')
     @ApiOperation({
         summary: 'Get top N projects for a course',
         description:
-            'Returns the top N projects for a specific course within an event, ranked by average evaluation grade. ' +
-            'Each project includes complete project details along with average grade and evaluation count.',
+            'Returns the top N positions of a course within an event, with the same rules as the event ranking: ' +
+            'only approved projects with evaluations, averages rounded to 2 decimals, and tied projects share the ' +
+            'position (co-winners, no tie-break), so a position can hold more than one project. ' +
+            'Each project includes complete project details along with position, average grade and evaluation count.',
     })
     @ApiParam({
         name: 'courseId',
@@ -95,7 +97,7 @@ export class EvaluationsController {
     })
     @ApiQuery({
         name: 'limit',
-        description: 'Number of top projects to return',
+        description: 'Number of top positions to return (0 returns every project)',
         example: 5,
         required: false,
     })

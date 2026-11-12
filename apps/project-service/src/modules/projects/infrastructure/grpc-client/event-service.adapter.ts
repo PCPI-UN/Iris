@@ -6,6 +6,11 @@ import {
   JurorMembership,
 } from '../../application/ports/event-service.port';
 import { EventGrpcClient } from './event.grpc-client';
+import { EventStatus } from '@app/common/generated/event';
+import {
+  ParticipationAward,
+  ParticipationEvent,
+} from '../../domain/student-participation-stats';
 
 const CATEGORIES_PAGE_SIZE = 100;
 
@@ -68,5 +73,44 @@ export class EventServiceAdapter implements EventServicePort {
       memberEventId: res.memberEventId,
       memberRoleId: res.memberRoleId,
     };
+  }
+
+  // This client has no loader options: proto3 defaults (false, 0, '') arrive undefined
+  // and enums arrive as numbers, so every field is normalized here
+  async listEventsByIds(ids: number[]): Promise<ParticipationEvent[]> {
+    if (!ids.length) return [];
+    const res = await this.grpc.listEventsByIds(ids);
+    return (res?.events ?? []).map((e: any) => ({
+      id: Number(e.id),
+      name: e.name ?? '',
+      startDate: e.startDate ?? '',
+      endDate: e.endDate ?? '',
+      active: e.active === true,
+      finished: e.status === EventStatus.CLOSED,
+      inProgress: e.status === EventStatus.AVAILABLE,
+    }));
+  }
+
+  async listAwardsByProjects(projectIds: number[]): Promise<ParticipationAward[]> {
+    if (!projectIds.length) return [];
+    const res = await this.grpc.listAwardsByProjects(projectIds);
+    return (res?.awards ?? []).map((a: any) => ({
+      projectId: Number(a.projectId),
+      awardId: Number(a.awardId),
+      title: a.title ?? '',
+      position: Number(a.position ?? 0),
+      categoryName: a.categoryName ?? '',
+      eventId: Number(a.eventId),
+      resultsPublished: a.resultsPublished === true,
+    }));
+  }
+
+  async listCategoriesByIds(ids: number[]): Promise<{ id: number; name: string }[]> {
+    if (!ids.length) return [];
+    const res = await this.grpc.listCategoriesByIds(ids);
+    return (res?.categories ?? []).map((c: any) => ({
+      id: Number(c.id),
+      name: c.name ?? '',
+    }));
   }
 }

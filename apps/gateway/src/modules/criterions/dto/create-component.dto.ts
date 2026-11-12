@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNumber, IsNotEmpty, Min, Max, IsOptional } from 'class-validator';
+import { IsString, IsNumber, IsNotEmpty, Min, Max, IsInt } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateComponentDto {
@@ -12,7 +12,9 @@ export class CreateComponentDto {
   name: string;
 
   @ApiProperty({
-    description: 'Weight of the component (0 to 1)',
+    description:
+      'Weight of the component as a fraction of the grade (0 to 1). The components of an event must add up to 1 ' +
+      'before the event can be evaluated; it is shared by every category of the event.',
     example: 0.4,
     minimum: 0,
     maximum: 1,
@@ -24,12 +26,10 @@ export class CreateComponentDto {
   weight: number;
 
   @ApiProperty({
-    description: 'Event ID (optional)',
+    description: 'Event the component belongs to',
     example: 1,
-    required: false,
   })
-  @IsNumber()
-  @IsOptional()
+  @IsInt()
   @Type(() => Number)
-  eventId?: number;
+  eventId: number;
 }

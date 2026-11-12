@@ -28,6 +28,7 @@ import {
   ListAssignedProjectsRequest,
   ListAssignedProjectsResponse,
   GetMyProjectByEventRequest,
+  GetStudentParticipationStatsResponse,
   GetMyProjectByEventResponse,
   ListUserParticipationsResponse,
   AddPendingParticipantRequest,
@@ -294,7 +295,7 @@ export class ProjectsService implements OnModuleInit {
         firstValueFrom(
           this.projectsService.addProjectDocumentFromUrl({
             projectId: createdProject.id,
-            url: uploadResult.url,
+            url: uploadResult.blobName,
             type: this.mapDocumentTypeToProto(documentMetadata[index].type),
           }),
         ),
@@ -337,7 +338,7 @@ export class ProjectsService implements OnModuleInit {
           })) ?? [],
         documents:
           dto.documents?.map((d) => ({
-            url: d.url,
+            url: this.azureBlobUploadService.toStoredUrl(d.url),
             type: this.mapDocumentTypeToProto(d.type),
           })) ?? [],
       }),
@@ -555,6 +556,29 @@ export class ProjectsService implements OnModuleInit {
     }
   }
 
+  /**
+   * Freshly signed URL of a project document's file, for the stable
+   * `/projects/:projectId/documents/:documentId/open` link.
+   */
+  async getDocumentOpenUrl(
+    projectId: number,
+    documentId: number,
+  ): Promise<string> {
+    const { items } = await lastValueFrom(
+      this.projectsService.listProjectDocuments({ projectId }),
+    );
+    const document = items?.find((item) => item.id === documentId);
+    if (!document) {
+      throw new NotFoundException('Project document not found');
+    }
+
+    const url = this.azureBlobUploadService.openUrl(document.url);
+    if (!url) {
+      throw new NotFoundException('Project document has no stored file');
+    }
+    return url;
+  }
+
   async updateProjectDocument(
     id: number,
     dto: UpdateProjectDocumentDto,
@@ -564,9 +588,7 @@ export class ProjectsService implements OnModuleInit {
 
     if (file) {
       const uploadResult = await this.azureBlobUploadService.uploadFile(file);
-      request.url = uploadResult.url;
-    } else if (dto.url && dto.url.trim() !== '') {
-      request.url = dto.url.trim();
+      request.url = uploadResult.blobName;
     }
     if (dto.type !== undefined) {
       request.type = this.mapDocumentTypeToProto(dto.type);
@@ -893,7 +915,7 @@ export class ProjectsService implements OnModuleInit {
         firstValueFrom(
           this.projectsService.addProjectDocumentFromUrl({
             projectId,
-            url: uploadResult.url,
+            url: uploadResult.blobName,
             type: this.mapDocumentTypeToProto(documentMetadata[index].type),
           }),
         ),
@@ -936,6 +958,16 @@ export class ProjectsService implements OnModuleInit {
   ): Promise<ListUserParticipationsResponse> {
     return lastValueFrom(
       this.projectsService.listUserParticipations({ userId, email, limit }),
+    );
+  }
+
+  /** Data of the student dashboard; userId and email must come from the session */
+  async getStudentParticipationStats(
+    userId: number,
+    email: string,
+  ): Promise<GetStudentParticipationStatsResponse> {
+    return lastValueFrom(
+      this.projectsService.getStudentParticipationStats({ userId, email }),
     );
   }
 }

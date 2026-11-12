@@ -16,6 +16,8 @@ service EventService {
   rpc GetEventStatuses (GetEventStatusesRequest) returns (GetEventStatusesResponse) {}
   rpc GetDashboardStats (GetEventDashboardStatsRequest) returns (GetEventDashboardStatsResponse) {}
   rpc GetEventsForAR (GetEventsForARRequest) returns (GetEventsForARResponse);
+  // Events by id, soft deleted ones included (active = false); used by the student dashboard
+  rpc ListEventsByIds (ListEventsByIdsRequest) returns (ListEventsByIdsResponse) {}
 
   // ---- EVENT MEMBERS ----
   rpc CreateEventMember (CreateEventMemberRequest) returns (CreateEventMemberResponse) {}
@@ -53,6 +55,10 @@ service EventService {
   rpc GetAwardWinner (GetAwardWinnerRequest) returns (GetAwardWinnerResponse) {}
   rpc ListAwardWinners (ListAwardWinnersRequest) returns (ListAwardWinnersResponse) {}
   rpc DeleteAwardWinner (DeleteAwardWinnerRequest) returns (DeleteAwardWinnerResponse) {}
+  // Awards won by the given projects in active categories, with the award, category and event they belong to
+  rpc ListAwardsByProjects (ListAwardsByProjectsRequest) returns (ListAwardsByProjectsResponse) {}
+  // Categories by id, inactive ones included (active = false)
+  rpc ListCategoriesByIds (ListCategoriesByIdsRequest) returns (ListCategoriesByIdsResponse) {}
 
   // ---- EVENT INSCRIPTION DETAILS ----
   rpc CreateEventInscriptionDetail (CreateEventInscriptionDetailRequest) returns (CreateEventInscriptionDetailResponse) {}
@@ -825,4 +831,44 @@ message DeleteRankingEventRequest {
 
 message DeleteRankingEventResponse {
   bool ok = 1;
+}
+
+// ===== STUDENT DASHBOARD =====
+
+message ListEventsByIdsRequest {
+  repeated int32 ids = 1;
+}
+
+message ListEventsByIdsResponse {
+  repeated EventProto events = 1;
+}
+
+message ListAwardsByProjectsRequest {
+  repeated int32 projectIds = 1;
+}
+
+// One award won by a project. Co-winners of the same award get one row each.
+message ProjectAwardProto {
+  int32 winnerId = 1;
+  int32 projectId = 2;
+  int32 awardId = 3;
+  string title = 4;
+  int32 position = 5;
+  int32 categoryId = 6;
+  string categoryName = 7;
+  int32 eventId = 8;
+  // true when the event ranking is published (ranking_event.visible_public)
+  bool resultsPublished = 9;
+}
+
+message ListAwardsByProjectsResponse {
+  repeated ProjectAwardProto awards = 1;
+}
+
+message ListCategoriesByIdsRequest {
+  repeated int32 ids = 1;
+}
+
+message ListCategoriesByIdsResponse {
+  repeated CategoryProto categories = 1;
 }
