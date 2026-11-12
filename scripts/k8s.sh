@@ -5,7 +5,7 @@ ENGINE="k3s"
 CLUSTER_NAME="iris-local"
 NAMESPACE="pcpi"
 SKIP_BUILD=false
-LOCAL_KUBECONFIG="$HOME/.kube/config"
+LOCAL_KUBECONFIG="/etc/rancher/k3s/k3s.yaml"
 PUBLIC_URL="${PUBLIC_URL:-}"
 NODE_ENV="${NODE_ENV:-}"
 LOG_APP=""
@@ -372,7 +372,7 @@ ensure_cluster() {
   esac
 
   log_info "Esperando que los nodos del clúster estén Ready..."
-  "${KUBECTL_COMMAND[@]}" wait --for=condition=Ready nodes --all --timeout=120s
+  "${KUBECTL_COMMAND[@]}" wait --for=condition=Ready nodes/k3s-atlas node/k3s-hyas --timeout=120s
 }
 
 get_target_services() {
@@ -415,33 +415,24 @@ load_images() {
   local target_services=($(get_target_services))
   local images=()
   local s image
+  local workers=(
+    "root@hyas"
+    "root@maia"
+  )
 
-  log_info "Cargando imágenes de Backend en el clúster ($ENGINE) para: ${target_services[*]}..."
-  for s in "${target_services[@]}"; do
-    images+=("pcpi/$s:latest")
+  for service in "${target_services[@]}"; do
+    local image="pcpi/$service:latest"
+
+    log_info "Importando $images en Atlas..."
+    docker save "$image" | sudo k3s ctr --namespace k8s.io images import -
+
+    for worker in "${workers[@]}"; do
+      log_info "Importando $image en $worker..."
+      ssh "$worker" " sudo k3s ctr --namespace k8s.io images import -"
+    done
   done
 
-  case "$ENGINE" in
-    kind)
-      for image in "${images[@]}"; do
-        echo "  ↳ [Kind] Cargando $image..."
-        kind load docker-image "$image" --name "$CLUSTER_NAME"
-      done
-      ;;
-    k3s)
-      sudo -v
-      for image in "${images[@]}"; do
-        echo "  ↳ [K3s] Importando $image..."
-        docker save "$image" | sudo k3s ctr --namespace k8s.io images import -
-      done
-      ;;
-    k3d)
-      echo "  ↳ [K3d] Inyectando imágenes en lote..."
-      k3d image import "${images[@]}" -c "$CLUSTER_NAME"
-      ;;
-  esac
-
-  log_success "Todas las imágenes fueron inyectadas correctamente."
+  log_success "Frontend distribuido en Atlas"
 }
 
 deploy_infra() {
