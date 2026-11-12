@@ -431,4 +431,14 @@ export class PrismaProjectRepository implements ProjectRepository {
     });
   }
 
+  async listProjectsByParticipant(userId: number, states: ProjectState[]): Promise<Project[]> {
+    const rows = await this.prisma.project.findMany({
+      where: {
+        participants: { some: { userId } },
+        ...(states.length ? { state: { in: states } } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows as unknown as Project[];
+  }
 }

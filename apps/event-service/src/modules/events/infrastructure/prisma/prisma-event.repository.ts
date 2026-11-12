@@ -222,6 +222,16 @@ export class PrismaEventRepository extends EventRepository {
     return toDomainEvent(row);
   }
 
+  async findByIds(ids: number[]): Promise<DomainEvent[]> {
+    if (!ids.length) return [];
+
+    const rows = await this.prisma.event.findMany({
+      where: { id: { in: ids } },
+    });
+
+    return rows.map(toDomainEvent);
+  }
+
   async findByAccessCode(accessCode: string): Promise<DomainEvent | null> {
     const row = await this.prisma.event.findUnique({
       where: { accessCode },

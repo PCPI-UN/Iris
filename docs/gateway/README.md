@@ -28,7 +28,7 @@ Single HTTP entry point of the platform. It authenticates the browser session, c
 | `evaluations` | Evaluate a project, project statistics, top projects per course | `evaluation`, `project` |
 | `tiebreaks` | Manual tiebreak order | `evaluation` |
 | `invitations` | Invitations, juror invitations, acceptance | `invitation`, `auth`, `event`, `project` |
-| `dashboard` | Admin summary figures | `event`, `project`, `evaluation` (through the other modules) |
+| `dashboard` | Admin summary figures; student dashboard (`GET /students/me/dashboard`, own data only) | `event`, `project`, `evaluation` (through the other modules) |
 
 Cross-cutting code lives in `src/common`: guards, decorators (`@Public`, `@RequirePermission`, `@GetUser`), the gRPC-to-HTTP exception filter and the cache.
 

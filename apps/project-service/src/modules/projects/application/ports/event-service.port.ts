@@ -1,3 +1,5 @@
+import { ParticipationAward, ParticipationEvent } from '../../domain/student-participation-stats';
+
 export const EVENT_SERVICE_PORT = 'EVENT_SERVICE_PORT';
 
 export interface JurorMembership {
@@ -16,4 +18,13 @@ export interface EventServicePort {
    * The event-service knows which roles are juror roles.
    */
   getJurorMembership(userId: number, eventId: number): Promise<JurorMembership | null>;
+
+  /** Events with the given ids, deleted ones included (active = false). */
+  listEventsByIds(ids: number[]): Promise<ParticipationEvent[]>;
+
+  /** Awards won by the given projects in active categories. */
+  listAwardsByProjects(projectIds: number[]): Promise<ParticipationAward[]>;
+
+  /** Names of the given categories (courses), in one call. */
+  listCategoriesByIds(ids: number[]): Promise<{ id: number; name: string }[]>;
 }
