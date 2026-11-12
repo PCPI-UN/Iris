@@ -80,13 +80,13 @@ describe('JurorImportsService.preview', () => {
     getJurorImportTemplate = jest.fn().mockReturnValue(
       of({
         eventName: 'Feria',
-        departments: ['Dpt. Ingeniería Industrial'],
         projects: [
           {
             projectId: 195,
             department: 'Dpt. Ingeniería Industrial',
             projectCode: '14',
             name: 'Modelo',
+            members: ['Ana Ríos', 'Luis Mora'],
           },
         ],
       }),
@@ -169,6 +169,8 @@ describe('JurorImportsService.preview', () => {
     expect(fileName).toBe('plantilla-jurados-evento-10.xlsx');
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(file as unknown as ExcelJS.Buffer);
-    expect(wb.getWorksheet('Proyectos')!.getCell('D2').value).toBe('Modelo');
+    const ws = wb.getWorksheet('Asignación jurados')!;
+    expect(ws.getCell('C5').value).toBe('Modelo');
+    expect(ws.getCell('E5').value).toBe('Ana Ríos\nLuis Mora');
   });
 });

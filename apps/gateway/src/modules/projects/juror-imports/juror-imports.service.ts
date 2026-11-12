@@ -97,7 +97,7 @@ export class JurorImportsService implements OnModuleInit {
     };
   }
 
-  /** Builds the template of the event with its departments and approved projects */
+  /** Builds the template of the event with its approved projects */
   async template(eventId: number): Promise<{ fileName: string; file: Buffer }> {
     const data = await firstValueFrom(
       this.projectsService.getJurorImportTemplate({ eventId }),
@@ -107,14 +107,12 @@ export class JurorImportsService implements OnModuleInit {
       department: project.department ?? '',
       projectCode: project.projectCode ?? '',
       name: project.name ?? '',
+      members: project.members ?? [],
+      // IRIS does not store the tutor yet: the column goes out empty
+      tutors: [],
     }));
-    // Provisional until the template is rewritten: the dropdown lists the departments of the projects
-    const departments = [
-      ...new Set(projects.map((p) => p.department).filter(Boolean)),
-    ].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
     const file = await buildJurorImportTemplate({
       eventName: data.eventName ?? '',
-      departments,
       projects,
     });
     return { fileName: `plantilla-jurados-evento-${eventId}.xlsx`, file };

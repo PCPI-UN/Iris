@@ -1,140 +1,62 @@
 import * as ExcelJS from 'exceljs';
-import { JUROR_IMPORT_MAX_ROWS } from './juror-import-format';
-
-// Legacy layout (one juror per row): the parser no longer reads it. Commit C rewrites this file.
-const JUROR_IMPORT_SHEET = 'Asignaciones';
-type JurorImportField = 'department' | 'projectCode' | 'jurorName' | 'email';
-const JUROR_IMPORT_COLUMNS: { field: JurorImportField; label: string }[] = [
-  { field: 'department', label: 'Departamento' },
-  { field: 'projectCode', label: 'Número' },
-  { field: 'jurorName', label: 'Jurado' },
-  { field: 'email', label: 'Email' },
-];
+import { JUROR_IMPORT_SHEET } from './juror-import-format';
 
 /** Data of the event, as GetJurorImportTemplate returns it */
 export interface JurorImportTemplateData {
   eventName: string;
-  departments: string[];
   projects: {
     projectId: number;
     department: string;
     projectCode: string;
     name: string;
+    /** Full names of the participants, confirmed first and then pending */
+    members: string[];
+    /** Names of the tutors; empty until the tutor is stored in IRIS */
+    tutors: string[];
   }[];
 }
 
-const PROJECTS_SHEET = 'Proyectos';
-const LISTS_SHEET = 'Listas';
-const LAST_ROW = JUROR_IMPORT_MAX_ROWS + 1;
+/** Jurors per project row, as in the template of decanatura */
+const JUROR_SLOTS = 4;
+/** First row with data: title, legend, a blank row and the headers come first */
+const HEADER_ROW = 4;
+const FIRST_ROW = HEADER_ROW + 1;
 
 const NAVY = 'FF1F3864';
+const OLIVE = 'FF7F6000';
 const INPUT_FILL = 'FFFFF2CC';
-const AUTO_FILL = 'FFE7E6E6';
-const AUTO_FONT = 'FF404040';
-const ERROR_FONT = 'FFC00000';
+const AUTO_FILL = 'FFF2F2F2';
 const GRID = 'FFBFBFBF';
 const SUBTITLE_FONT = 'FF595959';
+const MUTED_FONT = 'FF808080';
+const TUTOR_FILL = 'FFF8CBAD';
+const TUTOR_FONT = 'FF9C0006';
 
-/** The original template uses Arial 10 everywhere, including the empty cells to fill */
+/** The template of decanatura uses Arial 10 everywhere */
 const FONT: Partial<ExcelJS.Font> = { name: 'Arial', size: 10 };
 
-const label = (field: JurorImportField) =>
-  JUROR_IMPORT_COLUMNS.find((c) => c.field === field)!.label;
+const LEGEND =
+  'Gris: datos del proyecto (no editar). Amarillo: decanatura escribe nombre(s), apellido(s) y correo de cada jurado. La columna Revisión avisa si un jurado parece ser tutor del proyecto. Departamento y Número coinciden con IRIS.';
 
-/** Assignment sheet layout: A Departamento, B Número, C (auto), D Jurado, E Email, F (auto) */
-const ASSIGNMENT_COLUMNS: { header: string; width: number; input: boolean }[] =
-  [
-    { header: `${label('department')}*`, width: 38, input: true },
-    { header: `${label('projectCode')}*`, width: 10, input: true },
-    { header: 'Nombre proyecto (auto)', width: 55, input: false },
-    { header: `${label('jurorName')}*`, width: 30, input: true },
-    { header: `${label('email')}*`, width: 34, input: true },
-    { header: 'Revisión (auto)', width: 36, input: false },
-  ];
+const LAST_COLUMN = 6 + JUROR_SLOTS * 3 + 2; // F + jurors + Revisión + Notas
+const col = (n: number) => String.fromCharCode(64 + n);
+const REVIEW_COL = col(6 + JUROR_SLOTS * 3 + 1);
+const NOTES_COL = col(LAST_COLUMN);
+/** Hidden column: the tutor without accents and in lowercase, to compare against the jurors */
+const TUTOR_KEY_COL = col(LAST_COLUMN + 1);
 
-/** Project sheet layout: A Departamento, B Número, C Id, D Nombre, E N° jurados, F Llave */
-const PROJECT_HEADERS = [
-  'Departamento',
-  'Número',
-  'Id (interno IRIS)',
-  'Nombre proyecto',
-  'N° jurados en este archivo',
-  'Llave (auto)',
+const FIXED_COLUMNS: { header: string; width: number }[] = [
+  { header: 'Departamento', width: 30 },
+  { header: 'Número', width: 9 },
+  { header: 'Nombre del proyecto', width: 50 },
+  { header: 'Tutor(es)', width: 30 },
+  { header: 'Integrantes', width: 45 },
+  { header: 'N° integrantes', width: 11 },
 ];
-
-const INSTRUCTIONS: { text: string; heading?: boolean; fill?: string }[] = [
-  { text: 'Qué diligencia decanatura', heading: true },
-  {
-    text: `Solo la hoja '${JUROR_IMPORT_SHEET}': una fila por cada jurado de cada proyecto, con Departamento, Número del proyecto, nombre y correo del jurado. Un proyecto con 3 jurados ocupa 3 filas. Máximo ${JUROR_IMPORT_MAX_ROWS} filas.`,
-  },
-  { text: '' },
-  { text: 'Qué hace IRIS al cargar el archivo', heading: true },
-  {
-    text: '1. Busca cada proyecto por Departamento + Número dentro de este evento (el Número solo se repite entre departamentos).',
-  },
-  {
-    text: '2. Busca cada jurado por su correo. Si no tiene cuenta, IRIS la crea con el nombre de la fila.',
-  },
-  {
-    text: '3. Muestra una vista previa con el resultado de cada fila. Nada se guarda ni se envía hasta confirmar, y no se puede confirmar si hay errores.',
-  },
-  {
-    text: '4. Al confirmar, crea las asignaciones e invita a los jurados que aún no están en el evento.',
-  },
-  { text: '' },
-  { text: 'Colores', heading: true },
-  { text: 'Amarillo: lo que diligencia decanatura.', fill: INPUT_FILL },
-  {
-    text: 'Gris: lo genera IRIS o se calcula solo. No se edita.',
-    fill: AUTO_FILL,
-  },
-  { text: '' },
-  {
-    text: `La hoja '${PROJECTS_SHEET}' trae los proyectos aprobados del evento al momento de descargar la plantilla. Un proyecto sin Número debe numerarse en IRIS antes de asignarle jurados.`,
-  },
-  {
-    text: `Las columnas grises de '${JUROR_IMPORT_SHEET}' son una ayuda: la validación que cuenta es la de IRIS al cargar el archivo.`,
-  },
-  { text: '' },
-  {
-    text: `No cambie el nombre de la hoja '${JUROR_IMPORT_SHEET}' ni de sus encabezados.`,
-  },
-];
-
-const RULES: [string, string][] = [
-  [
-    `Que exista la hoja '${JUROR_IMPORT_SHEET}' con las columnas Departamento, Número, Jurado y Email.`,
-    `Faltan columnas en la hoja «${JUROR_IMPORT_SHEET}»: Número, Email.`,
-  ],
-  [
-    'Que cada fila tenga Departamento, Número, Jurado y Email.',
-    'Faltan los datos obligatorios: Número, Email.',
-  ],
-  ['Que el correo sea válido.', 'El correo «ana.perez@uninorte» no es válido.'],
-  [
-    'Que no haya filas repetidas (mismo departamento, número y correo).',
-    'Fila repetida: igual a la fila 3.',
-  ],
-  [
-    'Que el departamento sea una categoría del evento.',
-    'El departamento «Dpt. Ing. Civil» no existe en este evento.',
-  ],
-  [
-    'Que Departamento + Número correspondan a un solo proyecto aprobado del evento.',
-    'No hay proyecto con número 99 en «Dpt. Ingeniería Industrial».',
-  ],
-  [
-    'Que el jurado no esté en el evento con otro rol (por ejemplo, como participante).',
-    'ana.perez@uninorte.edu.co ya está en este evento con otro rol; no puede ser jurado.',
-  ],
-  [
-    'Que la asignación no exista ya; si existe, la fila se omite.',
-    'Ya estaba asignado a este proyecto; se omite.',
-  ],
-  [
-    'Que el evento esté activo y no haya terminado; si no, no se puede confirmar.',
-    'El evento ya terminó (fecha de fin: 30/10/2026).',
-  ],
+const SLOT_COLUMNS: { header: string; width: number }[] = [
+  { header: 'Nombre(s) jurado', width: 18 },
+  { header: 'Apellido(s) jurado', width: 20 },
+  { header: 'Correo jurado', width: 30 },
 ];
 
 const border: Partial<ExcelJS.Borders> = {
@@ -150,15 +72,52 @@ const fill = (argb: string): ExcelJS.Fill => ({
   fgColor: { argb },
 });
 
-/** Column widths with Arial 10 as the style of every cell of the column, typed later or not */
-const columns = (widths: number[]): Partial<ExcelJS.Column>[] =>
-  widths.map((width) => ({ width, style: { font: FONT } }));
+/** Text without accents and in lowercase, the same way the hidden column does it */
+const normalize = (expr: string) =>
+  ['á', 'é', 'í', 'ó', 'ú'].reduce(
+    (acc, accent, i) => `SUBSTITUTE(${acc},"${accent}","${'aeiou'[i]}")`,
+    `LOWER(${expr})`,
+  );
+
+/** One word of a cell: `start` 1 is the first, 101 the second */
+const word = (cell: string, start: number) =>
+  `TRIM(MID(SUBSTITUTE(TRIM(${cell})," ",REPT(" ",100)),${start},100))`;
+
+/** The word has more than 2 letters and appears in the tutor key of the row */
+const wordInTutor = (cell: string, start: number, r: string) =>
+  `AND(LEN(${word(cell, start)})>2,ISNUMBER(SEARCH(${normalize(word(cell, start))},$${TUTOR_KEY_COL}${r})))`;
+
+/**
+ * "Parece ser tutor": the first word of the first name and the first or second word of the
+ * last name appear in the tutor. `r` is the row ("5") or its relative form in a rule.
+ */
+const looksLikeTutor = (first: string, last: string, r: string) =>
+  `AND(${first}<>"",${last}<>"",$${TUTOR_KEY_COL}${r}<>"",${wordInTutor(first, 1, r)},OR(${wordInTutor(last, 1, r)},${wordInTutor(last, 101, r)}))`;
+
+/** Letters of the name, last name and email columns of juror `slot` (1-based) */
+const slotColumns = (slot: number) => {
+  const first = 6 + (slot - 1) * 3 + 1;
+  return [col(first), col(first + 1), col(first + 2)];
+};
+
+function reviewFormula(r: number, withoutCode: boolean): string {
+  const slots = Array.from({ length: JUROR_SLOTS }, (_, i) => i + 1);
+  const empty = slots.map((s) => `(${slotColumns(s)[0]}${r}<>"")`).join('+');
+  const tutors = slots
+    .map((s) => {
+      const [first, last] = slotColumns(s);
+      return `IF(${looksLikeTutor(`${first}${r}`, `${last}${r}`, String(r))},"Jurado ${s} parece ser tutor. ","")`;
+    })
+    .join('&');
+  const base = `IF((${empty})=0,"Sin jurados",TRIM(${tutors}))`;
+  return withoutCode ? `TRIM("Sin número en IRIS. "&${base})` : base;
+}
 
 function styleHeader(row: ExcelJS.Row) {
   row.height = 30;
-  row.eachCell((cell) => {
+  row.eachCell((cell, n) => {
     cell.font = { ...FONT, bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.fill = fill(NAVY);
+    cell.fill = fill(n > 6 && n <= 6 + JUROR_SLOTS * 3 ? OLIVE : NAVY);
     cell.border = border;
     cell.alignment = {
       horizontal: 'center',
@@ -168,172 +127,154 @@ function styleHeader(row: ExcelJS.Row) {
   });
 }
 
-/** Numbers as numbers, so the key Departamento|Número matches what Excel reads in the sheet */
-const codeCell = (code: string): string | number =>
-  /^\d+$/.test(code) ? Number(code) : code;
-
-function addInstructions(wb: ExcelJS.Workbook, eventName: string) {
-  const ws = wb.addWorksheet('Instrucciones');
-  ws.columns = columns([4, 110]);
-  const text = (row: number, value: string, font: Partial<ExcelJS.Font>) => {
-    const cell = ws.getCell(row, 2);
-    cell.value = value;
-    cell.font = font;
-    cell.alignment = { wrapText: true, vertical: 'top' };
-    return cell;
-  };
-  text(1, 'IRIS · Plantilla de asignación de jurados', {
-    ...FONT,
-    size: 14,
-    bold: true,
-    color: { argb: NAVY },
-  });
-  text(2, `Evento: ${eventName}`, {
-    ...FONT,
-    italic: true,
-    color: { argb: SUBTITLE_FONT },
-  });
-  INSTRUCTIONS.forEach(({ text: value, heading, fill: legend }, i) => {
-    const cell = text(
-      i + 4,
-      value,
-      heading ? { ...FONT, size: 11, bold: true, color: { argb: NAVY } } : FONT,
-    );
-    if (legend) cell.fill = fill(legend);
-  });
-}
-
-function addAssignments(wb: ExcelJS.Workbook, departmentCount: number) {
-  const ws = wb.addWorksheet(JUROR_IMPORT_SHEET, {
-    views: [{ state: 'frozen', ySplit: 1 }],
-  });
-  ws.columns = columns(ASSIGNMENT_COLUMNS.map(({ width }) => width));
-  styleHeader(ws.addRow(ASSIGNMENT_COLUMNS.map(({ header }) => header)));
-
-  const departmentList =
-    departmentCount > 0
-      ? `${LISTS_SHEET}!$A$2:$A$${departmentCount + 1}`
-      : undefined;
-  for (let r = 2; r <= LAST_ROW; r++) {
-    const row = ws.getRow(r);
-    ASSIGNMENT_COLUMNS.forEach(({ input }, i) => {
-      const cell = row.getCell(i + 1);
-      cell.fill = fill(input ? INPUT_FILL : AUTO_FILL);
-      cell.border = border;
-      cell.font = input ? FONT : { ...FONT, color: { argb: AUTO_FONT } };
-    });
-    row.getCell(3).value = {
-      formula: `IF(OR(A${r}="",B${r}=""),"",IFERROR(INDEX(${PROJECTS_SHEET}!$D:$D,MATCH(A${r}&"|"&B${r},${PROJECTS_SHEET}!$F:$F,0)),"No existe en el evento"))`,
-    };
-    row.getCell(6).value = {
-      formula:
-        `IF(AND(A${r}="",B${r}="",D${r}="",E${r}=""),"",` +
-        `IF(OR(A${r}="",B${r}="",D${r}="",E${r}=""),"Error: falta un dato obligatorio",` +
-        `IF(ISNA(MATCH(A${r}&"|"&B${r},${PROJECTS_SHEET}!$F:$F,0)),"Error: proyecto no está en el evento",` +
-        `IF(ISERROR(FIND("@",E${r})),"Error: correo no válido",` +
-        `IF(COUNTIFS($A$2:$A$${LAST_ROW},A${r},$B$2:$B$${LAST_ROW},B${r},$E$2:$E$${LAST_ROW},E${r})>1,"Error: fila repetida","OK")))))`,
-    };
-    if (departmentList) {
-      row.getCell(1).dataValidation = {
-        type: 'list',
-        allowBlank: true,
-        formulae: [departmentList],
-        showErrorMessage: false,
-      };
-    }
-    row.getCell(2).dataValidation = {
-      type: 'whole',
-      operator: 'greaterThan',
-      allowBlank: true,
-      formulae: [0],
-      showErrorMessage: false,
-    };
-  }
-  ws.addConditionalFormatting({
-    ref: `F2:F${LAST_ROW}`,
-    rules: [
-      {
-        type: 'expression',
-        priority: 1,
-        formulae: ['LEFT(F2,5)="Error"'],
-        style: { font: { bold: true, color: { argb: ERROR_FONT } } },
-      },
-    ],
-  });
-}
-
-function addProjects(
-  wb: ExcelJS.Workbook,
-  projects: JurorImportTemplateData['projects'],
-) {
-  const ws = wb.addWorksheet(PROJECTS_SHEET, {
-    views: [{ state: 'frozen', ySplit: 1 }],
-  });
-  ws.columns = columns([38, 10, 12, 70, 14, 40]);
-  styleHeader(ws.addRow(PROJECT_HEADERS));
-  projects.forEach((project, i) => {
-    const r = i + 2;
-    const row = ws.addRow([
-      project.department,
-      project.projectCode ? codeCell(project.projectCode) : null,
-      project.projectId,
-      project.name,
-      {
-        formula: `COUNTIFS(${JUROR_IMPORT_SHEET}!$A:$A,A${r},${JUROR_IMPORT_SHEET}!$B:$B,B${r})`,
-      },
-      { formula: `A${r}&"|"&B${r}` },
-    ]);
-    row.eachCell({ includeEmpty: true }, (cell, col) => {
-      cell.font = FONT;
-      cell.fill = fill(AUTO_FILL);
-      cell.border = border;
-      cell.alignment =
-        col === 5
-          ? { horizontal: 'center', vertical: 'top' }
-          : { vertical: 'top', wrapText: true };
-    });
-  });
-}
-
-function addRules(wb: ExcelJS.Workbook) {
-  const ws = wb.addWorksheet('Validaciones');
-  ws.columns = columns([5, 70, 70]);
-  styleHeader(
-    ws.addRow(['#', 'Qué valida IRIS al cargar', 'Ejemplo de mensaje']),
-  );
-  RULES.forEach(([rule, example], i) => {
-    ws.addRow([i + 1, rule, example]).eachCell((cell) => {
-      cell.font = FONT;
-      cell.alignment = { wrapText: true, vertical: 'top' };
-      cell.border = border;
-    });
-  });
-}
-
-function addLists(wb: ExcelJS.Workbook, departments: string[]) {
-  const ws = wb.addWorksheet(LISTS_SHEET, { state: 'hidden' });
-  ws.columns = columns([40]);
-  ws.addRow(['Departamento']);
-  departments.forEach((department) => ws.addRow([department]));
-}
+/** Numbers as numbers, so the cell reads the same as the one decanatura types */
+const codeCell = (code: string): string | number | null =>
+  !code ? null : /^\d+$/.test(code) ? Number(code) : code;
 
 /**
- * Builds the juror template of an event: instructions, an empty assignment sheet with
- * the helper formulas, the approved projects and the rules IRIS checks on upload.
+ * Builds the juror template of an event: one sheet with a row per approved project, its data
+ * in gray and a group of yellow cells per juror, with the helper columns of decanatura.
  */
 export async function buildJurorImportTemplate(
   data: JurorImportTemplateData,
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'IRIS';
-  // The helper formulas are written without results: Excel computes them on open
+  // The Revisión formulas are written without results: Excel computes them on open
   wb.calcProperties.fullCalcOnLoad = true;
 
-  addInstructions(wb, data.eventName);
-  addAssignments(wb, data.departments.length);
-  addProjects(wb, data.projects);
-  addRules(wb);
-  addLists(wb, data.departments);
+  const lastRow = Math.max(FIRST_ROW, HEADER_ROW + data.projects.length);
+  const ws = wb.addWorksheet(JUROR_IMPORT_SHEET, {
+    views: [{ state: 'frozen', ySplit: HEADER_ROW }],
+  });
+  const columns: { width: number; hidden?: boolean }[] = [
+    ...FIXED_COLUMNS,
+    ...Array.from({ length: JUROR_SLOTS }, () => SLOT_COLUMNS).flat(),
+    { width: 34 },
+    { width: 50 },
+    { width: 13, hidden: true },
+  ];
+  ws.columns = columns.map(({ width, hidden }) => ({
+    width,
+    hidden,
+    style: { font: FONT },
+  }));
+
+  const title = ws.getCell(1, 1);
+  title.value = `Asignación de jurados · ${data.eventName}`;
+  title.font = { ...FONT, size: 14, bold: true, color: { argb: NAVY } };
+  ws.getRow(1).height = 17.4;
+
+  const legend = ws.getCell(2, 1);
+  legend.value = LEGEND;
+  legend.font = { ...FONT, italic: true, color: { argb: SUBTITLE_FONT } };
+  legend.alignment = { vertical: 'top', wrapText: true };
+  ws.mergeCells(2, 1, 2, LAST_COLUMN);
+  ws.getRow(2).height = 30;
+
+  const headers = [
+    ...FIXED_COLUMNS.map(({ header }) => header),
+    ...Array.from({ length: JUROR_SLOTS }, (_, i) =>
+      SLOT_COLUMNS.map(({ header }) => `${header} ${i + 1}`),
+    ).flat(),
+    'Revisión (auto)',
+    'Notas sobre los datos',
+  ];
+  headers.forEach((header, i) => {
+    ws.getCell(HEADER_ROW, i + 1).value = header;
+  });
+  styleHeader(ws.getRow(HEADER_ROW));
+
+  data.projects.forEach((project, i) => {
+    const r = FIRST_ROW + i;
+    const row = ws.getRow(r);
+    row.values = [
+      project.department,
+      codeCell(project.projectCode),
+      project.name,
+      project.tutors.join('\n') || null,
+      project.members.join('\n') || null,
+      project.members.length,
+    ];
+    // Same height the cell would need with one line per member
+    const lines = Math.max(project.members.length, project.tutors.length, 1);
+    row.height = Math.max(15, lines * 13.5);
+    row.getCell(LAST_COLUMN - 1).value = {
+      formula: reviewFormula(r, !project.projectCode),
+    };
+    row.getCell(LAST_COLUMN + 1).value = {
+      formula: normalize(`D${r}`),
+    };
+    for (let c = 1; c <= LAST_COLUMN; c++) {
+      const cell = row.getCell(c);
+      const input = c > 6 && c <= 6 + JUROR_SLOTS * 3;
+      cell.border = border;
+      if (c <= 6) cell.fill = fill(AUTO_FILL);
+      else if (input) cell.fill = fill(INPUT_FILL);
+      cell.font =
+        c === LAST_COLUMN - 1
+          ? { ...FONT, bold: true }
+          : c === LAST_COLUMN
+            ? { ...FONT, size: 9, color: { argb: OLIVE } }
+            : FONT;
+      cell.alignment =
+        c === 2 || c === 6
+          ? { horizontal: 'center', vertical: 'top' }
+          : { vertical: 'top', wrapText: true };
+    }
+    row.getCell(LAST_COLUMN + 1).font = {
+      name: 'Arial',
+      size: 8,
+      color: { argb: MUTED_FONT },
+    };
+  });
+
+  // A juror that looks like the tutor is painted in red, name and last name together
+  for (let s = 1, priority = 2; s <= JUROR_SLOTS; s++) {
+    const [first, last] = slotColumns(s);
+    ws.addConditionalFormatting({
+      ref: `${first}${FIRST_ROW}:${last}${lastRow}`,
+      rules: [
+        {
+          type: 'expression',
+          priority: priority++,
+          formulae: [
+            looksLikeTutor(
+              `$${first}${FIRST_ROW}`,
+              `$${last}${FIRST_ROW}`,
+              String(FIRST_ROW),
+            ),
+          ],
+          style: {
+            font: { bold: true, color: { argb: TUTOR_FONT } },
+            fill: {
+              type: 'pattern',
+              pattern: 'solid',
+              bgColor: { argb: TUTOR_FILL },
+            },
+          },
+        },
+      ],
+    });
+  }
+  ws.addConditionalFormatting({
+    ref: `${REVIEW_COL}${FIRST_ROW}:${REVIEW_COL}${lastRow}`,
+    rules: [
+      {
+        type: 'expression',
+        priority: 151,
+        formulae: [`${REVIEW_COL}${FIRST_ROW}="Sin jurados"`],
+        style: { font: { italic: true, color: { argb: MUTED_FONT } } },
+      },
+      {
+        type: 'expression',
+        priority: 150,
+        formulae: [`ISNUMBER(SEARCH("tutor",${REVIEW_COL}${FIRST_ROW}))`],
+        style: { font: { bold: true, color: { argb: TUTOR_FONT } } },
+      },
+    ],
+  });
+  ws.autoFilter = `A${HEADER_ROW}:${NOTES_COL}${lastRow}`;
 
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
