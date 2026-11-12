@@ -261,9 +261,6 @@ export class CreateInvitationUseCase {
     projectData: any;
   }): Promise<void> {
     switch (params.targetType) {
-      // A project tutor has no dedicated template yet: they get the platform
-      // invitation email with the roles of the invitation (Tutor)
-      case InvitationTargetType.PROJECT_TUTOR:
       case InvitationTargetType.PLATFORM: {
         // Fetch role names if provided
         let roles = '';
@@ -278,6 +275,17 @@ export class CreateInvitationUseCase {
           lastName: params.lastName,
           invitationLink: params.invitationLink,
           roles,
+        });
+        break;
+      }
+
+      case InvitationTargetType.PROJECT_TUTOR: {
+        await this.notificationService.sendProjectTutorInvitationEmail({
+          to: params.to,
+          firstName: params.firstName,
+          lastName: params.lastName,
+          invitationLink: params.invitationLink,
+          projectName: params.projectData.name,
         });
         break;
       }

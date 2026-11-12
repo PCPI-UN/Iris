@@ -193,12 +193,12 @@ export class ResendInvitationUseCase {
             }
 
             case InvitationTargetType.PROJECT_TUTOR: {
-                await this.notificationService.sendPlatformInvitationEmail({
+                await this.notificationService.sendProjectTutorInvitationEmail({
                     to: params.to,
                     firstName: params.firstName,
                     lastName: params.lastName,
                     invitationLink: params.invitationLink,
-                    roles: 'Tutor',
+                    projectName: params.projectData?.name || 'Project',
                 });
                 break;
             }

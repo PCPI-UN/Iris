@@ -39,7 +39,7 @@ describe('CreateInvitationUseCase - PROJECT_TUTOR', () => {
     };
     eventService = { getEvent: jest.fn() };
     projectService = { getProject: jest.fn().mockResolvedValue({ id: 10, name: 'Project A', eventId: 5 }) };
-    notificationService = { sendPlatformInvitationEmail: jest.fn().mockResolvedValue({ success: true }) };
+    notificationService = { sendProjectTutorInvitationEmail: jest.fn().mockResolvedValue({ success: true }) };
     const config = { get: jest.fn((_: string, fallback?: unknown) => fallback ?? 'http://front') };
 
     useCase = new CreateInvitationUseCase(
@@ -53,7 +53,7 @@ describe('CreateInvitationUseCase - PROJECT_TUTOR', () => {
     );
   });
 
-  it('validates that the project exists, stores the roles and sends the Tutor email', async () => {
+  it('validates that the project exists, stores the roles and sends the tutor email', async () => {
     const { invitation, invitationRoles } = await useCase.execute(dto);
 
     expect(projectService.getProject).toHaveBeenCalledWith(10);
@@ -61,8 +61,8 @@ describe('CreateInvitationUseCase - PROJECT_TUTOR', () => {
     expect(invitation.targetType).toBe(InvitationTargetType.PROJECT_TUTOR);
     expect(invitation.email).toBe('tutor@example.com');
     expect(invitationRoles.map((r) => r.roleId)).toEqual([10]);
-    expect(notificationService.sendPlatformInvitationEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ to: 'tutor@example.com', roles: 'Tutor' }),
+    expect(notificationService.sendProjectTutorInvitationEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'tutor@example.com', projectName: 'Project A' }),
     );
   });
 
@@ -73,7 +73,7 @@ describe('CreateInvitationUseCase - PROJECT_TUTOR', () => {
       new RpcException({ code: status.NOT_FOUND, message: 'Project with ID 10 not found' }),
     );
     expect(invitationRepository.save).not.toHaveBeenCalled();
-    expect(notificationService.sendPlatformInvitationEmail).not.toHaveBeenCalled();
+    expect(notificationService.sendProjectTutorInvitationEmail).not.toHaveBeenCalled();
   });
 
   it('returns the existing pending invitation instead of creating another one', async () => {

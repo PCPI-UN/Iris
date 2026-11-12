@@ -31,4 +31,5 @@ enum EmailTemplate {
   PARTICIPANTS_SUBMITTED = 9; // For competitions
   PARTICIPANTS_APPROVED = 10;
   PARTICIPANTS_REJECTED = 11;
+  PROJECT_TUTOR_INVITATION = 12; // Invitation sent to a tutor typed in by the student
 }

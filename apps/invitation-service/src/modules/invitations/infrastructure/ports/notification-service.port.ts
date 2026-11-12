@@ -32,6 +32,17 @@ export abstract class NotificationServicePort {
   }): Promise<{ success: boolean }>;
 
   /**
+   * Sends the invitation email to a tutor of a project
+   */
+  abstract sendProjectTutorInvitationEmail(params: {
+    to: string;
+    firstName: string;
+    lastName?: string;
+    invitationLink: string;
+    projectName: string;
+  }): Promise<{ success: boolean }>;
+
+  /**
    * Sends a project submitted invitation email
    */
   abstract sendProjectSubmittedInvitationEmail(params: {
