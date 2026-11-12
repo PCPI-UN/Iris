@@ -56,6 +56,7 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'GET /criterions/components/:id': { permission: ['read:events'] },
   'PUT /criterions/components/:id': { permission: ['manage:events'] },
   'GET /criterions/course/:courseId': { access: 'pending' },
+  'GET /criterions/readiness': { permission: ['manage:events'] },
   // modules/dashboard/dashboard.controller.ts
   'GET /dashboard/stats': { permission: ['read:events'] },
   // modules/evaluations/evaluations.controller.ts
@@ -103,7 +104,7 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'DELETE /events/inscription-details/:id': { access: 'pending' },
   'GET /events/inscription-details/:id': { access: 'pending' },
   'PATCH /events/inscription-details/:id': { access: 'pending' },
-  'POST /events/members': { access: 'public' },
+  'POST /events/members': { permission: ['create:event-members'] },
   'GET /events/members/:eventId': { access: 'public' },
   'DELETE /events/members/delete': { access: 'public' },
   'GET /events/my-events': { access: 'session', why: "events of the caller; platform staff (read:events) sees every event" },
@@ -145,6 +146,7 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'PATCH /projects/:id/reject': { access: 'pending' },
   'PATCH /projects/:id/request-changes': { access: 'pending' },
   'POST /projects/:projectId/documents': { access: 'public' },
+  'GET /projects/:projectId/documents/:documentId/open': { access: 'public' },
   'DELETE /projects/:projectId/jurors/:jurorId': { access: 'pending' },
   'POST /projects/add-update-participants': { access: 'pending' },
   'POST /projects/assign-jurors': { access: 'pending' },
