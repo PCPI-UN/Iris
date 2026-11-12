@@ -22,7 +22,7 @@ export class PrismaAwardWinnerRepository extends AwardWinnerRepository {
         award: {
           include: {
             category: {
-              include: { event: { include: { rankingEvent: true } } },
+              include: { event: true },
             },
           },
         },
@@ -46,7 +46,7 @@ export class PrismaAwardWinnerRepository extends AwardWinnerRepository {
           row.award.categoryId,
           row.award.category.name,
           row.award.category.eventId,
-          row.award.category.event.rankingEvent?.visiblePublic === true,
+          row.award.category.event.resultsPublished,
         ),
     );
   }
