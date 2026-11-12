@@ -3,6 +3,7 @@ import { RpcException } from '@nestjs/microservices';
 import { status } from '@grpc/grpc-js';
 import { CriterionRepositoryPort } from '@criterions/domain/repositories/criterion.repository.port';
 import { DeleteComponentDto } from '../dto/delete-component.dto';
+import { areComponentsLocked, componentsLockedMessage } from '../services/component-lock';
 
 @Injectable()
 export class DeleteComponentUseCase {
@@ -11,6 +12,21 @@ export class DeleteComponentUseCase {
   ) {}
 
   async execute(deleteComponentDto: DeleteComponentDto): Promise<void> {
+    const component = await this.criterionRepository.findComponentById(deleteComponentDto.id);
+    if (!component) {
+      throw new RpcException({
+        code: status.NOT_FOUND,
+        message: `Component with ID ${deleteComponentDto.id} not found`,
+      });
+    }
+
+    // The rubric checks and the write run under the rubric lock of the event
+    await this.criterionRepository.withRubricLock([component.eventId], 'exclusive', () =>
+      this.delete(deleteComponentDto),
+    );
+  }
+
+  private async delete(deleteComponentDto: DeleteComponentDto): Promise<void> {
     const { id } = deleteComponentDto;
 
     // Verify component exists
@@ -20,6 +36,22 @@ export class DeleteComponentUseCase {
       throw new RpcException({
         code: status.NOT_FOUND,
         message: `Component with ID ${id} not found`,
+      });
+    }
+
+    // Removing a component changes the total weight of the event rubric
+    if (await areComponentsLocked(this.criterionRepository, component.eventId)) {
+      throw new RpcException({
+        code: status.FAILED_PRECONDITION,
+        message: componentsLockedMessage(component.eventId),
+      });
+    }
+
+    const activeCriteria = await this.criterionRepository.countActiveCriteriaInComponent(id);
+    if (activeCriteria > 0) {
+      throw new RpcException({
+        code: status.FAILED_PRECONDITION,
+        message: `Component ${id} still has ${activeCriteria} active criteria; remove or move them first`,
       });
     }
 

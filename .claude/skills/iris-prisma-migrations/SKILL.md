@@ -15,9 +15,9 @@ This skill is **instructions only**. Never create scripts, never add npm depende
 2. **Identify the service.** Prisma schemas live in `apps/<service>/prisma/schema.prisma`; take the service from the path of the changed file (`git status`). Do not rely on a fixed list of services: new ones follow the same layout. If the changed schema is somewhere else, or the service has no `migrations/` folder yet, stop and ask (a first migration for a new service needs an initial baseline, which is a different conversation).
 3. **Confirm the taskId** (ClickUp, e.g. `CU-86abcdefg`). Never invent it. It is needed for the branch and the commit.
 4. **Check the branch.** Work on a branch created from `origin/dev`, named `<taskId>/<Short-Description>`. Never commit on the branch of an open PR that is not yours to change.
-5. **Know the two environments** and tell the developer once, briefly:
-   - Production applies migrations with `prisma migrate deploy` (only what is in `migrations/`).
-   - The dev stack uses `prisma db push --accept-data-loss`, which ignores `migrations/`. **The dev database can differ from `migrations/`. Never assume it is up to date, and never use it to decide what the migration should contain.**
+5. **Know the environments** and tell the developer once, briefly:
+   - Both the local dev stack (`docker-compose.dev.yml`) and production (`docker-compose.yml`) apply migrations with `prisma migrate deploy` (only what is in `migrations/`).
+   - Never assume a shared database is up to date; always check the migration history before deciding what a new migration should contain.
 
 ## Hard Rules
 

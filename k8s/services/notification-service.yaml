@@ -27,6 +27,7 @@ spec:
       labels:
         app: notification-service
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: notification-service
           image: pcpi/notification-service:latest
@@ -39,21 +40,78 @@ spec:
                 configMapKeyRef:
                   name: pcpi-config
                   key: NODE_ENV
-            - name: EMAIL_PUBLIC_KEY
+            - name: GRPC_HOST
               valueFrom:
                 configMapKeyRef:
                   name: pcpi-config
-                  key: EMAIL_PUBLIC_KEY
-            - name: EMAIL_PRIVATE_KEY
+                  key: NOTIFICATION_GRPC_HOST
+            - name: GRPC_PORT
               valueFrom:
                 configMapKeyRef:
                   name: pcpi-config
-                  key: EMAIL_PRIVATE_KEY
-            - name: EMAILJS_TEMPLATE_PROJECT-CONFIRMATION_ID
+                  key: NOTIFICATION_GRPC_PORT
+            - name: EMAIL_PROVIDERS
               valueFrom:
                 configMapKeyRef:
                   name: pcpi-config
-                  key: EMAILJS_TEMPLATE_PROJECT-CONFIRMATION_ID
+                  key: EMAIL_PROVIDERS
+            # EmailJS
+            - name: EMAILJS_SERVICE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: EMAILJS_SERVICE_ID
+                  optional: true
+            - name: EMAILJS_TEMPLATE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: EMAILJS_TEMPLATE_ID
+                  optional: true
+            - name: EMAILJS_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: EMAILJS_PUBLIC_KEY
+                  optional: true
+            - name: EMAILJS_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: EMAILJS_PRIVATE_KEY
+                  optional: true
+            # Azure Communication Services Email (Fallback)
+            - name: ACS_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: ACS_CONNECTION_STRING
+                  optional: true
+            - name: ACS_SENDER_ADDRESS
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: ACS_SENDER_ADDRESS
+                  optional: true
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          startupProbe:
+            tcpSocket:
+              port: 50056
+            failureThreshold: 30
+            periodSeconds: 5
           readinessProbe:
             tcpSocket:
               port: 50056

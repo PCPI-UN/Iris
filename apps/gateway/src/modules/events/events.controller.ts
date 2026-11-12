@@ -475,7 +475,6 @@ export class EventsController {
   // EVENT MEMBERS ENDPOINTS
   // =====================
 
-  @Public()
   @RequirePermission('create:event-members')
   @Post('members')
   @ApiOperation({ summary: 'Create a new event member' })

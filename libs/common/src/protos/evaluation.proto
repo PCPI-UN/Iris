@@ -40,6 +40,9 @@ service CriterionsService {
   rpc ListComponents (Empty) returns (ListComponentsResponse) {}
   rpc UpdateComponent (UpdateComponentRequest) returns (ComponentProto) {}
   rpc DeleteComponent (DeleteComponentRequest) returns (DeleteCriterionResponse) {}
+
+  // Tells, per category, whether the rubric of an event can be evaluated
+  rpc GetRubricReadiness (GetRubricReadinessRequest) returns (GetRubricReadinessResponse) {}
 }
 
 // ===== COMMON MESSAGES =====
@@ -144,6 +147,8 @@ message EvaluationDetailResponse {
   int32 evaluationId = 1;
   int32 criterionId = 2;
   double score = 3;
+  // Effective weight the criterion had in the grade when it was evaluated
+  optional double weight = 4;
 }
 
 // ===== CRITERIONS MESSAGES =====
@@ -176,7 +181,8 @@ message CreateCriterionRequest {
   int32 eventId = 1;
   string name = 2;
   optional string description = 3;
-  double weight = 4;
+  // Relative weight inside its component and category; 1 when not sent
+  optional double weight = 4;
   repeated int32 courseIds = 5;
   optional string category = 6;
   optional int32 componentId = 7;
@@ -252,8 +258,9 @@ message ComponentProto {
 
 message CreateComponentRequest {
   string name = 1;
+  // Fraction of the grade (0-1); the components of an event add up to 1
   double weight = 2;
-  optional int32 eventId = 3;
+  int32 eventId = 3;
 }
 
 message GetComponentRequest {
@@ -262,6 +269,30 @@ message GetComponentRequest {
 
 message ListComponentsResponse {
   repeated ComponentProto components = 1;
+}
+
+message GetRubricReadinessRequest {
+  int32 eventId = 1;
+  // When set, the response only includes this category (course)
+  optional int32 courseId = 2;
+}
+
+message RubricCategoryReadiness {
+  int32 courseId = 1;
+  bool ready = 2;
+  int32 criteriaCount = 3;
+  // Components of the event without any criterion in this category
+  repeated int32 missingComponentIds = 4;
+  // Criteria of this category that are not inside a component of the event
+  repeated int32 criteriaWithoutComponent = 5;
+}
+
+message GetRubricReadinessResponse {
+  int32 eventId = 1;
+  // Sum of the component weights of the event; must be 1 to evaluate
+  double componentsWeight = 2;
+  repeated ComponentProto components = 3;
+  repeated RubricCategoryReadiness categories = 4;
 }
 
 message UpdateComponentRequest {

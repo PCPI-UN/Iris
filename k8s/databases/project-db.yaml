@@ -27,6 +27,7 @@ spec:
       labels:
         app: project-db
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: postgres
           image: postgres:16-alpine
@@ -36,15 +37,27 @@ spec:
             - name: POSTGRES_DB
               value: project_service
             - name: POSTGRES_USER
-              valueFrom:
-                configMapKeyRef:
-                  name: pcpi-config
-                  key: POSTGRES_USER
+              value: project_user
             - name: POSTGRES_PASSWORD
               valueFrom:
-                configMapKeyRef:
-                  name: pcpi-config
-                  key: POSTGRES_PASSWORD
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: PROJECT_DB_PASSWORD
+          readinessProbe:
+            exec:
+              command: ["sh", "-ec", 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
+            periodSeconds: 5
+          startupProbe:
+            exec:
+              command: ["sh", "-ec", 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
+            periodSeconds: 5
+            failureThreshold: 30
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
           volumeMounts:
             - name: project-db-storage
               mountPath: /var/lib/postgresql/data

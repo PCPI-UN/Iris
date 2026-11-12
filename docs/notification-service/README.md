@@ -11,7 +11,7 @@ Sends the platform's transactional emails. Other services ask for an email by te
 | Notification service does | Notification service does not |
 | --- | --- |
 | Render an HTML template with the parameters it receives (Handlebars; the subject comes from the template's front matter) | Decide which email to send or to whom: the calling service decides |
-| Deliver the email through EmailJS, with Azure Communication Services Email as a fallback when configured | Store a history of sent emails or queue them for retry |
+| Deliver the email through a primary provider and, if it fails, a fallback provider, both chosen by configuration | Store a history of sent emails or queue them for retry |
 | Keep the HTML templates for every email type | Know about users, roles or permissions |
 
 ## Modules
@@ -22,15 +22,28 @@ The service follows the layering described in `LLM_RULES.md`, without a `domain`
 | --- | --- |
 | `interface/grpc` | gRPC controller for sending an email |
 | `application` | Send-email use case, request DTO and the email service port (`application/ports`) |
-| `infrastructure/email` | Provider adapter (EmailJS and Azure fallback) and the HTML templates |
+| `infrastructure/email` | Template renderer, the dispatcher that tries providers in order, one adapter per provider (`providers/`) and the HTML templates |
 
 ## Templates
 
-Each email type of the `EmailTemplate` enum maps to one HTML file in `src/infrastructure/email/templates/`. The file starts with a front matter block that holds the subject, followed by the HTML body. `currentYear` is always available to templates. When adding a template, add the enum value in the proto, the file, and its mapping in the adapter.
+Each email type of the `EmailTemplate` enum maps to one HTML file in `src/infrastructure/email/templates/`. The file starts with a front matter block that holds the subject, followed by the HTML body. `currentYear` is always available to templates. When adding a template, add the enum value in the proto, the file, and its mapping in `email-template.renderer.ts`.
+
+## Email providers
+
+Every provider implements `EmailProvider` (`application/ports/email-provider.port.ts`) in its own adapter under `infrastructure/email/providers/`. `EMAIL_PROVIDERS` is an ordered, comma-separated list: the first configured provider is the primary and the next one is the fallback. The default is `acs,emailjs`.
+
+| Provider | Variables | Behavior |
+| --- | --- | --- |
+| `acs` | `ACS_CONNECTION_STRING`, `ACS_SENDER_ADDRESS` | Waits for Azure's final status; a send that is not `Succeeded` is a failure. Sends an HTML and a plain-text body. |
+| `emailjs` | `EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`, `EMAILJS_PUBLIC_KEY`, `EMAILJS_PRIVATE_KEY` | At most 1 request per second, as primary or fallback. A `429` is retried with a growing wait (1 s, 2 s, 4 s) before it counts as a failure. |
+
+- A listed provider whose variables are missing is skipped with a warning, so the service runs with only one provider. The startup log states the primary and the fallback, or that there is no fallback.
+- The service does not start if `EMAIL_PROVIDERS` names an unknown provider or if none of the listed providers is configured.
+- Adding a provider means a new adapter and one entry in the registry of `providers/email-providers.ts`.
 
 ## Dependencies
 
-- **Uses**: EmailJS (primary provider) and Azure Communication Services Email (fallback).
+- **Uses**: Azure Communication Services Email and EmailJS, in the order set by `EMAIL_PROVIDERS`.
 - **Used by**: `auth-service` (account and password emails), `invitation-service` (invitation emails) and `project-service` (review result emails).
 
 ## Main flow: sending an email
@@ -41,24 +54,24 @@ sequenceDiagram
     participant C as Calling service
     participant N as Notification service
     participant T as HTML templates
-    participant EJ as EmailJS
-    participant ACS as Azure ACS (fallback)
+    participant P as Primary provider
+    participant F as Fallback provider
 
     C->>N: SendEmail {to, template, params}
     N->>T: load template for the email type
-    N->>N: render subject and body with params
-    N->>EJ: send
-    alt EmailJS succeeds
+    N->>N: render subject, HTML and plain text with params
+    N->>P: send
+    alt primary succeeds
         N-->>C: success
-    else EmailJS fails and fallback configured
-        N->>ACS: send
+    else primary fails and fallback configured
+        N->>F: send
         N-->>C: success, or error if it also fails
     else no fallback
         N-->>C: error
     end
 ```
 
-- Each request is a single delivery attempt per provider; the caller receives an error if no provider accepts the email.
+- Each request is one delivery attempt per provider (EmailJS adds its own retries on `429`); the caller receives an error if no provider accepts the email.
 
 ## Related
 
