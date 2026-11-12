@@ -17,7 +17,8 @@ const DATA: JurorImportTemplateData = {
       projectCode: '5',
       name: 'Edificio',
       members: ['Ana Pérez', 'Luis Mora'],
-      tutors: ['Margarita Gamarra'],
+      tutors: ['Margarita Gamarra', 'Pedro Luna'],
+      tutorEmails: ['MGamarra@uninorte.edu.co', 'pluna@x.co'],
     },
     {
       projectId: 200,
@@ -26,6 +27,7 @@ const DATA: JurorImportTemplateData = {
       name: 'Sin número',
       members: [],
       tutors: [],
+      tutorEmails: [],
     },
     {
       projectId: 195,
@@ -34,6 +36,7 @@ const DATA: JurorImportTemplateData = {
       name: 'Modelo',
       members: ['Sofía Díaz'],
       tutors: [],
+      tutorEmails: [],
     },
   ],
 };
@@ -87,7 +90,14 @@ describe('buildJurorImportTemplate', () => {
       [1, 2, 3, 4, 5, 6].map((c) => ws.getRow(r).getCell(c).value),
     );
     expect(rows).toEqual([
-      [CIVIL, 5, 'Edificio', 'Margarita Gamarra', 'Ana Pérez\nLuis Mora', 2],
+      [
+        CIVIL,
+        5,
+        'Edificio',
+        'Margarita Gamarra\nPedro Luna',
+        'Ana Pérez\nLuis Mora',
+        2,
+      ],
       [CIVIL, null, 'Sin número', null, null, 0],
       [INDUSTRIAL, 'A-3', 'Modelo', null, 'Sofía Díaz', 1],
     ]);
@@ -106,9 +116,17 @@ describe('buildJurorImportTemplate', () => {
   it('computes Revisión per row, with the tutor key in the hidden column U', () => {
     expect(ws.getColumn('U').hidden).toBe(true);
     expect(ws.getCell('U8').formula).toContain('LOWER(D8)');
+    expect(ws.getColumn('V').hidden).toBe(true);
+    // lowercase emails between ";" so the formula matches a whole email
+    expect(ws.getCell('V8').value).toBe(
+      ';mgamarra@uninorte.edu.co;pluna@x.co;',
+    );
+    expect(ws.getCell('V10').value).toBeNull();
     const review = (r: number) => ws.getCell(`S${r}`).formula;
     expect(review(8)).toContain('"Sin jurados"');
     expect(review(8)).toContain('Jurado 4 parece ser tutor');
+    expect(review(8)).toContain('Jurado 4 es tutor (mismo correo)');
+    expect(review(8)).toContain('$V8');
     expect(review(8)).not.toContain('Sin número');
     expect(review(9)).toContain('Sin número en IRIS');
     expect(ws.getCell('S11').value).toBeNull();
@@ -119,7 +137,7 @@ describe('buildJurorImportTemplate', () => {
       conditionalFormattings: { ref: string }[];
     };
     const refs = conditionalFormattings.map((c) => c.ref);
-    expect(refs).toEqual(['G8:H10', 'J8:K10', 'M8:N10', 'P8:Q10', 'S8:S10']);
+    expect(refs).toEqual(['G8:I10', 'J8:L10', 'M8:O10', 'P8:R10', 'S8:S10']);
   });
 
   it('is read back by the parser once filled, and has no example rows', async () => {

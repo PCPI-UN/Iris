@@ -518,6 +518,8 @@ message JurorImportTemplateProject {
   string projectCode = 3;  // empty if the project has no number yet
   string name = 4;
   repeated string members = 5;  // full names of the participants, confirmed first and then pending
+  repeated string tutors = 6;  // full names of the tutors, linked first and then pending
+  repeated string tutorEmails = 7;  // emails of those same tutors, in the same order
 }
 
 message GetJurorImportTemplateResponse {

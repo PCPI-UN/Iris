@@ -102,7 +102,11 @@ const TEMPLATE_ROWS = [
 ];
 
 describe('PreviewJurorImportUC', () => {
-  let repo: { listWithJurorsByEvent: jest.Mock };
+  let repo: {
+    listWithJurorsByEvent: jest.Mock;
+    listTutorLinksByProjects: jest.Mock;
+    listPendingTutorsByProjects: jest.Mock;
+  };
   let events: {
     getEventById: jest.Mock;
     listCategoriesByEvent: jest.Mock;
@@ -121,6 +125,19 @@ describe('PreviewJurorImportUC', () => {
           project(195, 2, '14', 'APPROVED'),
           project(190, 3, '14', 'UNDER_REVIEW'),
         ]),
+      // Carlos (12) is a linked tutor of project 183; a pending tutor of 195 has no account yet
+      listTutorLinksByProjects: jest
+        .fn()
+        .mockResolvedValue([{ projectId: 183, userId: CARLOS.id }]),
+      listPendingTutorsByProjects: jest.fn().mockResolvedValue([
+        {
+          projectId: 195,
+          firstName: 'Nuevo',
+          lastName: 'Tutor',
+          email: 'nuevo.tutor@x.co',
+          status: 'INVITED',
+        },
+      ]),
     };
     events = {
       getEventById: jest.fn().mockResolvedValue({
@@ -156,6 +173,27 @@ describe('PreviewJurorImportUC', () => {
 
   const preview = (rows: JurorImportRowInput[]) =>
     useCase.execute({ eventId: EVENT_ID, rows });
+
+  it('warns when the juror is a tutor of the project, without blocking', async () => {
+    // Carlos is a participant of the event (role 5): make him a juror just for this test
+    const original = MEMBER_ROLES[CARLOS.id];
+    MEMBER_ROLES[CARLOS.id] = 4;
+    const result = await preview([
+      row(2, CIVIL, '6', 'Carlos Mejía', CARLOS.email),
+      row(3, INDUSTRIAL, '14', 'Nuevo Tutor', 'Nuevo.Tutor@x.co'),
+      row(4, CIVIL, '5', 'Carlos Mejía', CARLOS.email),
+    ]);
+    MEMBER_ROLES[CARLOS.id] = original;
+
+    const [linked, pending, other] = result.rows;
+    expect(linked.outcome).toBe('ASSIGN');
+    expect(linked.message).toContain('Aviso: es tutor de este proyecto.');
+    expect(pending.outcome).toBe('ASSIGN');
+    expect(pending.message).toContain('Aviso: es tutor de este proyecto.');
+    // same person in a project where they are not tutor: no warning
+    expect(other.message).not.toContain('tutor');
+    expect(result.canConfirm).toBe(true);
+  });
 
   it('reports every example row of the template', async () => {
     const result = await preview(TEMPLATE_ROWS);
