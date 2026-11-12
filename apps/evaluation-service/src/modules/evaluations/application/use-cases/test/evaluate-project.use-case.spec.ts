@@ -5,11 +5,18 @@ import { ProjectServicePort } from '../../../infrastructure/ports/project.servic
 import { EventServicePort } from '../../../infrastructure/ports/event.service.port';
 import { AuthServicePort } from '../../../infrastructure/ports/auth.service.port';
 import { CriterionRepositoryPort } from '../../../../criterions/domain/repositories/criterion.repository.port';
-import { EvaluationType } from '../../../../../common/constants/evaluation-type.constants';
+import { EvaluationType } from '@app/common/generated/event';
+import { EventGradingScaleResolver } from '../../../../grading-scales/application/event-grading-scale.resolver';
+import {
+    buildResolver,
+    customScale,
+    InMemoryGradingScaleRepository,
+} from '../../../../grading-scales/testing/grading-scales.fixture';
 import { RpcException } from '@nestjs/microservices';
 
 describe('EvaluateProjectUseCase', () => {
     let useCase: EvaluateProjectUseCase;
+    let scaleRepository: InMemoryGradingScaleRepository;
 
     const mockEvaluationRepository = {
         existsByProjectAndEvaluator: jest.fn(),
@@ -65,6 +72,7 @@ describe('EvaluateProjectUseCase', () => {
     };
 
     beforeEach(async () => {
+        scaleRepository = new InMemoryGradingScaleRepository();
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 EvaluateProjectUseCase,
@@ -73,6 +81,7 @@ describe('EvaluateProjectUseCase', () => {
                 { provide: EventServicePort, useValue: mockEventService },
                 { provide: AuthServicePort, useValue: mockAuthService },
                 { provide: CriterionRepositoryPort, useValue: mockCriterionRepository },
+                { provide: EventGradingScaleResolver, useFactory: () => buildResolver(scaleRepository) },
             ],
         }).compile();
 
@@ -154,16 +163,68 @@ describe('EvaluateProjectUseCase', () => {
 
         await expect(
             useCase.execute({ projectId: 1, userId: 1, scores: [{ criterionId: 1, score: 5 }] }),
-        ).rejects.toThrow('Invalid score for FINAL_PROJECTS');
+        ).rejects.toThrow('must be a level of the grading scale "Proyectos finales": 1, 2, 3, 4');
     });
 
-    it('should reject UNKNOWN evaluationType with clear error', async () => {
+    it('gives an event without a scale the system scale of its deprecated evaluation type and keeps it', async () => {
+        mockEventService.getEvent.mockResolvedValue(openEvent(EvaluationType.ZERO_TO_HUNDRED));
+        withRubric([{ id: 1, weight: 1 }]);
+
+        const result = await useCase.execute({ projectId: 1, userId: 1, scores: [{ criterionId: 1, score: 4 }] });
+
+        expect(result.evaluation.grade).toBe(100);
+        expect(scaleRepository.eventScales.get(1)).toBe(3);
+    });
+
+    it('falls back to "Proyectos finales" for an unknown deprecated evaluation type', async () => {
         mockEventService.getEvent.mockResolvedValue(openEvent('UNKNOWN'));
         withRubric([{ id: 1, weight: 1 }]);
 
+        const result = await useCase.execute({ projectId: 1, userId: 1, scores: [{ criterionId: 1, score: 4 }] });
+
+        expect(result.evaluation.grade).toBe(90);
+    });
+
+    it('grades with the scale assigned to the event, not with its deprecated evaluation type', async () => {
+        // 10/20/30/40 scale with every criterion at level 4 gives 40 (acceptance criterion of IRIS-V3-EVAL-03)
+        scaleRepository.scales.set(50, customScale(50, [10, 20, 30, 40]));
+        scaleRepository.eventScales.set(1, 50);
+        mockEventService.getEvent.mockResolvedValue(openEvent(EvaluationType.ZERO_TO_FIVE));
+
+        const result = await useCase.execute({
+            projectId: 1,
+            userId: 1,
+            scores: posterRubric.map((criterion) => ({ criterionId: criterion.id, score: 4 })),
+        });
+
+        expect(result.evaluation.grade).toBe(40);
+        expect(result.scores.every((detail) => detail.score === 40)).toBe(true);
+    });
+
+    it('stores the points of the custom scale for each level, weighted', async () => {
+        scaleRepository.scales.set(50, customScale(50, [10, 20, 30, 40]));
+        scaleRepository.eventScales.set(1, 50);
+        withRubric([{ id: 1, weight: 0.5 }, { id: 2, weight: 0.5 }]);
+
+        const result = await useCase.execute({
+            projectId: 1,
+            userId: 1,
+            scores: [
+                { criterionId: 1, score: 1 },
+                { criterionId: 2, score: 3 },
+            ],
+        });
+
+        expect(result.scores.map((detail) => detail.score)).toEqual([10, 30]);
+        expect(result.evaluation.grade).toBe(20);
+    });
+
+    it.each([0, 5, -1])('rejects the level %p, which the scale does not have', async (level) => {
+        withRubric([{ id: 1, weight: 1 }]);
+
         await expect(
-            useCase.execute({ projectId: 1, userId: 1, scores: [{ criterionId: 1, score: 4 }] }),
-        ).rejects.toThrow('Unsupported evaluation type: UNKNOWN');
+            useCase.execute({ projectId: 1, userId: 1, scores: [{ criterionId: 1, score: level }] }),
+        ).rejects.toThrow('must be a level of the grading scale');
     });
 
     it('should calculate grade correctly with real-world rubric data (15 criterions, 3 components)', async () => {

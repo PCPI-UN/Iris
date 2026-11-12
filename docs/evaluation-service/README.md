@@ -1,17 +1,17 @@
 # Evaluation Service
 
-Owns evaluation criteria, the components that group them, jurors' evaluations of projects and the manual tiebreak order used in rankings. It turns a juror's raw scores into a weighted grade and returns per-project averages so the platform can rank projects.
+Owns evaluation criteria, the components that group them, the grading scales of events, jurors' evaluations of projects and the manual tiebreak order used in rankings. It turns the levels a juror picks into points of the event's grading scale and a weighted grade and returns per-project averages so the platform can rank projects.
 
-- **Transport**: gRPC (`EvaluationService`, `CriterionsService`, `TieBreakService`). The contract is `libs/common/src/protos/evaluation.proto`.
+- **Transport**: gRPC (`EvaluationService`, `CriterionsService`, `TieBreakService`, `GradingScaleService`). The contract is `libs/common/src/protos/evaluation.proto`.
 - **Database**: PostgreSQL database `evaluation_service`, managed with Prisma. See [schema.md](./schema.md).
-- **HTTP**: none. Public endpoints live in the gateway (`/criterions/*`, `/evaluations/*`, `/tiebreaks/*`); see Swagger at `/api/docs`.
+- **HTTP**: none. Public endpoints live in the gateway (`/criterions/*`, `/evaluations/*`, `/tiebreaks/*`, `/grading-scales/*`); see Swagger at `/api/docs`.
 
 ## Boundaries
 
 | Evaluation service does | Evaluation service does not |
 | --- | --- |
 | Store criteria, components, evaluations with their per-criterion scores, and tiebreaks | Store events, courses, projects or users: it keeps only their ids |
-| Validate and map raw scores according to the event's evaluation type, and compute the grade | Decide the evaluation type: `event-service` owns it per event |
+| Keep the catalog of grading scales, the scale of each event, and turn levels into points with it to compute the grade | Store the event itself: the scale is linked by `event_id` only |
 | Reject an evaluation when evaluations are closed, the event is out of its dates, the juror is not assigned or already evaluated | Assign jurors to projects: that belongs to `project-service` |
 | Return the average grade and evaluation count per project | Sort the ranking or apply tiebreaks: the gateway does it with the averages and the tiebreak rows |
 | Check that a criterion's courses and component belong to its event, and refuse to grade with an incomplete rubric | Decide whether a caller may invoke an RPC: authorization is enforced in the gateway |
@@ -26,18 +26,39 @@ Each module follows the layering described in `LLM_RULES.md` (`domain`, `applica
 | `criterions` | Criteria and their course associations; components (named, weighted groups of criteria) |
 | `evaluations` | Evaluate a project, evaluation status per juror, project statistics, averages for rankings, dashboard count |
 | `tiebreaks` | Manual order between tied projects of an event and category |
+| `grading-scales` | Catalog of 4-level grading scales, the scale of each event, and the level ↔ points conversion |
 
-## Evaluation types
+## Grading scales
 
-The event's `evaluationType` is never sent in the evaluation request. The service resolves it from `project.eventId → event.evaluationType` and picks a score validator and mapper for it. In every type the juror submits a raw score from 1 to 4 per criterion; only the stored value changes.
+Every event has one **grading scale** with exactly 4 levels. For each criterion the juror picks a level from 1 to 4; the scale gives the points of that level, which is what is stored in `evaluation_detail.score` and used for the grade. Each level has a label (for example *Insuficiente*, *Aceptable*, *Bueno*, *Excelente*) and points with at most 2 decimals that grow strictly from level 1 to level 4.
 
-| Type | Raw score | Stored score |
+The catalog starts with three read-only **system scales**, seeded by the migration. They have the points of the former evaluation types, so grades and rankings of existing events do not change:
+
+| Scale | `code` | Points of levels 1, 2, 3, 4 |
 | --- | --- | --- |
-| `FINAL_PROJECTS` (default when the event has none) | 1, 2, 3, 4 | 25, 55, 75, 90 |
-| `ZERO_TO_FIVE` | 1, 2, 3, 4 | 2, 3, 4, 5 |
-| `ZERO_TO_HUNDRED` | 1, 2, 3, 4 | 40, 60, 80, 100 |
+| Proyectos finales (default) | `FINAL_PROJECTS` | 25, 55, 75, 90 |
+| Cero a cinco | `ZERO_TO_FIVE` | 2, 3, 4, 5 |
+| Cero a cien | `ZERO_TO_HUNDRED` | 40, 60, 80, 100 |
 
-Raw scores must be integers. In `ZERO_TO_FIVE`, a stored `1.5` is also read back as raw score 1.
+In *Cero a cinco*, a stored `1.5` is still read back as level 1 (the value level 1 had before it was aligned with the poster rubric).
+
+Rules:
+
+- System scales are never edited or deleted.
+- A catalog scale can be edited or deleted only while no event using it has evaluations; the error says which events block it and suggests creating a new scale. A scale assigned to an event cannot be deleted at all: assign the event another scale first.
+- The scale of an event cannot change once the event has evaluations. Assigning the same scale again is accepted and changes nothing.
+- These checks and the scale changes run under the exclusive rubric lock of the affected events, and an evaluation reads the scale under the shared lock (see [Changing a rubric in use](#changing-a-rubric-in-use)), so an evaluation never sees a scale halfway through a change.
+
+`AssignEventGradingScale` takes a catalog scale (`scaleId`) or a new one (`scale`, also added to the catalog). With neither, the event gets the system scale of its deprecated `evaluationType`, which `event-service` sets to `FINAL_PROJECTS` by default. The gateway calls it when an event is created (and deletes the event if it fails) and when an edit sends `gradingScaleId` or `gradingScale`; `GET /events/:id` and the create and edit responses include the event's `gradingScale`.
+
+### Events created before the catalog
+
+`evaluationType` is deprecated but still accepted. The events live in `event-service`'s database, so the migration cannot link them to a scale. Two mechanisms do it, both giving the system scale of the event's `evaluationType`:
+
+- At startup, `GradingScaleBackfillService` pages through `ListEvents` of `event-service` in the background and inserts the missing `event_grading_scale` rows. It retries 5 times, 15 seconds apart, if `event-service` is not reachable. Set `GRADING_SCALE_BACKFILL=false` to turn it off.
+- `EventGradingScaleResolver`, used by every reader of the scale, assigns and saves the same scale the first time an event without one is used.
+
+An existing assignment is never overwritten by either of them.
 
 ## Rubric and grade
 
@@ -45,7 +66,7 @@ An event has one rubric for all its categories (courses). **Components** belong 
 
 ```txt
 effectiveWeight = component.weight × criterion.weight ÷ Σ criterion.weight (same component, same category)
-grade           = round2(Σ storedScore × effectiveWeight)
+grade           = round2(Σ points of the chosen level × effectiveWeight)
 ```
 
 Example: a `0.3` component with criteria weighted 10, 9 and 9 gives them `0.107`, `0.096` and `0.096`. Each score is saved with its effective weight (`evaluation_detail.weight`), so a saved grade never changes.
@@ -98,7 +119,8 @@ sequenceDiagram
         EV->>DB: already evaluated by this juror?
         EV->>DB: active criteria of the course in the event, components of the event
         EV->>EV: check the rubric is ready and every criterion is scored once
-        EV->>EV: map raw scores, compute effective weights and grade
+        EV->>DB: grading scale of the event
+        EV->>EV: turn levels into points, compute effective weights and grade
         EV->>DB: insert evaluation and evaluation_detail rows (score and effective weight)
     end
     EV-->>GW: evaluation with stored scores and weights
@@ -106,10 +128,10 @@ sequenceDiagram
 ```
 
 - The evaluator is identified by (`member_user_id`, `member_event_id`, `member_role_id`), mirroring an event membership in `event-service`. The role is always the `Juror` role.
-- Stored scores are the mapped values. When a juror's evaluation status is read, the service maps them back to the raw 1–4 values.
+- Stored scores are the points of the chosen levels. When a juror's evaluation status is read, the service turns them back into levels 1–4 with the event's scale.
 
 ## Related
 
 - [schema.md](./schema.md): database schema and ER diagram.
 - `libs/common/src/protos/evaluation.proto`: gRPC contract.
-- `apps/gateway/src/modules/criterions`, `evaluations` and `tiebreaks`: HTTP endpoints and ranking assembly.
+- `apps/gateway/src/modules/criterions`, `evaluations`, `tiebreaks` and `grading-scales`: HTTP endpoints and ranking assembly.

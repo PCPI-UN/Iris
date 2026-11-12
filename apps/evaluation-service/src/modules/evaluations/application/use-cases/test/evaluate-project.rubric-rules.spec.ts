@@ -6,7 +6,12 @@ import { ProjectServicePort } from '../../../infrastructure/ports/project.servic
 import { EventServicePort } from '../../../infrastructure/ports/event.service.port';
 import { AuthServicePort } from '../../../infrastructure/ports/auth.service.port';
 import { CriterionRepositoryPort } from '../../../../criterions/domain/repositories/criterion.repository.port';
-import { EvaluationType } from '../../../../../common/constants/evaluation-type.constants';
+import { EvaluationType } from '@app/common/generated/event';
+import { EventGradingScaleResolver } from '../../../../grading-scales/application/event-grading-scale.resolver';
+import {
+    buildResolver,
+    InMemoryGradingScaleRepository,
+} from '../../../../grading-scales/testing/grading-scales.fixture';
 
 /**
  * Rubric rules applied when a juror submits an evaluation (CU-86e3vmxar / IRIS-V3-EVAL-02):
@@ -20,6 +25,7 @@ import { EvaluationType } from '../../../../../common/constants/evaluation-type.
  */
 describe('EvaluateProjectUseCase - rubric rules', () => {
     let useCase: EvaluateProjectUseCase;
+    let scaleRepository: InMemoryGradingScaleRepository;
 
     const mockEvaluationRepository = {
         existsByProjectAndEvaluator: jest.fn(),
@@ -76,6 +82,7 @@ describe('EvaluateProjectUseCase - rubric rules', () => {
         });
 
     beforeEach(async () => {
+        scaleRepository = new InMemoryGradingScaleRepository();
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 EvaluateProjectUseCase,
@@ -84,6 +91,7 @@ describe('EvaluateProjectUseCase - rubric rules', () => {
                 { provide: EventServicePort, useValue: mockEventService },
                 { provide: AuthServicePort, useValue: mockAuthService },
                 { provide: CriterionRepositoryPort, useValue: mockCriterionRepository },
+                { provide: EventGradingScaleResolver, useFactory: () => buildResolver(scaleRepository) },
             ],
         }).compile();
 
@@ -271,7 +279,7 @@ describe('EvaluateProjectUseCase - rubric rules', () => {
             const scores = scoreAll(posterRubric, 4).map((s, i) => (i === 0 ? { ...s, score: rawScore } : s));
 
             await expect(useCase.execute({ projectId: 1, userId: 1, scores })).rejects.toEqual(
-                rpcError(status.INVALID_ARGUMENT, 'must be an integer level'),
+                rpcError(status.INVALID_ARGUMENT, 'must be a level of the grading scale'),
             );
         });
     });

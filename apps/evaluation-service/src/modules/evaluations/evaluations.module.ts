@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../common/prisma/prisma.module';
 import { CriterionsModule } from '../criterions/criterions.module';
+import { GradingScalesModule } from '../grading-scales/grading-scales.module';
 import { EvaluationsController } from './interface/grpc/evaluations.controller';
 import { EvaluationPrismaRepository } from './infrastructure/prisma/evaluation.prisma.repository';
 import { EvaluateProjectUseCase } from './application/use-cases/evaluate-project.use-case';
@@ -19,7 +20,7 @@ import { AuthServiceAdapter } from './infrastructure/adapters/auth.service.adapt
 import { GetDashboardStatsUC } from './application/use-cases/get-dashboard-stats.use-case';
 
 @Module({
-    imports: [PrismaModule, CriterionsModule],
+    imports: [PrismaModule, CriterionsModule, GradingScalesModule],
     controllers: [EvaluationsController],
     providers: [
         {
