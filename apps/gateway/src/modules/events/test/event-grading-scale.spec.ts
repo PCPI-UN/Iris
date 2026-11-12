@@ -1,0 +1,162 @@
+import 'reflect-metadata';
+import { BadRequestException } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { of, throwError } from 'rxjs';
+import { EventService } from '../events.service';
+import { GradingScaleDto } from '../../grading-scales/dto/grading-scale.dto';
+
+/**
+ * IRIS-V3-EVAL-03: an event is created or edited with a grading scale (a catalog one or a new
+ * one) and the event response carries its scale.
+ */
+describe('EventService - grading scale of the event', () => {
+  const finalProjects = { id: 1, name: 'Proyectos finales', isSystem: true, levels: [], locked: true };
+  const decenas = {
+    name: 'Decenas',
+    levels: [10, 20, 30, 40].map((points, index) => ({ level: index + 1, label: `N${index + 1}`, points })),
+  };
+
+  const build = () => {
+    const eventGrpc = {
+      createEvent: jest.fn(() => of({ event: { id: 9, name: 'Feria', status: 1 } })),
+      updateEvent: jest.fn(() => of({ event: { id: 9, name: 'Feria', status: 1 } })),
+      getEvent: jest.fn(() => of({ event: { id: 9, name: 'Feria', status: 1 } })),
+      deleteEvent: jest.fn(() => of({ success: true })),
+    };
+    const gradingScaleGrpc = {
+      assignEventGradingScale: jest.fn(() => of(finalProjects)),
+      getEventGradingScale: jest.fn(() => of(finalProjects)),
+    };
+    const services: Record<string, unknown> = {
+      EventService: eventGrpc,
+      GradingScaleService: gradingScaleGrpc,
+    };
+    const grpcClient = { getService: jest.fn((name: string) => services[name] ?? {}) };
+
+    const service = new EventService(grpcClient as any, grpcClient as any, grpcClient as any, {} as any, {} as any);
+    service.onModuleInit();
+    jest.spyOn(service, 'createCategory').mockResolvedValue({ category: { id: 3 } } as any);
+    jest.spyOn(service as any, 'getAndCacheStatuses').mockResolvedValue([]);
+    jest.spyOn(service as any, 'enrichEventWithCatalogData').mockImplementation(async (event: unknown) => event);
+    jest.spyOn(service as any, 'updateEventCatalogData').mockResolvedValue(undefined);
+
+    return { service, eventGrpc, gradingScaleGrpc };
+  };
+
+  it('assigns the default scale to a new event without a scale and returns it', async () => {
+    const { service, eventGrpc, gradingScaleGrpc } = build();
+
+    const result = await service.create({ name: 'Feria', createdByUserId: 4 } as any);
+
+    expect(gradingScaleGrpc.assignEventGradingScale).toHaveBeenCalledWith({
+      eventId: 9,
+      scaleId: undefined,
+      scale: undefined,
+      userId: 4,
+    });
+    expect(eventGrpc.createEvent).toHaveBeenCalledWith(
+      expect.not.objectContaining({ gradingScaleId: expect.anything() }),
+    );
+    expect((result.event as any).gradingScale).toEqual(finalProjects);
+  });
+
+  it('creates the event with a new scale', async () => {
+    const { service, gradingScaleGrpc } = build();
+
+    await service.create({ name: 'Feria', gradingScale: decenas, createdByUserId: 4 } as any);
+
+    expect(gradingScaleGrpc.assignEventGradingScale).toHaveBeenCalledWith(
+      expect.objectContaining({ eventId: 9, scale: decenas, userId: 4 }),
+    );
+  });
+
+  it('deletes the new event when its scale is rejected', async () => {
+    const { service, eventGrpc, gradingScaleGrpc } = build();
+    gradingScaleGrpc.assignEventGradingScale.mockReturnValue(
+      throwError(() => ({ code: 3, details: 'Invalid grading scale' })) as any,
+    );
+
+    await expect(service.create({ name: 'Feria', gradingScaleId: 77 } as any)).rejects.toEqual(
+      expect.objectContaining({ code: 3 }),
+    );
+    expect(eventGrpc.deleteEvent).toHaveBeenCalledWith({ id: 9 });
+  });
+
+  it('rejects gradingScaleId together with gradingScale before creating anything', async () => {
+    const { service, eventGrpc } = build();
+
+    await expect(
+      service.create({ name: 'Feria', gradingScaleId: 1, gradingScale: decenas } as any),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(eventGrpc.createEvent).not.toHaveBeenCalled();
+  });
+
+  it('changes the scale before the event fields, so a locked scale leaves the event untouched', async () => {
+    const { service, eventGrpc, gradingScaleGrpc } = build();
+    gradingScaleGrpc.assignEventGradingScale.mockReturnValue(
+      throwError(() => ({ code: 9, details: 'cannot change' })) as any,
+    );
+
+    await expect(service.update({ id: 9, name: 'Nueva', gradingScaleId: 2 } as any)).rejects.toEqual(
+      expect.objectContaining({ code: 9 }),
+    );
+    expect(eventGrpc.updateEvent).not.toHaveBeenCalled();
+  });
+
+  it('keeps the scale of an event updated without scale fields', async () => {
+    const { service, eventGrpc, gradingScaleGrpc } = build();
+
+    const result = await service.update({ id: 9, name: 'Nueva' } as any);
+
+    expect(gradingScaleGrpc.assignEventGradingScale).not.toHaveBeenCalled();
+    expect(eventGrpc.updateEvent).toHaveBeenCalledWith({ id: 9, name: 'Nueva' });
+    expect((result.event as any).gradingScale).toEqual(finalProjects);
+  });
+
+  it('returns the event with a null scale when evaluation-service cannot give it', async () => {
+    const { service, gradingScaleGrpc } = build();
+    gradingScaleGrpc.getEventGradingScale.mockReturnValue(throwError(() => new Error('unavailable')) as any);
+
+    const result = await service.get({ id: 9 } as any);
+
+    expect((result.event as any).gradingScale).toBeNull();
+    expect((result.event as any).name).toBe('Feria');
+  });
+});
+
+describe('GradingScaleDto', () => {
+  const check = (body: unknown) => validate(plainToInstance(GradingScaleDto, body));
+
+  it('accepts 4 levels', async () => {
+    expect(
+      await check({
+        name: 'Decenas',
+        levels: [10, 20, 30, 40].map((points, index) => ({ level: index + 1, label: 'L', points })),
+      }),
+    ).toHaveLength(0);
+  });
+
+  it('rejects a scale without exactly 4 levels', async () => {
+    const errors = await check({ name: 'X', levels: [{ level: 1, label: 'L', points: 1 }] });
+
+    expect(JSON.stringify(errors)).toContain('exactly 4 levels');
+  });
+
+  it('rejects a level outside 1-4, an empty label and points with 3 decimals', async () => {
+    const errors = await check({
+      name: 'X',
+      levels: [
+        { level: 5, label: 'L', points: 1 },
+        { level: 2, label: '', points: 2 },
+        { level: 3, label: 'L', points: 3.001 },
+        { level: 4, label: 'L', points: 4 },
+      ],
+    });
+
+    const text = JSON.stringify(errors);
+    expect(text).toContain('level must not be greater than 4');
+    expect(text).toContain('label should not be empty');
+    expect(text).toContain('points');
+  });
+});

@@ -6,6 +6,7 @@ import {
   IsBoolean,
   IsDateString,
   IsEnum,
+  IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -19,6 +20,7 @@ import {
   transformEvaluationType,
   transformEventType,
 } from './event-type-transformer';
+import { GradingScaleDto } from '../../../grading-scales/dto/grading-scale.dto';
 
 class CreateSpecificInscriptionDetailDTO {
   @ApiProperty({
@@ -229,7 +231,8 @@ export class CreateEventDTO {
   locationDetails?: string;
 
   @ApiProperty({
-    description: 'Evaluation scale configured for the event',
+    description: 'Deprecated: use gradingScaleId or gradingScale. Kept for compatibility; with neither of those, a new event gets the system scale of this type',
+    deprecated: true,
     enum: EvaluationType,
     required: false,
     example: 'FINAL_PROJECTS',
@@ -238,6 +241,28 @@ export class CreateEventDTO {
   @Transform(transformEvaluationType)
   @IsEnum(EvaluationType)
   evaluationType?: EvaluationType;
+
+  @ApiProperty({
+    description:
+      'Grading scale of the event, from the catalog (GET /grading-scales). Send this or gradingScale, not both. ' +
+      'With neither, a new event gets "Proyectos finales" and an existing event keeps its scale.',
+    required: false,
+    example: 1,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  gradingScaleId?: number;
+
+  @ApiProperty({
+    description: 'New grading scale for the event; it is also added to the catalog. Send this or gradingScaleId, not both.',
+    required: false,
+    type: () => GradingScaleDto,
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => GradingScaleDto)
+  gradingScale?: GradingScaleDto;
 
   @ApiProperty({
     description: 'Additional inscription requirements for participants',
