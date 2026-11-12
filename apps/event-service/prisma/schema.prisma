@@ -31,6 +31,8 @@ model Event {
   inscriptionDeadline     DateTime        @map("inscription_deadline") @db.Timestamptz()
   inscriptionCost         Float?          @map("inscription_cost")
   evaluationsOpened       Boolean         @map("evaluations_opened")
+  // Set by the admin: participants can see their scores and awards for this event
+  resultsPublished        Boolean         @default(false) @map("results_published")
   startDate               DateTime        @map("start_date") @db.Timestamptz()
   endDate                 DateTime        @map("end_date") @db.Timestamptz()
   active                  Boolean         @default(true)
