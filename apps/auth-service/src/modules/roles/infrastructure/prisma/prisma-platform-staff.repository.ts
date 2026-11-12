@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@common/prisma/prisma.service';
-import { PlatformStaffRepositoryPort } from '@roles/domain/repositories/platform-staff.repository.port';
+import { ActiveRole, PlatformStaffRepositoryPort } from '@roles/domain/repositories/platform-staff.repository.port';
 import { PlatformStaff } from '@roles/domain/entities/platform-staff.entity';
 import { TransactionClient } from '@common/prisma/types/transaction-client.type';
 
@@ -9,6 +9,38 @@ export class PrismaPlatformStaffRepository
   implements PlatformStaffRepositoryPort
 {
   constructor(private readonly prisma: PrismaService) {}
+
+  async findActiveRoles(userId: number): Promise<ActiveRole[]> {
+    const rows = await this.prisma.platformStaff.findMany({
+      where: { userId, active: true },
+      include: { role: { include: { permissions: true } } },
+    });
+
+    return rows.map(({ role }) => ({
+      id: role.id,
+      name: role.name,
+      scope: role.scope,
+      permissions: role.permissions.map(
+        (permission) => `${permission.action}:${permission.resource}`,
+      ),
+    }));
+  }
+
+  async setActiveRoles(userId: number, roleIds: number[]): Promise<void> {
+    await this.prisma.$transaction([
+      this.prisma.platformStaff.updateMany({
+        where: { userId, active: true, roleId: { notIn: roleIds } },
+        data: { active: false },
+      }),
+      ...roleIds.map((roleId) =>
+        this.prisma.platformStaff.upsert({
+          where: { userId_roleId: { userId, roleId } },
+          update: { active: true },
+          create: { userId, roleId, active: true },
+        }),
+      ),
+    ]);
+  }
 
   async findByUserIdAndRoleId(
     userId: number,
@@ -54,11 +86,13 @@ export class PrismaPlatformStaffRepository
     roleId: number,
     excludeUserId: number,
   ): Promise<number> {
+    // A deactivated user cannot act as an admin even if the role row is still active
     return this.prisma.platformStaff.count({
       where: {
         userId: { not: excludeUserId },
         roleId,
         active: true,
+        user: { active: true },
       },
     });
   }
