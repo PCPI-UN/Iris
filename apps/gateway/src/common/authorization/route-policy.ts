@@ -37,9 +37,15 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'POST /auth/forgot-password': { access: 'public' },
   'POST /auth/login': { access: 'public' },
   'GET /auth/login/microsoft': { access: 'public' },
-  'POST /auth/logout': { access: 'session', why: "closes the caller's own session" },
+  'POST /auth/logout': {
+    access: 'session',
+    why: "closes the caller's own session",
+  },
   'GET /auth/me': { access: 'session', why: "the caller's own account" },
-  'PUT /auth/password': { access: 'session', why: "changes the caller's own password; auth-service checks the current one" },
+  'PUT /auth/password': {
+    access: 'session',
+    why: "changes the caller's own password; auth-service checks the current one",
+  },
   'POST /auth/refresh': { access: 'public' },
   'POST /auth/reset-password': { access: 'public' },
   'POST /auth/signup': { access: 'public' },
@@ -60,9 +66,14 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   // modules/dashboard/dashboard.controller.ts
   'GET /dashboard/stats': { permission: ['read:events'] },
   // modules/evaluations/evaluations.controller.ts
-  'GET /evaluations/courses/:courseId/top-projects': { permission: ['read:grades'] },
+  'GET /evaluations/courses/:courseId/top-projects': {
+    permission: ['read:grades'],
+  },
   'GET /evaluations/projects/:projectId/stats': { access: 'pending' },
-  'POST /evaluations/projects/evaluate': { access: 'session', why: "evaluation-service checks that the caller is a juror assigned to the project, evaluations are open and the event dates" },
+  'POST /evaluations/projects/evaluate': {
+    access: 'session',
+    why: 'evaluation-service checks that the caller is a juror assigned to the project, evaluations are open and the event dates',
+  },
   // modules/events/events.controller.ts
   'GET /events': { permission: ['read:events'] },
   'POST /events': { permission: ['manage:events'] },
@@ -72,7 +83,10 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'DELETE /events/:id': { permission: ['manage:events'] },
   'GET /events/:id': { permission: ['read:events'] },
   'PATCH /events/:id': { permission: ['manage:events'] },
-  'GET /events/:id/my-project': { access: 'session', why: "the caller's own project in the event" },
+  'GET /events/:id/my-project': {
+    access: 'session',
+    why: "the caller's own project in the event",
+  },
   'GET /events/ar': { access: 'public' },
   'GET /events/award-winners': { access: 'pending' },
   'POST /events/award-winners': { access: 'pending' },
@@ -107,7 +121,10 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'POST /events/members': { permission: ['create:event-members'] },
   'GET /events/members/:eventId': { access: 'public' },
   'DELETE /events/members/delete': { access: 'public' },
-  'GET /events/my-events': { access: 'session', why: "events of the caller; platform staff (read:events) sees every event" },
+  'GET /events/my-events': {
+    access: 'session',
+    why: 'events of the caller; platform staff (read:events) sees every event',
+  },
   'GET /events/public': { access: 'public' },
   'GET /events/public/:id': { access: 'public' },
   'GET /events/public/past': { access: 'public' },
@@ -130,10 +147,19 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'POST /invitations/accept': { access: 'public' },
   'GET /invitations/events/:eventId': { permission: ['read:invitations'] },
   'POST /invitations/events/:eventId/jurors': { permission: ['manage:events'] },
-  'GET /invitations/me': { access: 'session', why: "invitations addressed to the caller" },
+  'GET /invitations/me': {
+    access: 'session',
+    why: 'invitations addressed to the caller',
+  },
   // modules/profile/profile.controller.ts
-  'GET /profile/me': { access: 'session', why: "the caller's own profile; the user id comes from the session" },
-  'PATCH /profile/me': { access: 'session', why: "edits the caller's own profile; auth-service only accepts the editable fields" },
+  'GET /profile/me': {
+    access: 'session',
+    why: "the caller's own profile; the user id comes from the session",
+  },
+  'PATCH /profile/me': {
+    access: 'session',
+    why: "edits the caller's own profile; auth-service only accepts the editable fields",
+  },
   // modules/projects/projects.controller.ts
   'POST /projects': { access: 'public' },
   'GET /projects/:id': { access: 'pending' },
@@ -150,7 +176,10 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'DELETE /projects/:projectId/jurors/:jurorId': { access: 'pending' },
   'POST /projects/add-update-participants': { access: 'pending' },
   'POST /projects/assign-jurors': { access: 'pending' },
-  'GET /projects/assigned-projects': { access: 'session', why: "projects assigned to the calling juror" },
+  'GET /projects/assigned-projects': {
+    access: 'session',
+    why: 'projects assigned to the calling juror',
+  },
   'GET /projects/by-event/:eventId': { access: 'public' },
   'GET /projects/by-event/:eventId/with-jurors': { access: 'public' },
   'PATCH /projects/documents/:id': { access: 'pending' },
