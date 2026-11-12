@@ -1,86 +1,32 @@
 import { AssignPlatformRoleUseCase } from '../assign-platform-role.use-case';
-import { PrismaService } from '../../../../../common/prisma/prisma.service';
+import { PlatformStaffRepositoryPort } from '@roles/domain/repositories/platform-staff.repository.port';
 
 describe('AssignPlatformRoleUseCase', () => {
   let useCase: AssignPlatformRoleUseCase;
-  let mockPrismaService: any;
+  let repository: { assignRoles: jest.Mock };
 
   beforeEach(() => {
-    mockPrismaService = {
-      platformStaff: {
-        createMany: jest.fn(),
-      },
-    } as any;
-
-    useCase = new AssignPlatformRoleUseCase(mockPrismaService);
+    repository = { assignRoles: jest.fn().mockResolvedValue(undefined) };
+    useCase = new AssignPlatformRoleUseCase(
+      repository as unknown as PlatformStaffRepositoryPort,
+    );
   });
 
-  describe('execute', () => {
-    it('should assign roles to user using default prisma client', async () => {
-      const userId = 1;
-      const roleIds = [1, 2, 3];
+  it('delegates the assignment to the repository', async () => {
+    await useCase.execute(1, [1, 2, 3]);
 
-      mockPrismaService.platformStaff.createMany.mockResolvedValue({ count: 3 });
+    expect(repository.assignRoles).toHaveBeenCalledWith(1, [1, 2, 3]);
+  });
 
-      await useCase.execute(userId, roleIds);
+  it('passes an empty role list through unchanged', async () => {
+    await useCase.execute(1, []);
 
-      expect(mockPrismaService.platformStaff.createMany).toHaveBeenCalledWith({
-        data: [
-          { userId: 1, roleId: 1, active: true },
-          { userId: 1, roleId: 2, active: true },
-          { userId: 1, roleId: 3, active: true },
-        ],
-        skipDuplicates: true,
-      });
-    });
+    expect(repository.assignRoles).toHaveBeenCalledWith(1, []);
+  });
 
-    it('should assign roles to user using transaction client', async () => {
-      const userId = 2;
-      const roleIds = [5, 6];
-      const mockTx = {
-        platformStaff: {
-          createMany: jest.fn().mockResolvedValue({ count: 2 }),
-        },
-      } as any;
+  it('propagates repository errors', async () => {
+    repository.assignRoles.mockRejectedValue(new Error('db down'));
 
-      await useCase.execute(userId, roleIds, mockTx);
-
-      expect(mockTx.platformStaff.createMany).toHaveBeenCalledWith({
-        data: [
-          { userId: 2, roleId: 5, active: true },
-          { userId: 2, roleId: 6, active: true },
-        ],
-        skipDuplicates: true,
-      });
-      expect(mockPrismaService.platformStaff.createMany).not.toHaveBeenCalled();
-    });
-
-    it('should skip duplicates when assigning roles', async () => {
-      const userId = 1;
-      const roleIds = [1, 2];
-
-      mockPrismaService.platformStaff.createMany.mockResolvedValue({ count: 1 }); // Only 1 inserted (1 was duplicate)
-
-      await useCase.execute(userId, roleIds);
-
-      expect(mockPrismaService.platformStaff.createMany).toHaveBeenCalledWith({
-        data: expect.any(Array),
-        skipDuplicates: true,
-      });
-    });
-
-    it('should handle empty roleIds array', async () => {
-      const userId = 1;
-      const roleIds: number[] = [];
-
-      mockPrismaService.platformStaff.createMany.mockResolvedValue({ count: 0 });
-
-      await useCase.execute(userId, roleIds);
-
-      expect(mockPrismaService.platformStaff.createMany).toHaveBeenCalledWith({
-        data: [],
-        skipDuplicates: true,
-      });
-    });
+    await expect(useCase.execute(1, [1])).rejects.toThrow('db down');
   });
 });
