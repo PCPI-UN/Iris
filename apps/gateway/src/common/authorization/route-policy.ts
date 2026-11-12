@@ -65,6 +65,11 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'GET /criterions/readiness': { permission: ['manage:events'] },
   // modules/dashboard/dashboard.controller.ts
   'GET /dashboard/stats': { permission: ['read:events'] },
+  // modules/dashboard/student-dashboard.controller.ts
+  'GET /students/me/dashboard': {
+    access: 'session',
+    why: "the caller's own dashboard; the user comes from the session",
+  },
   // modules/evaluations/evaluations.controller.ts
   'GET /evaluations/courses/:courseId/top-projects': {
     permission: ['read:grades'],
