@@ -518,7 +518,10 @@ export class ProjectsController {
 
   @GrpcMethod('ProjectsService', 'GetStudentParticipationStats')
   async getStudentParticipationStatsRpc(req: GetStudentParticipationStatsDTO) {
-    const stats = await this.getStudentParticipationStatsUC.execute({ userId: req.userId });
+    const stats = await this.getStudentParticipationStatsUC.execute({
+      userId: req.userId,
+      email: req.email,
+    });
     return toProtoStudentParticipationStats(stats);
   }
 }

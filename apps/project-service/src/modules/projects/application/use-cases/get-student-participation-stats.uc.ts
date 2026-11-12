@@ -10,6 +10,10 @@ import {
   buildStudentParticipationStats,
   pickCurrentProject,
 } from '../../domain/student-participation-stats';
+import {
+  AcademicProfile,
+  deriveAcademicProfile,
+} from '../../domain/academic-profile';
 import { Project } from '../../domain/entities/project.entity';
 import { ValidationError } from '../../domain/errors';
 import { GetStudentParticipationStatsDTO } from '../dto/get-student-participation-stats.dto';
@@ -21,16 +25,19 @@ export interface StudentCurrentProjectWithCounts extends StudentCurrentProject {
 
 export interface StudentDashboardData extends StudentParticipationStats {
   currentProject: StudentCurrentProjectWithCounts | null;
+  academic: AcademicProfile;
 }
 
 /**
- * Data of the student dashboard (IRIS-V3-STD-01, ClickUp 86e3vmxb0): participation
- * statistics, history by semester and the project of the event in progress.
+ * Data of the student dashboard: participation statistics, history by semester, the
+ * project of the event that has not ended and the academic data of the user.
  *
- * - Statistics and history only count APPROVED projects of events that were not deleted
- *   (see buildStudentParticipationStats).
+ * - Statistics and history only count APPROVED projects of events that were not deleted,
+ *   and awards only once the event ranking is published (see buildStudentParticipationStats).
  * - The current project is taken from every project of the user, whatever its review
- *   state, so the student sees whether it is pending, approved or needs changes.
+ *   state, following the priority of pickCurrentProject.
+ * - The academic data is derived from all the user's participations, as in
+ *   ListUserParticipations, so the dashboard needs a single call.
  * - The user id must be the authenticated one: the gateway takes it from the session.
  */
 @Injectable()
@@ -49,14 +56,19 @@ export class GetStudentParticipationStatsUC {
       throw new ValidationError('userId must be a positive integer');
     }
 
-    const projects = await this.repo.listProjectsByParticipant(
-      input.userId,
-      [],
-    );
+    const [projects, participations] = await Promise.all([
+      this.repo.listProjectsByParticipant(input.userId, []),
+      input.email?.trim()
+        ? this.repo.listParticipationsByUser(input.userId, input.email)
+        : Promise.resolve([]),
+    ]);
+    const academic = deriveAcademicProfile(participations);
+
     if (!projects.length) {
       return {
         ...buildStudentParticipationStats([], [], []),
         currentProject: null,
+        academic,
       };
     }
 
@@ -73,6 +85,7 @@ export class GetStudentParticipationStatsUC {
     return {
       ...buildStudentParticipationStats(approved, events, awards, courseNames),
       currentProject: current ? await this.withCounts(current) : null,
+      academic,
     };
   }
 
@@ -91,24 +104,17 @@ export class GetStudentParticipationStatsUC {
     };
   }
 
-  // Category (course) names by id; a missing category only leaves its name empty
+  // Category (course) names by id in one call; if they cannot be read, names stay empty
   private async courseNames(projects: Project[]): Promise<Map<number, string>> {
     const ids = [...new Set(projects.map((project) => project.courseId))];
-    const entries = await Promise.all(
-      ids.map(async (id): Promise<[number, string] | null> => {
-        try {
-          const course = (await this.events.getCourseById(id)) as {
-            code?: string;
-          } | null;
-          return course?.code ? [id, course.code] : null;
-        } catch (error: unknown) {
-          this.logger.warn(
-            `Category ${id} not found for the student dashboard: ${(error as Error)?.message}`,
-          );
-          return null;
-        }
-      }),
-    );
-    return new Map(entries.filter((e): e is [number, string] => e !== null));
+    try {
+      const categories = await this.events.listCategoriesByIds(ids);
+      return new Map(categories.map((c) => [c.id, c.name]));
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Category names unavailable for the student dashboard: ${(error as Error)?.message}`,
+      );
+      return new Map();
+    }
   }
 }

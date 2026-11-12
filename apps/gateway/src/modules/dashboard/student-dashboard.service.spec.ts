@@ -85,18 +85,17 @@ describe('StudentDashboardService', () => {
 
   const build = (overrides: { stats?: object; academic?: object } = {}) => {
     const projects = {
-      getStudentParticipationStats: jest
-        .fn()
-        .mockResolvedValue(overrides.stats ?? stats),
-      listUserParticipations: jest.fn().mockResolvedValue({
-        participations: [],
-        total: 0,
-        academic: overrides.academic ?? {
+      getStudentParticipationStats: jest.fn().mockResolvedValue({
+        ...stats,
+        academic: {
           studentCode: '200145892',
           career: 'Ingeniería de Sistemas',
           semester: '8',
         },
+        ...overrides.stats,
+        ...(overrides.academic ? { academic: overrides.academic } : {}),
       }),
+      listUserParticipations: jest.fn(),
     };
     return {
       service: new StudentDashboardService(
@@ -106,17 +105,29 @@ describe('StudentDashboardService', () => {
     };
   };
 
-  it('asks project-service only for the session user', async () => {
+  it('makes a single call to project-service for the session user', async () => {
     const { service, projects } = build();
 
     await service.getDashboard(user);
 
-    expect(projects.getStudentParticipationStats).toHaveBeenCalledWith(7);
-    expect(projects.listUserParticipations).toHaveBeenCalledWith(
+    expect(projects.getStudentParticipationStats).toHaveBeenCalledTimes(1);
+    expect(projects.getStudentParticipationStats).toHaveBeenCalledWith(
       7,
       'maria@test.local',
-      1,
     );
+    expect(projects.listUserParticipations).not.toHaveBeenCalled();
+  });
+
+  it('returns null academic fields when project-service sends none', async () => {
+    const { service } = build({ academic: {} });
+
+    const { profile } = await service.getDashboard(user);
+
+    expect(profile).toMatchObject({
+      studentCode: null,
+      career: null,
+      semester: null,
+    });
   });
 
   it('builds the profile from the session and the academic data', async () => {
@@ -217,7 +228,7 @@ describe('StudentDashboardService', () => {
 
   it('returns null current project and evaluation when there is no event in progress', async () => {
     const { service } = build({
-      stats: { ...stats, currentProject: null },
+      stats: { currentProject: null },
     });
 
     const dashboard = await service.getDashboard(user);

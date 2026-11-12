@@ -68,15 +68,16 @@ sequenceDiagram
 
 ## Student participation statistics
 
-`GetStudentParticipationStats` feeds the student dashboard (IRIS-V3-STD-01, `GET /students/me/dashboard` in the gateway, which always sends the session user id and shapes the response for the frontend).
+`GetStudentParticipationStats` feeds the student dashboard (`GET /students/me/dashboard` in the gateway, which always sends the session user id and shapes the response for the frontend).
 
 - **Counted projects**: only `APPROVED` projects where the user is a confirmed participant (`project_participants`).
 - **Events**: read from `event-service` with `ListEventsByIds`. Deleted events (`active = false`) are left out. Events that already ended (status `CLOSED`) are marked `finished` (historical); the rest are ongoing.
 - **Semester**: derived from the event start date in Bogota time, `AAAA-10` from January to June and `AAAA-30` from July to December.
-- **Awards**: read with `ListAwardsByProjects`; only awards of the project's own event count, co-winners once each.
-- **Current project**: the user's project in an event that has not ended and was not deleted, in any review state (so the student sees whether it is pending, approved or needs changes). With several, the most recent event. `canEdit` is true only for `REQUEST_CHANGES`. It carries the team size (participants captured at submission) and the number of active documents.
-- **Category name**: read with `GetCourse` for each category of the user's projects; a missing one leaves the name empty.
-- **Response**: totals (events, finished and ongoing events, projects, awards), `bySemester` from the oldest semester, `participations` from the most recent event, and `currentProject` when there is one.
+- **Awards**: read with `ListAwardsByProjects`; only awards of active categories in the project's own event count, co-winners once each, and only once the event ranking is published (`ranking_event.visible_public`), the same rule as the scores.
+- **Current project**: the user's project in an event that has not ended and was not deleted, in any review state (so the student sees whether it is pending, approved or needs changes). With several: a rejected project never displaces another one, an event in progress goes before an upcoming one, then the event in progress that started last or the upcoming one that starts first. `canEdit` is true only for `REQUEST_CHANGES`. It carries the team size (participants captured at submission) and the number of active documents.
+- **Category name**: read with one `ListCategoriesByIds` call; if it fails or a category is missing, the name stays empty.
+- **Academic data**: derived from all the user's participations, as in `ListUserParticipations` (the request carries the session email), so the dashboard needs a single call.
+- **Response**: totals (events, finished and ongoing events, projects, awards), `bySemester` from the oldest semester, `participations` from the most recent event, `currentProject` when there is one, and `academic`.
 
 ## Related
 

@@ -36,7 +36,7 @@ service ProjectsService {
   rpc ListAssignedProjects(ListAssignedProjectsRequest) returns (ListAssignedProjectsResponse);
   rpc GetMyProjectByEvent (GetMyProjectByEventRequest) returns (GetMyProjectByEventResponse);
   rpc ListUserParticipations (ListUserParticipationsRequest) returns (ListUserParticipationsResponse);
-  // Participation statistics of a student for their dashboard (IRIS-V3-STD-01)
+  // Data of the student dashboard: participation statistics, history, current project and academic data
   rpc GetStudentParticipationStats (GetStudentParticipationStatsRequest) returns (GetStudentParticipationStatsResponse);
 
   rpc ListProjectsForReview(ListProjectsForReviewRequest) returns (ListProjectsForReviewResponse);
@@ -402,12 +402,15 @@ message ListUserParticipationsResponse {
   int32 total = 3;
 }
 
-// ===== STUDENT DASHBOARD (IRIS-V3-STD-01) =====
+// ===== STUDENT DASHBOARD =====
 // Statistics and history only count approved projects of events that were not deleted.
-// currentProject is the project of an event that has not ended, in any review state.
+// Awards only count once the event ranking is published.
+// currentProject is the project of an event that has not ended; rejected projects only when there is no other.
 
 message GetStudentParticipationStatsRequest {
   int32 userId = 1;
+  // Used to match the participant data captured at submission (academic data)
+  string email = 2;
 }
 
 message StudentAward {
@@ -471,4 +474,6 @@ message GetStudentParticipationStatsResponse {
   repeated StudentParticipation participations = 7;
   // Not set when the student has no project in an event that has not ended
   StudentCurrentProject currentProject = 8;
+  // Derived from all the user's participations, as in ListUserParticipations
+  AcademicInfo academic = 9;
 }

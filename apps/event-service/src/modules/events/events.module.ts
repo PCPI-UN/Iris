@@ -38,6 +38,9 @@ import { ListEventsByIdsUC } from '@events/application/use-cases/list-events-by-
 import { ListAwardsByProjectsUC } from '@events/application/use-cases/list-awards-by-projects.uc';
 import { AwardWinnerRepository } from '@events/domain/repositories/award-winner.repository';
 import { PrismaAwardWinnerRepository } from '@events/infrastructure/prisma/prisma-award-winner.repository';
+import { ListCategoriesByIdsUC } from '@events/application/use-cases/list-categories-by-ids.uc';
+import { CategoryRepository } from '@events/domain/repositories/category.repository';
+import { PrismaCategoryRepository } from '@events/infrastructure/prisma/prisma-category.repository';
 
 
 @Module({
@@ -87,6 +90,11 @@ import { PrismaAwardWinnerRepository } from '@events/infrastructure/prisma/prism
       useClass: PrismaAwardWinnerRepository,
     },
     ListAwardsByProjectsUC,
+    {
+      provide: CategoryRepository,
+      useClass: PrismaCategoryRepository,
+    },
+    ListCategoriesByIdsUC,
     // Ranking event
     {
       provide: RankingEventRepository,

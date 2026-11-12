@@ -170,6 +170,11 @@ export const toProtoStudentParticipationStats = (stats: StudentDashboardData) =>
       categoryName: a.categoryName,
     })),
   })),
+  academic: {
+    studentCode: stats.academic.studentCode ?? undefined,
+    career: stats.academic.career ?? undefined,
+    semester: stats.academic.semester ?? undefined,
+  },
   currentProject: stats.currentProject
     ? {
         projectId: stats.currentProject.projectId,

@@ -15,6 +15,7 @@ export class ProjectAwardMapper {
       categoryId: award.categoryId,
       categoryName: award.categoryName,
       eventId: award.eventId,
+      resultsPublished: award.resultsPublished,
     };
   }
 

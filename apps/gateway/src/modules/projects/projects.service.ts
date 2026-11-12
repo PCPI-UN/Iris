@@ -961,12 +961,13 @@ export class ProjectsService implements OnModuleInit {
     );
   }
 
-  /** Participation statistics of the student dashboard; userId must come from the session */
+  /** Data of the student dashboard; userId and email must come from the session */
   async getStudentParticipationStats(
     userId: number,
+    email: string,
   ): Promise<GetStudentParticipationStatsResponse> {
     return lastValueFrom(
-      this.projectsService.getStudentParticipationStats({ userId }),
+      this.projectsService.getStudentParticipationStats({ userId, email }),
     );
   }
 }

@@ -4,8 +4,9 @@ import { ProjectAward } from '../../domain/entities/project-award.entity';
 import { ListAwardsByProjectsDTO } from '../dto/list-awards-by-projects.dto';
 
 /**
- * Awards won by the given projects. Used by the student dashboard (IRIS-V3-STD-01) to
- * count and list the student's awards; co-winners are returned as one row each.
+ * Awards won by the given projects in active categories, with whether the event ranking
+ * is published. Used by the student dashboard to count and list the student's awards;
+ * co-winners are returned as one row each.
  */
 @Injectable()
 export class ListAwardsByProjectsUC {

@@ -12,28 +12,25 @@ import {
 } from './dto/student-dashboard.response';
 
 /**
- * Student dashboard (IRIS-V3-STD-01), shaped as the frontend contract of the student
- * dashboard (CU-86e3vmxb2, "Integration details", endpoint 1).
+ * Student dashboard. The figures and the academic data are computed in project-service in
+ * one call; the gateway only joins them with the session user and names the fields as the
+ * frontend expects.
  *
- * The figures are computed in project-service; the gateway only joins them with the
- * session user and renames the fields for the screen.
- *
- * Out of this task (left empty on purpose):
- * - Scores (`evaluation`, `trajectory[].finalScore`): task S2-10, they need the admin flag
- *   that publishes results. Until then `resultsPublished` is false and no score is sent.
- * - Certificates (`trajectory[].certificates`): there is no certificate model yet.
+ * Not exposed yet:
+ * - Scores (`evaluation`, `trajectory[].finalScore`): `resultsPublished` is always false
+ *   and no score is sent.
+ * - Certificates (`trajectory[].certificates`): always empty, there is no certificate model.
  */
 @Injectable()
 export class StudentDashboardService {
   constructor(private readonly projectsService: ProjectsService) {}
 
   async getDashboard(user: AppUser): Promise<StudentDashboardResponse> {
-    const [stats, participations] = await Promise.all([
-      this.projectsService.getStudentParticipationStats(user.id),
-      // Only the academic data is used: it is derived from all the participations
-      this.projectsService.listUserParticipations(user.id, user.email, 1),
-    ]);
-    const academic = participations.academic;
+    const stats = await this.projectsService.getStudentParticipationStats(
+      user.id,
+      user.email,
+    );
+    const academic = stats.academic;
 
     return {
       profile: {

@@ -27,6 +27,7 @@ describe('GetStudentParticipationStatsUC', () => {
     endDate: '2025-03-11T15:00:00.000Z',
     active: true,
     finished: true,
+    inProgress: false,
   };
   const ongoingEvent = {
     id: 20,
@@ -35,6 +36,7 @@ describe('GetStudentParticipationStatsUC', () => {
     endDate: '2026-11-21T15:00:00.000Z',
     active: true,
     finished: false,
+    inProgress: true,
   };
 
   const build = (projects: Project[]) => {
@@ -46,6 +48,14 @@ describe('GetStudentParticipationStatsUC', () => {
       listDocuments: jest
         .fn()
         .mockResolvedValue([{ state: 'ACTIVE' }, { state: 'INACTIVE' }]),
+      listParticipationsByUser: jest.fn().mockResolvedValue([
+        {
+          project: project(1, 10),
+          studentCode: '200145892',
+          career: 'Ingeniería de Sistemas',
+          semester: '8',
+        },
+      ]),
     };
     const events = {
       listEventsByIds: jest.fn().mockResolvedValue([pastEvent, ongoingEvent]),
@@ -57,13 +67,12 @@ describe('GetStudentParticipationStatsUC', () => {
           title: 'Primer puesto',
           position: 1,
           categoryName: 'Sistemas',
+          resultsPublished: true,
         },
       ]),
-      getCourseById: jest.fn((id: number) =>
-        id === 1
-          ? Promise.resolve({ id: 1, code: 'Ingeniería de Sistemas' })
-          : Promise.reject(new Error('not found')),
-      ),
+      listCategoriesByIds: jest
+        .fn()
+        .mockResolvedValue([{ id: 1, name: 'Ingeniería de Sistemas' }]),
     };
     const uc = new GetStudentParticipationStatsUC(
       repo as unknown as ProjectRepository,
@@ -151,12 +160,67 @@ describe('GetStudentParticipationStatsUC', () => {
     expect(repo.listPendingParticipants).not.toHaveBeenCalled();
   });
 
+  it('reads every category name in a single call', async () => {
+    const { uc, events } = build([
+      project(1, 10, 'APPROVED', 1),
+      project(2, 10, 'APPROVED', 1),
+      project(3, 20, 'UNDER_REVIEW', 2),
+    ]);
+
+    await uc.execute({ userId: 7 });
+
+    expect(events.listCategoriesByIds).toHaveBeenCalledTimes(1);
+    expect(events.listCategoriesByIds).toHaveBeenCalledWith([1, 2]);
+  });
+
   it('leaves the category name empty when event-service does not find it', async () => {
     const { uc } = build([project(1, 10, 'APPROVED', 99)]);
 
     const { participations } = await uc.execute({ userId: 7 });
 
     expect(participations[0].courseName).toBe('');
+  });
+
+  it('keeps the dashboard when the category names cannot be read', async () => {
+    const { uc, events } = build([project(1, 10)]);
+    events.listCategoriesByIds.mockRejectedValue(new Error('unavailable'));
+
+    const result = await uc.execute({ userId: 7 });
+
+    expect(result.totalProjects).toBe(1);
+    expect(result.participations[0].courseName).toBe('');
+  });
+
+  it('returns the academic data in the same response', async () => {
+    const { uc, repo } = build([project(1, 10)]);
+
+    const { academic } = await uc.execute({
+      userId: 7,
+      email: 'maria@test.local',
+    });
+
+    expect(repo.listParticipationsByUser).toHaveBeenCalledWith(
+      7,
+      'maria@test.local',
+    );
+    expect(academic).toEqual({
+      studentCode: '200145892',
+      career: 'Ingeniería de Sistemas',
+      semester: '8',
+    });
+  });
+
+  it('returns empty academic data without an email', async () => {
+    const { uc, repo } = build([]);
+
+    const { academic } = await uc.execute({ userId: 7 });
+
+    expect(repo.listParticipationsByUser).not.toHaveBeenCalled();
+    expect(academic).toEqual({
+      studentCode: null,
+      career: null,
+      semester: null,
+    });
   });
 
   it.each([0, -1, 1.5, NaN])(

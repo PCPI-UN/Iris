@@ -22,6 +22,9 @@ export interface EventServicePort {
   /** Events with the given ids, deleted ones included (active = false). */
   listEventsByIds(ids: number[]): Promise<ParticipationEvent[]>;
 
-  /** Awards won by the given projects. */
+  /** Awards won by the given projects in active categories. */
   listAwardsByProjects(projectIds: number[]): Promise<ParticipationAward[]>;
+
+  /** Names of the given categories (courses), in one call. */
+  listCategoriesByIds(ids: number[]): Promise<{ id: number; name: string }[]>;
 }

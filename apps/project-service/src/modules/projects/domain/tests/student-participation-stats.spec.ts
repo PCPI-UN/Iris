@@ -25,6 +25,7 @@ const event = (
   endDate: startDate,
   active: true,
   finished: true,
+  inProgress: false,
   ...overrides,
 });
 
@@ -40,6 +41,7 @@ const award = (
   title: `Award ${awardId}`,
   position,
   categoryName: 'Sistemas',
+  resultsPublished: true,
 });
 
 describe('buildStudentParticipationStats', () => {
@@ -176,6 +178,26 @@ describe('buildStudentParticipationStats', () => {
 
     expect(stats.totalAwards).toBe(0);
   });
+
+  it('hides awards until the event ranking is published', () => {
+    const stats = buildStudentParticipationStats(
+      [project(1, 10), project(2, 20)],
+      [
+        event(10, '2025-03-10T15:00:00.000Z'),
+        event(20, '2025-09-10T15:00:00.000Z'),
+      ],
+      [award(1, 10, 100), { ...award(2, 20, 200), resultsPublished: false }],
+    );
+
+    expect(stats.totalAwards).toBe(1);
+    expect(stats.participations.find((p) => p.projectId === 2)?.awards).toEqual(
+      [],
+    );
+    expect(stats.bySemester).toEqual([
+      { semester: '2025-10', events: 1, projects: 1, awards: 1 },
+      { semester: '2025-30', events: 1, projects: 1, awards: 0 },
+    ]);
+  });
 });
 
 describe('pickCurrentProject', () => {
@@ -256,15 +278,75 @@ describe('pickCurrentProject', () => {
     expect(canEdit).toEqual([false, false, false, true]);
   });
 
-  it('picks the most recent event when there are several in progress', () => {
+  const inProgress = { finished: false, inProgress: true };
+  const upcoming = { finished: false, inProgress: false };
+
+  it('picks the event that started last when several are in progress', () => {
     const current = pickCurrentProject(
       [withState(1, 10, 'APPROVED'), withState(2, 20, 'APPROVED')],
       [
-        event(10, '2026-10-01T15:00:00.000Z', { finished: false }),
-        event(20, '2026-11-20T15:00:00.000Z', { finished: false }),
+        event(10, '2026-10-01T15:00:00.000Z', inProgress),
+        event(20, '2026-11-01T15:00:00.000Z', inProgress),
       ],
     );
 
     expect(current?.projectId).toBe(2);
+  });
+
+  it('picks the upcoming event that starts first when none is in progress', () => {
+    const current = pickCurrentProject(
+      [withState(1, 10, 'UNDER_REVIEW'), withState(2, 20, 'UNDER_REVIEW')],
+      [
+        event(10, '2027-03-01T15:00:00.000Z', upcoming),
+        event(20, '2026-12-01T15:00:00.000Z', upcoming),
+      ],
+    );
+
+    expect(current?.projectId).toBe(2);
+  });
+
+  it('puts an event in progress before an upcoming one', () => {
+    const current = pickCurrentProject(
+      [withState(1, 10, 'APPROVED'), withState(2, 20, 'UNDER_REVIEW')],
+      [
+        event(10, '2026-11-01T15:00:00.000Z', inProgress),
+        event(20, '2026-12-01T15:00:00.000Z', upcoming),
+      ],
+    );
+
+    expect(current?.projectId).toBe(1);
+  });
+
+  it('does not let a rejected project displace an approved one', () => {
+    const current = pickCurrentProject(
+      [withState(1, 10, 'APPROVED'), withState(2, 20, 'REJECTED')],
+      [
+        event(10, '2026-11-01T15:00:00.000Z', inProgress),
+        event(20, '2026-12-01T15:00:00.000Z', upcoming),
+      ],
+    );
+
+    expect(current?.projectId).toBe(1);
+  });
+
+  it('does not let a rejected project in progress displace an upcoming one', () => {
+    const current = pickCurrentProject(
+      [withState(1, 10, 'REJECTED'), withState(2, 20, 'UNDER_REVIEW')],
+      [
+        event(10, '2026-11-01T15:00:00.000Z', inProgress),
+        event(20, '2026-12-01T15:00:00.000Z', upcoming),
+      ],
+    );
+
+    expect(current?.projectId).toBe(2);
+  });
+
+  it('shows a rejected project when it is the only candidate', () => {
+    const current = pickCurrentProject(
+      [withState(1, 10, 'REJECTED')],
+      [event(10, '2026-11-01T15:00:00.000Z', inProgress)],
+    );
+
+    expect(current).toMatchObject({ projectId: 1, state: 'REJECTED' });
   });
 });

@@ -5,12 +5,16 @@ import { EventCatalogService } from '@events/application/event-catalog.service';
 import { ListAwardsByProjectsUC } from '@events/application/use-cases/list-awards-by-projects.uc';
 import { ListAwardsByProjectsDTO } from '@events/application/dto/list-awards-by-projects.dto';
 import { ProjectAwardMapper } from '@events/application/mappers/project-award.mapper';
+import { ListCategoriesByIdsUC } from '@events/application/use-cases/list-categories-by-ids.uc';
+import { ListCategoriesByIdsDTO } from '@events/application/dto/list-categories-by-ids.dto';
+import { EventCategoryMapper } from '@events/application/mappers/event-category.mapper';
 
 @Controller()
 export class EventCatalogController {
   constructor(
     private readonly catalogService: EventCatalogService,
     private readonly listAwardsByProjectsUC: ListAwardsByProjectsUC,
+    private readonly listCategoriesByIdsUC: ListCategoriesByIdsUC,
   ) {}
 
   @GrpcMethod(EVENT_SERVICE_NAME, 'CreateCategory')
@@ -147,5 +151,11 @@ export class EventCatalogController {
   async listAwardsByProjects(request: ListAwardsByProjectsDTO) {
     const awards = await this.listAwardsByProjectsUC.execute(request);
     return ProjectAwardMapper.toListResponse(awards);
+  }
+
+  @GrpcMethod(EVENT_SERVICE_NAME, 'ListCategoriesByIds')
+  async listCategoriesByIds(request: ListCategoriesByIdsDTO) {
+    const categories = await this.listCategoriesByIdsUC.execute(request);
+    return EventCategoryMapper.toListResponse(categories);
   }
 }

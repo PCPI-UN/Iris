@@ -1,8 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
- * Response of GET /students/me/dashboard, following the frontend contract of the student
- * dashboard (CU-86e3vmxb2, "Integration details", endpoint 1).
+ * Response of GET /students/me/dashboard, with the field names the frontend expects.
  */
 
 export class StudentDashboardProfile {
@@ -122,8 +121,7 @@ export class StudentDashboardCurrentProject {
 export class StudentDashboardEvaluation {
   @ApiProperty({
     example: false,
-    description:
-      'Always false for now: scores belong to task S2-10 (results publication)',
+    description: 'Always false for now: scores are not exposed yet',
   })
   resultsPublished: boolean;
 
@@ -159,7 +157,7 @@ export class StudentDashboardTrajectoryItem {
     example: null,
     nullable: true,
     type: Number,
-    description: 'Always null for now: scores belong to task S2-10',
+    description: 'Always null for now: scores are not exposed yet',
   })
   finalScore: number | null;
 

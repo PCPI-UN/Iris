@@ -48,7 +48,8 @@ export class EventServiceAdapter implements EventServicePort {
       startDate: e.startDate ?? '',
       endDate: e.endDate ?? '',
       active: e.active === true,
-      finished: e.status === EventStatus.CLOSED || e.status === 'CLOSED',
+      finished: e.status === EventStatus.CLOSED,
+      inProgress: e.status === EventStatus.AVAILABLE,
     }));
   }
 
@@ -62,6 +63,16 @@ export class EventServiceAdapter implements EventServicePort {
       position: Number(a.position ?? 0),
       categoryName: a.categoryName ?? '',
       eventId: Number(a.eventId),
+      resultsPublished: a.resultsPublished === true,
+    }));
+  }
+
+  async listCategoriesByIds(ids: number[]): Promise<{ id: number; name: string }[]> {
+    if (!ids.length) return [];
+    const res = await this.grpc.listCategoriesByIds(ids);
+    return (res?.categories ?? []).map((c: any) => ({
+      id: Number(c.id),
+      name: c.name ?? '',
     }));
   }
 }

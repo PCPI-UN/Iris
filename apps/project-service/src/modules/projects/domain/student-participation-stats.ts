@@ -11,6 +11,8 @@ export interface ParticipationEvent {
   active: boolean;
   /** true when the event already ended (event-service status CLOSED) */
   finished: boolean;
+  /** true while the event is taking place (event-service status AVAILABLE) */
+  inProgress: boolean;
 }
 
 /** One award won by a project, as returned by event-service. */
@@ -21,6 +23,8 @@ export interface ParticipationAward {
   position: number;
   categoryName: string;
   eventId: number;
+  /** true when the event ranking is published; awards stay hidden until then */
+  resultsPublished: boolean;
 }
 
 export interface StudentAwardItem {
@@ -78,14 +82,15 @@ export interface StudentParticipationStats {
 }
 
 /**
- * Participation statistics of a student (IRIS-V3-STD-01, dashboard content approved on 28 Oct).
+ * Participation statistics of a student for the student dashboard.
  *
  * Rules:
  * - Only the projects given are counted; the caller passes the approved ones.
  * - A project counts only if its event exists and was not deleted (active). Events that
  *   already ended count as historical (`finished`), the rest as ongoing.
  * - The semester comes from the event start date (AAAA-10 / AAAA-30).
- * - Awards are those won by the counted projects in their own event; co-winners count once each.
+ * - Awards are those won by the counted projects in their own event, only once the event
+ *   ranking is published (the same rule as the scores); co-winners count once each.
  * - `courseNames` maps the project category (courseId) to its name; unknown ones are ''.
  */
 export function buildStudentParticipationStats(
@@ -117,7 +122,9 @@ export function buildStudentParticipationStats(
       awards: awards
         .filter(
           (award) =>
-            award.projectId === project.id && award.eventId === event.id,
+            award.resultsPublished &&
+            award.projectId === project.id &&
+            award.eventId === event.id,
         )
         .map(({ awardId, title, position, categoryName }) => ({
           awardId,
@@ -176,9 +183,16 @@ export function buildStudentParticipationStats(
 }
 
 /**
- * The project the student has in an event that has not ended (upcoming or in progress) and
- * was not deleted, in any review state, so the dashboard can show its enrollment status.
- * With several, the one of the most recent event. null when there is none.
+ * The project the student has in an event that has not ended (in progress or upcoming)
+ * and was not deleted, so the dashboard can show its enrollment status.
+ *
+ * With several candidates, in this order:
+ * 1. A rejected project never displaces another one; it is only shown when it is the only
+ *    project of an event that has not ended.
+ * 2. An event in progress goes before an upcoming one.
+ * 3. Among events in progress, the one that started last; among upcoming ones, the one that
+ *    starts first.
+ * null when there is no candidate.
  */
 export function pickCurrentProject(
   projects: Project[],
@@ -186,6 +200,8 @@ export function pickCurrentProject(
   courseNames: Map<number, string> = new Map(),
 ): StudentCurrentProject | null {
   const eventsById = new Map(events.map((event) => [event.id, event]));
+  const time = (event: ParticipationEvent) =>
+    new Date(event.startDate).getTime();
 
   const candidates = projects
     .map((project) => ({ project, event: eventsById.get(project.eventId) }))
@@ -193,11 +209,19 @@ export function pickCurrentProject(
       (c): c is { project: Project; event: ParticipationEvent } =>
         !!c.event && c.event.active && !c.event.finished,
     )
-    .sort(
-      (a, b) =>
-        new Date(b.event.startDate).getTime() -
-          new Date(a.event.startDate).getTime() || b.project.id - a.project.id,
-    );
+    .sort((a, b) => {
+      const rejected =
+        Number(a.project.state === 'REJECTED') -
+        Number(b.project.state === 'REJECTED');
+      if (rejected) return rejected;
+      const inProgress =
+        Number(b.event.inProgress) - Number(a.event.inProgress);
+      if (inProgress) return inProgress;
+      const byDate = a.event.inProgress
+        ? time(b.event) - time(a.event)
+        : time(a.event) - time(b.event);
+      return byDate || b.project.id - a.project.id;
+    });
 
   const current = candidates[0];
   if (!current) return null;

@@ -55,8 +55,10 @@ service EventService {
   rpc GetAwardWinner (GetAwardWinnerRequest) returns (GetAwardWinnerResponse) {}
   rpc ListAwardWinners (ListAwardWinnersRequest) returns (ListAwardWinnersResponse) {}
   rpc DeleteAwardWinner (DeleteAwardWinnerRequest) returns (DeleteAwardWinnerResponse) {}
-  // Awards won by the given projects, with the award, category and event they belong to
+  // Awards won by the given projects in active categories, with the award, category and event they belong to
   rpc ListAwardsByProjects (ListAwardsByProjectsRequest) returns (ListAwardsByProjectsResponse) {}
+  // Categories by id, inactive ones included (active = false)
+  rpc ListCategoriesByIds (ListCategoriesByIdsRequest) returns (ListCategoriesByIdsResponse) {}
 
   // ---- EVENT INSCRIPTION DETAILS ----
   rpc CreateEventInscriptionDetail (CreateEventInscriptionDetailRequest) returns (CreateEventInscriptionDetailResponse) {}
@@ -831,7 +833,7 @@ message DeleteRankingEventResponse {
   bool ok = 1;
 }
 
-// ===== STUDENT DASHBOARD (IRIS-V3-STD-01) =====
+// ===== STUDENT DASHBOARD =====
 
 message ListEventsByIdsRequest {
   repeated int32 ids = 1;
@@ -855,8 +857,18 @@ message ProjectAwardProto {
   int32 categoryId = 6;
   string categoryName = 7;
   int32 eventId = 8;
+  // true when the event ranking is published (ranking_event.visible_public)
+  bool resultsPublished = 9;
 }
 
 message ListAwardsByProjectsResponse {
   repeated ProjectAwardProto awards = 1;
+}
+
+message ListCategoriesByIdsRequest {
+  repeated int32 ids = 1;
+}
+
+message ListCategoriesByIdsResponse {
+  repeated CategoryProto categories = 1;
 }

@@ -13,8 +13,20 @@ export class PrismaAwardWinnerRepository extends AwardWinnerRepository {
     if (!projectIds.length) return [];
 
     const rows = await this.prisma.awardWinnerEvent.findMany({
-      where: { projectId: { in: projectIds } },
-      include: { award: { include: { category: true } } },
+      // Awards of a deactivated category no longer count
+      where: {
+        projectId: { in: projectIds },
+        award: { category: { active: true } },
+      },
+      include: {
+        award: {
+          include: {
+            category: {
+              include: { event: { include: { rankingEvent: true } } },
+            },
+          },
+        },
+      },
       orderBy: [
         { award: { category: { eventId: 'asc' } } },
         { award: { categoryId: 'asc' } },
@@ -34,6 +46,7 @@ export class PrismaAwardWinnerRepository extends AwardWinnerRepository {
           row.award.categoryId,
           row.award.category.name,
           row.award.category.eventId,
+          row.award.category.event.rankingEvent?.visiblePublic === true,
         ),
     );
   }
