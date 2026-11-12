@@ -51,7 +51,8 @@ export class ResendInvitationUseCase {
         if (acceptedInvitation) {
             const targetName = invitation.targetType === InvitationTargetType.EVENT
                 ? 'event'
-                : invitation.targetType === InvitationTargetType.PROJECT
+                : invitation.targetType === InvitationTargetType.PROJECT ||
+                    invitation.targetType === InvitationTargetType.PROJECT_TUTOR
                     ? 'project'
                     : 'platform';
 
@@ -138,6 +139,8 @@ export class ResendInvitationUseCase {
 
         if (invitation.targetType === InvitationTargetType.EVENT) {
             eventData = await this.eventService.getEvent(invitation.targetId);
+        } else if (invitation.targetType === InvitationTargetType.PROJECT_TUTOR) {
+            projectData = await this.projectService.getProject(invitation.targetId);
         } else if (invitation.targetType === InvitationTargetType.PROJECT) {
             projectData = await this.projectService.getProject(invitation.targetId);
             eventData = await this.eventService.getEvent(projectData.eventId);
@@ -185,6 +188,17 @@ export class ResendInvitationUseCase {
                     lastName: params.lastName,
                     invitationLink: params.invitationLink,
                     roles: '',
+                });
+                break;
+            }
+
+            case InvitationTargetType.PROJECT_TUTOR: {
+                await this.notificationService.sendPlatformInvitationEmail({
+                    to: params.to,
+                    firstName: params.firstName,
+                    lastName: params.lastName,
+                    invitationLink: params.invitationLink,
+                    roles: 'Tutor',
                 });
                 break;
             }

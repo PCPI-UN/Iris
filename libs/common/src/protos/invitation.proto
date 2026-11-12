@@ -138,6 +138,7 @@ enum InvitationTargetType {
   EVENT = 0;
   PLATFORM = 1;
   PROJECT = 2;
+  PROJECT_TUTOR = 3;
 }
 
 // The invitation message

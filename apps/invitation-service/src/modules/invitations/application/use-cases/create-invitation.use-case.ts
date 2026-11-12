@@ -50,7 +50,8 @@ export class CreateInvitationUseCase {
     if (acceptedInvitation) {
       const targetName = rest.targetType === InvitationTargetType.EVENT
         ? 'event'
-        : rest.targetType === InvitationTargetType.PROJECT
+        : rest.targetType === InvitationTargetType.PROJECT ||
+            rest.targetType === InvitationTargetType.PROJECT_TUTOR
           ? 'project'
           : 'platform';
 
@@ -118,6 +119,23 @@ export class CreateInvitationUseCase {
           }
         } catch (error) {
           // Re-throw as RpcException with proper code
+          throw new RpcException({
+            code: error.code || status.INTERNAL,
+            message: error.details || error.message || `Project with ID ${rest.targetId} not found`,
+          });
+        }
+        break;
+
+      case InvitationTargetType.PROJECT_TUTOR:
+        try {
+          projectData = await this.projectService.getProject(rest.targetId);
+          if (!projectData) {
+            throw new RpcException({
+              code: status.NOT_FOUND,
+              message: `Project with ID ${rest.targetId} not found`,
+            });
+          }
+        } catch (error) {
           throw new RpcException({
             code: error.code || status.INTERNAL,
             message: error.details || error.message || `Project with ID ${rest.targetId} not found`,
@@ -243,6 +261,9 @@ export class CreateInvitationUseCase {
     projectData: any;
   }): Promise<void> {
     switch (params.targetType) {
+      // A project tutor has no dedicated template yet: they get the platform
+      // invitation email with the roles of the invitation (Tutor)
+      case InvitationTargetType.PROJECT_TUTOR:
       case InvitationTargetType.PLATFORM: {
         // Fetch role names if provided
         let roles = '';

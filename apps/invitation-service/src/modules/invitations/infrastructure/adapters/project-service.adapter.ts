@@ -39,6 +39,14 @@ export class ProjectServiceAdapter implements ProjectServicePort, OnModuleInit {
     return await firstValueFrom(this.projectService.addParticipant(params));
   }
 
+  async addProjectTutor(params: {
+    projectId: number;
+    userId: number;
+    email: string;
+  }): Promise<void> {
+    await firstValueFrom(this.projectService.addProjectTutor(params));
+  }
+
   async listPendingParticipants(
     projectId: number,
   ): Promise<PendingProjectParticipant[]> {

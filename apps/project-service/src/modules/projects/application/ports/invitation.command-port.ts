@@ -1,7 +1,7 @@
 export interface InvitationCommandPort {
   createInvitation(input: {
     email: string;
-    targetType: 'PROJECT' | 'EVENT' | 'PLATFORM';
+    targetType: 'PROJECT' | 'PROJECT_TUTOR' | 'EVENT' | 'PLATFORM';
     targetId: number;
     firstName?: string;
     lastName?: string;

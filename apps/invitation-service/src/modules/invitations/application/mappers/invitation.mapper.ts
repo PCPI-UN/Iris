@@ -56,6 +56,7 @@ export class InvitationMapper {
       'EVENT': ProtoInvitationTargetType.EVENT,
       'PLATFORM': ProtoInvitationTargetType.PLATFORM,
       'PROJECT': ProtoInvitationTargetType.PROJECT,
+      'PROJECT_TUTOR': ProtoInvitationTargetType.PROJECT_TUTOR,
     };
     return targetTypeMap[targetType];
   }

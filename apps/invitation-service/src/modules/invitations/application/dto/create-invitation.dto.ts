@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsInt, IsNotEmpty, IsOptional, IsArray, Min, IsString } from 'class-validator';
+import { IsEmail, IsEnum, IsInt, IsNotEmpty, IsOptional, IsArray, Min, IsString, ValidateIf } from 'class-validator';
 import { InvitationTargetType } from '../../domain/entities/invitation.entity';
 
 export class CreateInvitationDto {
@@ -6,6 +6,11 @@ export class CreateInvitationDto {
   @IsNotEmpty()
   email: string;
 
+  // Picks the email template of PROJECT invitations; the tutor invitation email does not use it
+  @ValidateIf(
+    (dto: CreateInvitationDto) =>
+      dto.targetType !== InvitationTargetType.PROJECT_TUTOR,
+  )
   @IsString()
   @IsNotEmpty()
   eventType: string;
