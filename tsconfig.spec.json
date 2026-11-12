@@ -13,6 +13,9 @@
       ],
       "@evaluations/*": [
         "apps/evaluation-service/src/modules/evaluations/*"
+      ],
+      "@events/*": [
+        "apps/event-service/src/modules/events/*"
       ]
     }
   }
