@@ -97,3 +97,46 @@ model TieBreak {
 
   @@map("tiebreaks")
 }
+/**** GRADING SCALES ****/
+
+/// Catalog of grading scales. A juror picks a level (1-4) per criterion; the scale says how many points it is worth.
+model GradingScale {
+  id              Int                 @id @default(autoincrement())
+  name            String              @db.VarChar(100)
+  description     String?             @db.Text
+  /// System scales are seeded by the migration and read-only
+  isSystem        Boolean             @default(false) @map("is_system")
+  /// Stable key of a system scale (the legacy evaluation_type it replaces); null for catalog scales
+  code            String?             @unique @db.VarChar(32)
+  createdByUserId Int?                @map("created_by_user_id")
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamp()
+  levels          GradingScaleLevel[]
+  events          EventGradingScale[]
+
+  @@map("grading_scales")
+}
+
+model GradingScaleLevel {
+  scaleId Int          @map("scale_id")
+  /// 1 to 4, from the lowest to the highest
+  level   Int
+  label   String       @db.VarChar(50)
+  /// Grows from level 1 to 4 without repeating, so stored points map back to one level
+  points  Decimal      @db.Decimal(7, 2)
+  scale   GradingScale @relation(fields: [scaleId], references: [id], onDelete: Cascade)
+
+  @@id([scaleId, level])
+  @@unique([scaleId, points])
+  @@map("grading_scale_levels")
+}
+
+/// Scale of each event, kept here so evaluation-service can block changes once the event has evaluations
+model EventGradingScale {
+  eventId    Int          @id @map("event_id")
+  scaleId    Int          @map("scale_id")
+  assignedAt DateTime     @default(now()) @map("assigned_at") @db.Timestamp()
+  scale      GradingScale @relation(fields: [scaleId], references: [id])
+
+  @@index([scaleId])
+  @@map("event_grading_scale")
+}
