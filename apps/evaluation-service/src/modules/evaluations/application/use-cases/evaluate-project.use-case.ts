@@ -9,9 +9,8 @@ import { CriterionRepositoryPort } from '../../../criterions/domain/repositories
 import { Evaluation } from '../../domain/entities/evaluation.entity';
 import { EvaluationDetail } from '../../domain/entities/evaluation-detail.entity';
 import { EvaluateProjectDto } from '../dto/evaluate-project.dto';
-import { EvaluationType } from '../../../../common/constants/evaluation-type.constants';
-import { EvaluationType as EventEvaluationType } from '@app/common/generated/event';
 import { ScoreMapperFactory } from '../mappers/score-mapper.factory';
+import { resolveEvaluationType } from '../evaluation-type.resolver';
 import { ScoreValidatorFactory } from '../validators/score-validator.factory';
 import { Role } from '@app/common/generated/auth';
 import { isFullWeight, roundGrade } from '../../../../common/utils/grade.utils';
@@ -20,37 +19,6 @@ import { buildRubric } from '../../../criterions/domain/services/rubric';
 @Injectable()
 export class EvaluateProjectUseCase {
     private readonly logger = new Logger(EvaluateProjectUseCase.name);
-
-    private resolveEvaluationType(evaluationType: unknown): EvaluationType {
-        if (
-            evaluationType === undefined ||
-            evaluationType === null ||
-            evaluationType === EventEvaluationType.EVALUATION_TYPE_UNSPECIFIED ||
-            evaluationType === EventEvaluationType.FINAL_PROJECTS ||
-            evaluationType === EvaluationType.FINAL_PROJECTS
-        ) {
-            return EvaluationType.FINAL_PROJECTS;
-        }
-
-        if (
-            evaluationType === EventEvaluationType.ZERO_TO_FIVE ||
-            evaluationType === EvaluationType.ZERO_TO_FIVE
-        ) {
-            return EvaluationType.ZERO_TO_FIVE;
-        }
-
-        if (
-            evaluationType === EventEvaluationType.ZERO_TO_HUNDRED ||
-            evaluationType === EvaluationType.ZERO_TO_HUNDRED
-        ) {
-            return EvaluationType.ZERO_TO_HUNDRED;
-        }
-
-        throw new RpcException({
-            code: status.INVALID_ARGUMENT,
-            message: `Unsupported evaluation type: ${evaluationType}`,
-        });
-    }
 
     constructor(
         private readonly evaluationRepository: EvaluationRepositoryPort,
@@ -224,7 +192,7 @@ export class EvaluateProjectUseCase {
         const scoredCriterionIds = new Set<number>();
 
         // Resolve score validation and mapping from the event evaluation type
-        const evaluationType = this.resolveEvaluationType(eventEvaluationType);
+        const evaluationType = resolveEvaluationType(eventEvaluationType);
         const scoreValidator = ScoreValidatorFactory.create(evaluationType);
         const scoreMapper = ScoreMapperFactory.create(evaluationType);
 

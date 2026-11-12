@@ -110,6 +110,7 @@ import {
   GetAwardWinnerResponse,
   ListAwardWinnersRequest,
   ListAwardWinnersResponse,
+  ListAwardsByProjectsResponse,
   DeleteAwardWinnerRequest,
   DeleteAwardWinnerResponse,
   CreateEventInscriptionDetailRequest,
@@ -1254,6 +1255,13 @@ export class EventService implements OnModuleInit {
     return firstValueFrom(
       this.eventService.getAwardWinner({ id } as GetAwardWinnerRequest),
     );
+  }
+
+  /** Awards won by the given projects in active categories, with the event publication flag */
+  async listAwardsByProjects(
+    projectIds: number[],
+  ): Promise<ListAwardsByProjectsResponse> {
+    return firstValueFrom(this.eventService.listAwardsByProjects({ projectIds }));
   }
 
   async listAwardWinners(

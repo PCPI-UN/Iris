@@ -1,5 +1,6 @@
 import { StudentDashboardService } from './student-dashboard.service';
 import { ProjectsService } from '../projects/projects.service';
+import { EvaluationsService } from '../evaluations/evaluations.service';
 import { AppUser } from '../auth/types/app-user.type';
 
 describe('StudentDashboardService', () => {
@@ -83,7 +84,13 @@ describe('StudentDashboardService', () => {
     },
   };
 
-  const build = (overrides: { stats?: object; academic?: object } = {}) => {
+  const build = (
+    overrides: {
+      stats?: object;
+      academic?: object;
+      results?: Record<number, { evaluated: boolean; finalScore: number }>;
+    } = {},
+  ) => {
     const projects = {
       getStudentParticipationStats: jest.fn().mockResolvedValue({
         ...stats,
@@ -97,11 +104,21 @@ describe('StudentDashboardService', () => {
       }),
       listUserParticipations: jest.fn(),
     };
+    const evaluations = {
+      getProjectResult: jest.fn((projectId: number) => {
+        const result = overrides.results?.[projectId];
+        return result
+          ? Promise.resolve(result)
+          : Promise.reject(new Error('unavailable'));
+      }),
+    };
     return {
       service: new StudentDashboardService(
         projects as unknown as ProjectsService,
+        evaluations as unknown as EvaluationsService,
       ),
       projects,
+      evaluations,
     };
   };
 
@@ -214,16 +231,62 @@ describe('StudentDashboardService', () => {
     ]);
   });
 
-  it('never sends scores: results stay unpublished until task S2-10', async () => {
-    const { service } = build();
+  it('sends no score and asks for none while the results are not published', async () => {
+    const { service, evaluations } = build();
 
     const dashboard = await service.getDashboard(user);
 
+    expect(evaluations.getProjectResult).not.toHaveBeenCalled();
     expect(dashboard.evaluation).toEqual({
       resultsPublished: false,
       finalScore: null,
     });
     expect(dashboard.trajectory.every((t) => t.finalScore === null)).toBe(true);
+  });
+
+  it('adds the scores of the events whose results are published', async () => {
+    const { service, evaluations } = build({
+      stats: {
+        participations: [
+          { ...stats.participations[0], resultsPublished: true },
+          { ...stats.participations[1], resultsPublished: true },
+        ],
+        currentProject: { ...stats.currentProject, resultsPublished: true },
+      },
+      results: {
+        34: { evaluated: true, finalScore: 72.5 },
+        20: { evaluated: false, finalScore: 0 },
+      },
+    });
+
+    const dashboard = await service.getDashboard(user);
+
+    // The current project is also in the trajectory: its score is read once
+    expect(evaluations.getProjectResult).toHaveBeenCalledTimes(2);
+    expect(dashboard.evaluation).toEqual({
+      resultsPublished: true,
+      finalScore: 72.5,
+    });
+    expect(dashboard.trajectory.map((t) => [t.id, t.finalScore])).toEqual([
+      [34, 72.5],
+      [20, null],
+    ]);
+  });
+
+  it('keeps the dashboard when a score cannot be read', async () => {
+    const { service } = build({
+      stats: {
+        participations: [
+          { ...stats.participations[1], resultsPublished: true },
+        ],
+        currentProject: null,
+      },
+    });
+
+    const dashboard = await service.getDashboard(user);
+
+    expect(dashboard.trajectory).toHaveLength(1);
+    expect(dashboard.trajectory[0].finalScore).toBeNull();
   });
 
   it('returns null current project and evaluation when there is no event in progress', async () => {

@@ -404,7 +404,7 @@ message ListUserParticipationsResponse {
 
 // ===== STUDENT DASHBOARD =====
 // Statistics and history only count approved projects of events that were not deleted.
-// Awards only count once the event ranking is published.
+// Awards only count once the admin publishes the event results.
 // currentProject is the project of an event that has not ended; rejected projects only when there is no other.
 
 message GetStudentParticipationStatsRequest {
@@ -435,6 +435,8 @@ message StudentParticipation {
   string projectCode = 10;
   // Category of the project in the event (course)
   string courseName = 11;
+  // true when the admin published the event results (scores can be shown)
+  bool resultsPublished = 12;
 }
 
 message StudentCurrentProject {
@@ -453,6 +455,8 @@ message StudentCurrentProject {
   bool canEdit = 11;
   int32 participantsCount = 12;
   int32 documentsCount = 13;
+  // true when the admin published the event results (scores can be shown)
+  bool resultsPublished = 14;
 }
 
 message SemesterParticipation {

@@ -17,6 +17,7 @@ describe('EventServiceAdapter (student dashboard)', () => {
             endDate: 'e',
             active: true,
             status: EventStatus.CLOSED,
+            resultsPublished: true,
           },
           {
             id: 2,
@@ -41,6 +42,7 @@ describe('EventServiceAdapter (student dashboard)', () => {
         active: true,
         finished: true,
         inProgress: false,
+        resultsPublished: true,
       },
       {
         id: 2,
@@ -50,6 +52,7 @@ describe('EventServiceAdapter (student dashboard)', () => {
         active: false,
         finished: false,
         inProgress: true,
+        resultsPublished: false,
       },
       {
         id: 3,
@@ -59,6 +62,7 @@ describe('EventServiceAdapter (student dashboard)', () => {
         active: true,
         finished: false,
         inProgress: false,
+        resultsPublished: false,
       },
     ]);
   });

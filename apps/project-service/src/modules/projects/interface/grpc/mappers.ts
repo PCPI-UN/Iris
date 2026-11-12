@@ -163,6 +163,7 @@ export const toProtoStudentParticipationStats = (stats: StudentDashboardData) =>
     finished: p.finished,
     projectCode: p.projectCode,
     courseName: p.courseName,
+    resultsPublished: p.resultsPublished,
     awards: p.awards.map((a) => ({
       awardId: a.awardId,
       title: a.title,
@@ -190,6 +191,7 @@ export const toProtoStudentParticipationStats = (stats: StudentDashboardData) =>
         canEdit: stats.currentProject.canEdit,
         participantsCount: stats.currentProject.participantsCount,
         documentsCount: stats.currentProject.documentsCount,
+        resultsPublished: stats.currentProject.resultsPublished,
       }
     : undefined,
 });

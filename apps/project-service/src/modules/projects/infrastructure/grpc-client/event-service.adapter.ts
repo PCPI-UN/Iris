@@ -50,6 +50,7 @@ export class EventServiceAdapter implements EventServicePort {
       active: e.active === true,
       finished: e.status === EventStatus.CLOSED,
       inProgress: e.status === EventStatus.AVAILABLE,
+      resultsPublished: e.resultsPublished === true,
     }));
   }
 
