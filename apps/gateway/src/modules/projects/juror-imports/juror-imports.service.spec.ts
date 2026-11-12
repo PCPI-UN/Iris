@@ -6,15 +6,26 @@ import { JurorImportsService } from './juror-imports.service';
 
 async function template(): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet('Asignaciones');
+  const ws = wb.addWorksheet('Asignación jurados');
+  ws.addRow(['Asignación de jurados · Feria']);
+  ws.addRow(['Leyenda']);
+  ws.addRow([]);
   ws.addRow([
-    'Departamento*',
-    'Número*',
-    'Nombre proyecto (auto)',
-    'Jurado*',
-    'Email*',
+    'Departamento',
+    'Número',
+    'Nombre del proyecto',
+    'Nombre(s) jurado 1',
+    'Apellido(s) jurado 1',
+    'Correo jurado 1',
   ]);
-  ws.addRow(['Dpt. Ingeniería Industrial', 14, '', 'Laura', 'Laura@X.co']);
+  ws.addRow([
+    'Dpt. Ingeniería Industrial',
+    14,
+    '',
+    'Laura',
+    'Gómez',
+    'Laura@X.co',
+  ]);
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
 
@@ -94,11 +105,11 @@ describe('JurorImportsService.preview', () => {
       eventId: 10,
       rows: [
         {
-          rowNumber: 2,
+          rowNumber: 5,
           department: 'Dpt. Ingeniería Industrial',
           projectCode: '14',
           firstName: 'Laura',
-          lastName: '',
+          lastName: 'Gómez',
           jurorSlot: 1,
           email: 'Laura@X.co',
         },

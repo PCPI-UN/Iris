@@ -85,15 +85,7 @@ export class JurorImportsService implements OnModuleInit {
     if (!file.originalname?.toLowerCase().endsWith('.xlsx')) {
       throw new BadRequestException('El archivo debe ser .xlsx.');
     }
-    // Provisional until the parser reads the new sheet: one juror per row, in slot 1
-    const rows = (await parseJurorImportSheet(file.buffer)).map(
-      ({ jurorName, ...row }) => ({
-        ...row,
-        firstName: jurorName,
-        lastName: '',
-        jurorSlot: 1,
-      }),
-    );
+    const rows = await parseJurorImportSheet(file.buffer);
     const res: PreviewJurorImportResponse = await firstValueFrom(
       this.projectsService.previewJurorImport({ eventId, rows }),
     );

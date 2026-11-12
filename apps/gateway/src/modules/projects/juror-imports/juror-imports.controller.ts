@@ -50,9 +50,9 @@ export class JurorImportsController {
   @ApiOperation({
     summary: 'Preview a juror import from the PF template',
     description:
-      `Reads the "${JUROR_IMPORT_SHEET}" sheet (columns found by header: Departamento, Número, Jurado, Email) ` +
+      `Reads the "${JUROR_IMPORT_SHEET}" sheet (headers found in the first rows: Departamento, Número and, per juror N, Nombre(s), Apellido(s) and Correo) ` +
       'and reports, row by row, what confirming would do. Nothing is written and no email is sent. ' +
-      `Only .xlsx, up to ${JUROR_IMPORT_MAX_BYTES / (1024 * 1024)} MB and ${JUROR_IMPORT_MAX_ROWS} rows with data.`,
+      `Only .xlsx, up to ${JUROR_IMPORT_MAX_BYTES / (1024 * 1024)} MB and ${JUROR_IMPORT_MAX_ROWS} jurors.`,
   })
   @ApiParam({ name: 'eventId', type: Number, example: 1 })
   @ApiBody({

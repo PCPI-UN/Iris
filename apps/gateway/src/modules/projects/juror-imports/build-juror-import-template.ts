@@ -1,10 +1,15 @@
 import * as ExcelJS from 'exceljs';
-import {
-  JUROR_IMPORT_COLUMNS,
-  JUROR_IMPORT_MAX_ROWS,
-  JUROR_IMPORT_SHEET,
-  JurorImportField,
-} from './juror-import-format';
+import { JUROR_IMPORT_MAX_ROWS } from './juror-import-format';
+
+// Legacy layout (one juror per row): the parser no longer reads it. Commit C rewrites this file.
+const JUROR_IMPORT_SHEET = 'Asignaciones';
+type JurorImportField = 'department' | 'projectCode' | 'jurorName' | 'email';
+const JUROR_IMPORT_COLUMNS: { field: JurorImportField; label: string }[] = [
+  { field: 'department', label: 'Departamento' },
+  { field: 'projectCode', label: 'Número' },
+  { field: 'jurorName', label: 'Jurado' },
+  { field: 'email', label: 'Email' },
+];
 
 /** Data of the event, as GetJurorImportTemplate returns it */
 export interface JurorImportTemplateData {
