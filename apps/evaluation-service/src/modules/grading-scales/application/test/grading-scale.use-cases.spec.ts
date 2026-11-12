@@ -148,16 +148,13 @@ describe('Grading scale use cases', () => {
             expect(withRubricLock).toHaveBeenCalledWith([7], 'exclusive', expect.any(Function));
         });
 
-        it('creates a new scale, adds it to the catalog and assigns it', async () => {
-            const { scale } = await assign().execute({
-                eventId: 7,
-                scale: { name: 'Decenas', levels: levels([10, 20, 30, 40]) },
-                userId: 3,
-            });
+        it('assigns a scale created in the catalog', async () => {
+            const created = await repository.create({ name: 'Decenas', levels: levels([10, 20, 30, 40]) }, 3);
 
-            expect(repository.eventScales.get(7)).toBe(scale.id);
-            expect((await repository.findAll()).map((item) => item.name)).toContain('Decenas');
-            expect(scale.createdByUserId).toBe(3);
+            const { scale } = await assign().execute({ eventId: 7, scaleId: created.id });
+
+            expect(scale.name).toBe('Decenas');
+            expect(repository.eventScales.get(7)).toBe(created.id);
         });
 
         it('assigns "Proyectos finales" when no scale is given', async () => {
@@ -172,16 +169,6 @@ describe('Grading scale use cases', () => {
             const { scale } = await assign().execute({ eventId: 7 });
 
             expect(scale.code).toBe('ZERO_TO_FIVE');
-        });
-
-        it('rejects scaleId and scale together, and an invalid new scale', async () => {
-            await expect(
-                assign().execute({ eventId: 7, scaleId: 1, scale: { name: 'X', levels: levels([1, 2, 3, 4]) } }),
-            ).rejects.toEqual(rpcError(status.INVALID_ARGUMENT, 'not both'));
-            await expect(
-                assign().execute({ eventId: 7, scale: { name: 'X', levels: levels([1, 2, 3]) } }),
-            ).rejects.toEqual(rpcError(status.INVALID_ARGUMENT, 'exactly 4 levels'));
-            expect(repository.eventScales.has(7)).toBe(false);
         });
 
         it('returns NOT_FOUND for an unknown scale id', async () => {
@@ -200,9 +187,6 @@ describe('Grading scale use cases', () => {
                     'The grading scale of event 7 cannot change because the event already has evaluations graded with "Proyectos finales".',
                 ),
             );
-            await expect(
-                assign().execute({ eventId: 7, scale: { name: 'Nueva', levels: levels([1, 2, 3, 4]) } }),
-            ).rejects.toEqual(rpcError(status.FAILED_PRECONDITION, 'cannot change'));
             expect(repository.eventScales.get(7)).toBe(1);
         });
 

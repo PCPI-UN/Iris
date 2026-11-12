@@ -89,8 +89,6 @@ export class GradingScalesController {
         const view = await this.assignEventGradingScale.execute({
             eventId: request.eventId,
             scaleId: request.scaleId,
-            scale: toInput(request.scale),
-            userId: request.userId,
         });
         return toGradingScaleProto(view);
     }

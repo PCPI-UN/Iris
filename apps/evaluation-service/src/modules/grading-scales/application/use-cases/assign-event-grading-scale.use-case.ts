@@ -2,25 +2,22 @@ import { Injectable } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { status } from '@grpc/grpc-js';
 import { CriterionRepositoryPort } from '../../../criterions/domain/repositories/criterion.repository.port';
-import { GradingScale, GradingScaleInput } from '../../domain/grading-scale';
+import { GradingScale } from '../../domain/grading-scale';
 import { GradingScaleRepositoryPort } from '../../domain/grading-scale.repository.port';
 import { EventGradingScaleResolver } from '../event-grading-scale.resolver';
-import { scaleNotFound, validScaleInput } from '../grading-scale.errors';
+import { scaleNotFound } from '../grading-scale.errors';
 import { isLocked } from './get-grading-scale.use-case';
 import { GradingScaleView } from './list-grading-scales.use-case';
 
 export interface AssignEventGradingScaleCommand {
     eventId: number;
-    /** A scale of the catalog. */
+    /** A scale of the catalog; new scales are created with CreateGradingScale first. */
     scaleId?: number | null;
-    /** A new scale, created for this event and added to the catalog. */
-    scale?: GradingScaleInput | null;
-    userId?: number | null;
 }
 
 /**
- * Sets the grading scale of an event: a catalog scale, a new one, or (with neither) the system scale
- * of the event's deprecated evaluation type, "Proyectos finales" by default. Once the event has
+ * Sets the grading scale of an event: a catalog scale or, without one, the system scale of the
+ * event's deprecated evaluation type, "Proyectos finales" by default. Once the event has
  * evaluations its scale is fixed; assigning the same scale again is accepted and changes nothing.
  */
 @Injectable()
@@ -38,27 +35,17 @@ export class AssignEventGradingScaleUseCase {
         }
 
         const hasScaleId = command.scaleId !== undefined && command.scaleId !== null;
-        if (hasScaleId && command.scale) {
-            throw new RpcException({
-                code: status.INVALID_ARGUMENT,
-                message: 'Send either gradingScaleId or gradingScale, not both',
-            });
-        }
-        const newScale = command.scale ? validScaleInput(command.scale) : null;
 
         return this.criterionRepository.withRubricLock([eventId], 'exclusive', async () => {
-            let target: GradingScale | null = null;
-            if (hasScaleId) {
-                target = await this.findScale(command.scaleId!);
-            } else if (!newScale) {
-                target = await this.resolver.legacyScaleOf(eventId);
-            }
+            const target = hasScaleId
+                ? await this.findScale(command.scaleId!)
+                : await this.resolver.legacyScaleOf(eventId);
 
             const evaluated = await this.repository.findEventsWithEvaluations([eventId]);
             if (evaluated.length > 0) {
                 const current =
                     (await this.repository.findEventScale(eventId)) ?? (await this.resolver.legacyScaleOf(eventId));
-                if (target && target.id === current.id) {
+                if (target.id === current.id) {
                     await this.repository.assignIfMissing([{ eventId, scaleId: current.id }]);
                     return { scale: current, locked: true };
                 }
@@ -70,9 +57,8 @@ export class AssignEventGradingScaleUseCase {
                 });
             }
 
-            const scale = target ?? (await this.repository.create(newScale!, command.userId ?? null));
-            await this.repository.assignToEvent(eventId, scale.id);
-            return { scale, locked: await isLocked(this.repository, scale.id, scale.isSystem) };
+            await this.repository.assignToEvent(eventId, target.id);
+            return { scale: target, locked: await isLocked(this.repository, target.id, target.isSystem) };
         });
     }
 

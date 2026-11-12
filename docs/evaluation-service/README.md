@@ -49,7 +49,7 @@ Rules:
 - The scale of an event cannot change once the event has evaluations. Assigning the same scale again is accepted and changes nothing.
 - These checks and the scale changes run under the exclusive rubric lock of the affected events, and an evaluation reads the scale under the shared lock (see [Changing a rubric in use](#changing-a-rubric-in-use)), so an evaluation never sees a scale halfway through a change.
 
-`AssignEventGradingScale` takes a catalog scale (`scaleId`) or a new one (`scale`, also added to the catalog). With neither, the event gets the system scale of its deprecated `evaluationType`, which `event-service` sets to `FINAL_PROJECTS` by default. The gateway calls it when an event is created (and deletes the event if it fails) and when an edit sends `gradingScaleId` or `gradingScale`; `GET /events/:id` and the create and edit responses include the event's `gradingScale`.
+`AssignEventGradingScale` takes a catalog scale (`scaleId`); a new scale is created first with `CreateGradingScale` (`POST /grading-scales`). Without `scaleId`, the event gets the system scale of its deprecated `evaluationType`, which `event-service` sets to `FINAL_PROJECTS` by default. Creating and editing an event in the gateway accept only `gradingScaleId`. The gateway assigns the scale when an event is created, and if that fails it deletes the event and returns the error; an edit assigns it only when it sends `gradingScaleId`. `GET /events/:id` and the create and edit responses include the event's `gradingScale`.
 
 ### Events created before the catalog
 

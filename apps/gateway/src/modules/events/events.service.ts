@@ -152,7 +152,6 @@ import {
   GradingScaleProto,
   GradingScaleServiceClient,
 } from '@app/common/generated/evaluation';
-import { GradingScaleDto } from '../grading-scales/dto/grading-scale.dto';
 import { ProjectComplete } from '@app/common/generated/project';
 import {
   GetRankingReportDto,
@@ -240,35 +239,31 @@ export class EventService implements OnModuleInit {
       );
   }
 
-  private assertSingleGradingScale(
-    gradingScaleId?: number,
-    gradingScale?: GradingScaleDto,
-  ): void {
-    if (gradingScaleId !== undefined && gradingScaleId !== null && gradingScale) {
-      throw new BadRequestException(
-        'Send either gradingScaleId or gradingScale, not both',
-      );
-    }
-  }
-
   /**
-   * Assigns the grading scale of an event in evaluation-service: a catalog scale (gradingScaleId),
-   * a new one (gradingScale) or, with neither, the system scale of its deprecated evaluationType.
+   * Assigns the grading scale of an event in evaluation-service: a catalog scale (gradingScaleId) or,
+   * without one, the system scale of its deprecated evaluationType.
    */
   private assignGradingScale(
     eventId: number,
     gradingScaleId: number | undefined,
-    gradingScale: GradingScaleDto | undefined,
-    userId?: number,
   ): Promise<GradingScaleProto> {
     return firstValueFrom(
       this.gradingScaleService.assignEventGradingScale({
         eventId,
         scaleId: gradingScaleId ?? undefined,
-        scale: gradingScale,
-        userId,
       }),
     );
+  }
+
+  /** Deletes an event whose creation failed; the original error is the one reported. */
+  private async rollBackCreatedEvent(eventId: number): Promise<void> {
+    try {
+      await this.delete({ id: eventId });
+    } catch (error) {
+      this.logger.error(
+        `Could not delete event ${eventId} after its creation failed: ${(error as Error)?.message}`,
+      );
+    }
   }
 
   /** Grading scale shown with the event; `null` when evaluation-service cannot give it. */
@@ -905,7 +900,6 @@ export class EventService implements OnModuleInit {
       specificInscriptionDetails,
       eventInscriptionDetails,
       gradingScaleId,
-      gradingScale,
       ...eventPayload
     } = createEventDTO as CreateEventDTO & {
       category?: CreateCategoryDTO;
@@ -915,7 +909,6 @@ export class EventService implements OnModuleInit {
     };
     const nestedInscriptionDetails =
       specificInscriptionDetails ?? eventInscriptionDetails;
-    this.assertSingleGradingScale(gradingScaleId, gradingScale);
 
     const response = await firstValueFrom(
       this.eventService.createEvent(eventPayload as CreateEventRequest),
@@ -927,11 +920,9 @@ export class EventService implements OnModuleInit {
         eventGradingScale = await this.assignGradingScale(
           response.event.id,
           gradingScaleId,
-          gradingScale,
-          (eventPayload as { createdByUserId?: number }).createdByUserId,
         );
       } catch (error) {
-        await this.delete({ id: response.event.id });
+        await this.rollBackCreatedEvent(response.event.id);
         throw error;
       }
     }
@@ -1040,18 +1031,15 @@ export class EventService implements OnModuleInit {
       createdByUserId,
       category,
       gradingScaleId,
-      gradingScale,
       ...eventPayload
     } = normalizedDTO;
-    this.assertSingleGradingScale(gradingScaleId, gradingScale);
 
     // The scale goes first: when it cannot change (the event already has evaluations) nothing is updated
     let eventGradingScale: GradingScaleProto | null = null;
-    if ((gradingScaleId !== undefined && gradingScaleId !== null) || gradingScale) {
+    if (gradingScaleId !== undefined && gradingScaleId !== null) {
       eventGradingScale = await this.assignGradingScale(
         eventPayload.id,
         gradingScaleId,
-        gradingScale,
       );
     }
 

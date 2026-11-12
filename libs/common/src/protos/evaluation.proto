@@ -380,8 +380,9 @@ service GradingScaleService {
   rpc UpdateGradingScale (UpdateGradingScaleRequest) returns (GradingScaleProto) {}
   rpc DeleteGradingScale (DeleteGradingScaleRequest) returns (DeleteGradingScaleResponse) {}
 
-  // Assigns a catalog scale (scaleId) or a new scale (scale) to an event. With neither, the event
-  // gets the system scale of its deprecated evaluationType ("Proyectos finales" by default).
+  // Assigns a catalog scale (scaleId) to an event. New scales are created with CreateGradingScale
+  // first. Without scaleId, the event gets the system scale of its deprecated evaluationType
+  // ("Proyectos finales" by default).
   rpc AssignEventGradingScale (AssignEventGradingScaleRequest) returns (GradingScaleProto) {}
   rpc GetEventGradingScale (GetEventGradingScaleRequest) returns (GradingScaleProto) {}
 }
@@ -442,8 +443,8 @@ message DeleteGradingScaleResponse {
 message AssignEventGradingScaleRequest {
   int32 eventId = 1;
   optional int32 scaleId = 2;
-  optional GradingScaleInput scale = 3;
-  optional int32 userId = 4;
+  reserved 3, 4;
+  reserved "scale", "userId";
 }
 
 message GetEventGradingScaleRequest {

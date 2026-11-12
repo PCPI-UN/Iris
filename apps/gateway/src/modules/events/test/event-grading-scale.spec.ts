@@ -1,5 +1,4 @@
 import 'reflect-metadata';
-import { BadRequestException } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { of, throwError } from 'rxjs';
@@ -7,16 +6,11 @@ import { EventService } from '../events.service';
 import { GradingScaleDto } from '../../grading-scales/dto/grading-scale.dto';
 
 /**
- * IRIS-V3-EVAL-03: an event is created or edited with a grading scale (a catalog one or a new
- * one) and the event response carries its scale.
+ * IRIS-V3-EVAL-03: an event is created or edited with a catalog grading scale (gradingScaleId;
+ * new scales are created with POST /grading-scales) and the event response carries its scale.
  */
 describe('EventService - grading scale of the event', () => {
   const finalProjects = { id: 1, name: 'Proyectos finales', isSystem: true, levels: [], locked: true };
-  const decenas = {
-    name: 'Decenas',
-    levels: [10, 20, 30, 40].map((points, index) => ({ level: index + 1, label: `N${index + 1}`, points })),
-  };
-
   const build = () => {
     const eventGrpc = {
       createEvent: jest.fn(() => of({ event: { id: 9, name: 'Feria', status: 1 } })),
@@ -52,8 +46,6 @@ describe('EventService - grading scale of the event', () => {
     expect(gradingScaleGrpc.assignEventGradingScale).toHaveBeenCalledWith({
       eventId: 9,
       scaleId: undefined,
-      scale: undefined,
-      userId: 4,
     });
     expect(eventGrpc.createEvent).toHaveBeenCalledWith(
       expect.not.objectContaining({ gradingScaleId: expect.anything() }),
@@ -61,14 +53,13 @@ describe('EventService - grading scale of the event', () => {
     expect((result.event as any).gradingScale).toEqual(finalProjects);
   });
 
-  it('creates the event with a new scale', async () => {
-    const { service, gradingScaleGrpc } = build();
+  it('creates the event with a catalog scale', async () => {
+    const { service, eventGrpc, gradingScaleGrpc } = build();
 
-    await service.create({ name: 'Feria', gradingScale: decenas, createdByUserId: 4 } as any);
+    await service.create({ name: 'Feria', gradingScaleId: 4 } as any);
 
-    expect(gradingScaleGrpc.assignEventGradingScale).toHaveBeenCalledWith(
-      expect.objectContaining({ eventId: 9, scale: decenas, userId: 4 }),
-    );
+    expect(gradingScaleGrpc.assignEventGradingScale).toHaveBeenCalledWith({ eventId: 9, scaleId: 4 });
+    expect(eventGrpc.createEvent).toHaveBeenCalledWith({ name: 'Feria' });
   });
 
   it('deletes the new event when its scale is rejected', async () => {
@@ -83,13 +74,17 @@ describe('EventService - grading scale of the event', () => {
     expect(eventGrpc.deleteEvent).toHaveBeenCalledWith({ id: 9 });
   });
 
-  it('rejects gradingScaleId together with gradingScale before creating anything', async () => {
-    const { service, eventGrpc } = build();
+  it('reports the scale error even when the new event cannot be deleted', async () => {
+    const { service, eventGrpc, gradingScaleGrpc } = build();
+    gradingScaleGrpc.assignEventGradingScale.mockReturnValue(
+      throwError(() => ({ code: 5, details: 'Grading scale 77 not found' })) as any,
+    );
+    eventGrpc.deleteEvent.mockReturnValue(throwError(() => new Error('unavailable')) as any);
 
-    await expect(
-      service.create({ name: 'Feria', gradingScaleId: 1, gradingScale: decenas } as any),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    expect(eventGrpc.createEvent).not.toHaveBeenCalled();
+    await expect(service.create({ name: 'Feria', gradingScaleId: 77 } as any)).rejects.toEqual(
+      expect.objectContaining({ code: 5 }),
+    );
+    expect(eventGrpc.deleteEvent).toHaveBeenCalledWith({ id: 9 });
   });
 
   it('changes the scale before the event fields, so a locked scale leaves the event untouched', async () => {

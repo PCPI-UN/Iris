@@ -20,7 +20,6 @@ import {
   transformEvaluationType,
   transformEventType,
 } from './event-type-transformer';
-import { GradingScaleDto } from '../../../grading-scales/dto/grading-scale.dto';
 
 class UpdateEventCategoryDTO {
   @ApiProperty({ required: false })
@@ -262,7 +261,7 @@ export class UpdateEventPayloadDTO {
   locationDetails?: string;
 
   @ApiProperty({
-    description: 'Deprecated: use gradingScaleId or gradingScale. Kept for compatibility',
+    description: 'Deprecated: use gradingScaleId. Kept for compatibility',
     deprecated: true,
     enum: EvaluationType,
     required: false,
@@ -275,8 +274,8 @@ export class UpdateEventPayloadDTO {
 
   @ApiProperty({
     description:
-      'Grading scale of the event, from the catalog (GET /grading-scales). Send this or gradingScale, not both. ' +
-      'With neither, a new event gets "Proyectos finales" and an existing event keeps its scale.',
+      'Grading scale of the event, from the catalog (GET /grading-scales). To use a new scale, create it first ' +
+      'with POST /grading-scales. Without it, a new event gets "Proyectos finales" and an existing event keeps its scale.',
     required: false,
     example: 1,
   })
@@ -284,16 +283,6 @@ export class UpdateEventPayloadDTO {
   @IsInt()
   @Min(1)
   gradingScaleId?: number;
-
-  @ApiProperty({
-    description: 'New grading scale for the event; it is also added to the catalog. Send this or gradingScaleId, not both.',
-    required: false,
-    type: () => GradingScaleDto,
-  })
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => GradingScaleDto)
-  gradingScale?: GradingScaleDto;
 
   @ApiProperty({
     description: 'Updated inscription requirements',
