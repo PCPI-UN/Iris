@@ -63,13 +63,34 @@ erDiagram
         timestamp updated_at
     }
 
+    project_tutors {
+        int project_id PK, FK
+        int user_id PK
+        timestamp created_at
+    }
+
+    pending_project_tutors {
+        int pending_id PK
+        int project_id FK
+        string first_name
+        string last_name "nullable"
+        string email
+        PendingParticipantStatus status
+        timestamp invited_at "nullable"
+        timestamp joined_at "nullable"
+        timestamp created_at
+        timestamp updated_at
+    }
+
     projects ||--o{ project_documents : "documents"
     projects ||--o{ project_participants : "participants"
     projects ||--o{ project_assignments : "jurors assigned"
     projects ||--o{ pending_project_participants : "pending participants"
+    projects ||--o{ project_tutors : "tutors"
+    projects ||--o{ pending_project_tutors : "pending tutors"
 ```
 
-`projects` has a composite unique constraint on (`event_id`, `name`). `pending_project_participants` has a composite unique constraint on (`project_id`, `email`).
+`projects` has a composite unique constraint on (`event_id`, `name`). `pending_project_participants` and `pending_project_tutors` have a composite unique constraint on (`project_id`, `email`).
 
 ## Enums
 
@@ -98,7 +119,7 @@ erDiagram
 | `created_at` | `TIMESTAMP` | no | `now()` |
 | `updated_at` | `TIMESTAMP` | no | maintained by Prisma (`@updatedAt`) |
 
-Relations: 1:N `project_documents`, `project_participants`, `project_assignments`, `pending_project_participants`.
+Relations: 1:N `project_documents`, `project_participants`, `project_assignments`, `pending_project_participants`, `project_tutors`, `pending_project_tutors`.
 
 ### `project_documents` (`ProjectDocument`)
 
@@ -155,6 +176,33 @@ Participants captured when the project is submitted, before they have an account
 | `created_at` | `TIMESTAMP` | no | `now()` |
 | `updated_at` | `TIMESTAMP` | no | `@updatedAt` |
 
+### `project_tutors` (`ProjectTutor`)
+
+Platform users linked to a project as tutors. `user_id` belongs to the auth-service database.
+
+| Column | Type | Null | Default / constraint |
+| --- | --- | --- | --- |
+| `project_id` | `INTEGER` | no | PK (with `user_id`), FK → `projects.id` |
+| `user_id` | `INTEGER` | no | PK (with `project_id`) |
+| `created_at` | `TIMESTAMP` | no | `now()` |
+
+### `pending_project_tutors` (`PendingProjectTutor`)
+
+Tutors typed in at submission who have no account yet; marked `JOINED` when their invitation is accepted.
+
+| Column | Type | Null | Default / constraint |
+| --- | --- | --- | --- |
+| `pending_id` | `SERIAL` | no | PK |
+| `project_id` | `INTEGER` | no | FK → `projects.id`; unique together with `email` |
+| `first_name` | `VARCHAR(100)` | no | |
+| `last_name` | `VARCHAR(100)` | yes | |
+| `email` | `VARCHAR(255)` | no | unique together with `project_id` |
+| `status` | `PendingParticipantStatus` | no | `PENDING` |
+| `invited_at` | `TIMESTAMP` | yes | |
+| `joined_at` | `TIMESTAMP` | yes | |
+| `created_at` | `TIMESTAMP` | no | `now()` |
+| `updated_at` | `TIMESTAMP` | no | `@updatedAt` |
+
 ## Foreign keys
 
 | FK | References | On delete |
@@ -163,13 +211,15 @@ Participants captured when the project is submitted, before they have an account
 | `project_participants.project_id` | `projects.id` | `RESTRICT` |
 | `project_assignments.project_id` | `projects.id` | `RESTRICT` |
 | `pending_project_participants.project_id` | `projects.id` | `RESTRICT` |
+| `project_tutors.project_id` | `projects.id` | `CASCADE` |
+| `pending_project_tutors.project_id` | `projects.id` | `CASCADE` |
 
 All foreign keys use `ON UPDATE CASCADE`. References to other services (`event_id`, `course_id`, `user_id`, `member_*`) are logical only; there are no cross-database foreign keys.
 
 ## Notes
 
 - `pending_project_participants.pendingId` is the only column without a `snake_case` mapping, so its physical name is `"pendingId"` (quoted, camelCase).
-- Deleting a project requires deleting its documents, participants, assignments and pending participants first, because every foreign key is `RESTRICT`.
+- Deleting a project requires deleting its documents, participants, assignments and pending participants first, because those foreign keys are `RESTRICT`. Tutors and pending tutors are deleted with the project (`CASCADE`).
 - Timestamps are `TIMESTAMP` without time zone.
 - `semester` and `career` were added later with the defaults `'1'` and `'N/A'`, which were also used to fill existing rows.
 - The only indexes are the primary keys and the two unique constraints.

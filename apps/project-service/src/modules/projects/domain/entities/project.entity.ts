@@ -73,3 +73,18 @@ export interface PendingProjectParticipant {
   career: string;
   status: StudentStatus;
 }
+
+/** Tutor typed in at submission who has no platform account yet. */
+export interface PendingProjectTutor {
+  projectId: number;
+  firstName: string;
+  lastName?: string | null;
+  email: string;
+  status: StudentStatus;
+}
+
+export interface PendingProjectTutorInput {
+  firstName: string;
+  lastName?: string | null;
+  email: string;
+}

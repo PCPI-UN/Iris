@@ -24,6 +24,9 @@ service ProjectsService {
   rpc AddPendingParticipant (AddPendingParticipantRequest) returns (AddPendingParticipantResponse);
   rpc ListPendingParticipants (ListPendingParticipantsRequest) returns (ListPendingParticipantsResponse);
 
+  // Links a platform user as tutor of the project and marks the pending tutor with that email as joined
+  rpc AddProjectTutor (AddProjectTutorRequest) returns (AddProjectTutorResponse);
+
   rpc UpdateProject (UpdateProjectRequest) returns (ProjectResponse);      
   rpc ApproveProject (ApproveProjectRequest) returns (ProjectResponse);
   rpc RejectProject (RejectProjectRequest) returns (ProjectResponse);
@@ -305,6 +308,13 @@ message AddPendingParticipantRequest {
 message AddPendingParticipantResponse {
   PendingProjectParticipant participant = 1;
 }
+
+message AddProjectTutorRequest {
+  int32 projectId = 1;
+  int32 userId = 2;
+  string email = 3;
+}
+message AddProjectTutorResponse { bool success = 1; }
 
 message ListPendingParticipantsRequest {  int32 projectId = 1; }
 message ListPendingParticipantsResponse {  repeated PendingProjectParticipant items = 1;}

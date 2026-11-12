@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../common/prisma/prisma.service';
 import { normalizeEmail } from '@app/common/utils/email.util';
 import { ProjectRepository } from '../../domain/repositories/project.repository';
-import { PendingProjectParticipant, Project, TypedDocument } from '../../domain/entities/project.entity';
+import { PendingProjectParticipant, PendingProjectTutor, PendingProjectTutorInput, Project, TypedDocument } from '../../domain/entities/project.entity';
 import { ProjectDocument, ProjectState, JurorKey, ProjectParticipant, UserParticipation, ProjectWithJurorIds, JUROR_ROLE_ID } from '../../domain/entities/project.entity';
 
 
@@ -307,6 +307,79 @@ export class PrismaProjectRepository implements ProjectRepository {
       },
     });
     return res.count; // cuántos registros actualizó
+  }
+
+  async addTutor(projectId: number, userId: number): Promise<void> {
+    await this.prisma.projectTutor.upsert({
+      where: { projectId_userId: { projectId, userId } },
+      update: {},
+      create: { projectId, userId },
+    });
+  }
+
+  async listTutorUserIds(projectId: number): Promise<number[]> {
+    const rows = await this.prisma.projectTutor.findMany({
+      where: { projectId },
+      select: { userId: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map((row) => row.userId);
+  }
+
+  async replaceTutors(projectId: number, userIds: number[], pendings: PendingProjectTutorInput[]): Promise<void> {
+    const normalized = pendings.map((p) => ({ ...p, email: normalizeEmail(p.email) }));
+    await this.prisma.$transaction([
+      this.prisma.projectTutor.deleteMany({ where: { projectId, userId: { notIn: userIds } } }),
+      this.prisma.projectTutor.createMany({
+        data: userIds.map((userId) => ({ projectId, userId })),
+        skipDuplicates: true,
+      }),
+      this.prisma.pendingProjectTutor.deleteMany({
+        where: { projectId, email: { notIn: normalized.map((p) => p.email) } },
+      }),
+      ...normalized.map((p) =>
+        this.prisma.pendingProjectTutor.upsert({
+          where: { projectId_email: { projectId, email: p.email } },
+          update: { firstName: p.firstName, lastName: p.lastName ?? null },
+          create: { projectId, email: p.email, firstName: p.firstName, lastName: p.lastName ?? null },
+        }),
+      ),
+    ]);
+  }
+
+  async addPendingTutor(projectId: number, input: PendingProjectTutorInput): Promise<PendingProjectTutor> {
+    const email = normalizeEmail(input.email);
+    const row = await this.prisma.pendingProjectTutor.upsert({
+      where: { projectId_email: { projectId, email } },
+      update: { firstName: input.firstName, lastName: input.lastName ?? null },
+      create: { projectId, email, firstName: input.firstName, lastName: input.lastName ?? null },
+    });
+    return row as unknown as PendingProjectTutor;
+  }
+
+  async listPendingTutors(projectId: number): Promise<PendingProjectTutor[]> {
+    const rows = await this.prisma.pendingProjectTutor.findMany({
+      where: { projectId },
+      orderBy: { pendingId: 'asc' },
+    });
+    return rows as unknown as PendingProjectTutor[];
+  }
+
+  async markPendingTutorsInvited(projectId: number, emails: string[], invitedAt: Date): Promise<number> {
+    if (!emails.length) return 0;
+    const res = await this.prisma.pendingProjectTutor.updateMany({
+      where: { projectId, email: { in: emails.map(normalizeEmail) } },
+      data: { status: 'INVITED', invitedAt },
+    });
+    return res.count;
+  }
+
+  async markPendingTutorJoined(projectId: number, email: string, joinedAt: Date): Promise<boolean> {
+    const res = await this.prisma.pendingProjectTutor.updateMany({
+      where: { projectId, email: normalizeEmail(email) },
+      data: { status: 'JOINED', joinedAt },
+    });
+    return res.count > 0;
   }
 
   async listAssignedToJuror(juror: JurorKey, opts?: { page?: number; pageSize?: number }

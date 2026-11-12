@@ -32,6 +32,7 @@ import { GetDashboardStatsUC } from '../../application/use-cases/get-dashboard-s
 import { AddParticipantUC } from '../../application/use-cases/add-participant.uc';
 import { ListParticipantsUC } from '../../application/use-cases/list-participants.uc';
 import { AddPendingParticipantUC } from '../../application/use-cases/add-pending-participant.us';
+import { AddProjectTutorUC } from '../../application/use-cases/add-project-tutor.uc';
 import { ListPendingParticipantsUC } from '../../application/use-cases/list-pending-participants.uc';
 import { ListProjectsAssignedToJurorUC } from '../../application/use-cases/list-projects-assigned-to-juror.uc';
 import { NotificateStudentUC } from '../../application/use-cases/notificate-student.uc';
@@ -94,6 +95,7 @@ export class ProjectsController {
     private readonly listParticipantsUC: ListParticipantsUC,
     private readonly addPendingParticipantUC: AddPendingParticipantUC,
     private readonly listPendingParticipantsUC: ListPendingParticipantsUC,
+    private readonly addProjectTutorUC: AddProjectTutorUC,
     private readonly listAssignedToJurorUC: ListProjectsAssignedToJurorUC,
     private readonly notificateStudentUC: NotificateStudentUC,
     private readonly listProjectsForReviewUC: ListProjectsForReviewUC,
@@ -294,6 +296,15 @@ export class ProjectsController {
       studentCode: req.studentCode ?? undefined,
     });
     return { participant };
+  }
+
+  @GrpcMethod('ProjectsService', 'AddProjectTutor')
+  async addProjectTutorRpc(req: { projectId: number; userId: number; email: string }) {
+    return this.addProjectTutorUC.execute({
+      projectId: req.projectId,
+      userId: req.userId,
+      email: req.email,
+    });
   }
 
   @GrpcMethod('ProjectsService', 'ListParticipants')

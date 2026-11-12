@@ -23,6 +23,7 @@ import { ListProjectJurorsUC } from './application/use-cases/list-project-jurors
 import { GetDashboardStatsUC } from './application/use-cases/get-dashboard-stats.uc';
 import { AddParticipantUC } from './application/use-cases/add-participant.uc';
 import { ListParticipantsUC } from './application/use-cases/list-participants.uc';
+import { AddProjectTutorUC } from './application/use-cases/add-project-tutor.uc';
 import { AddPendingParticipantUC } from './application/use-cases/add-pending-participant.us';
 import { ListPendingParticipantsUC } from './application/use-cases/list-pending-participants.uc';
 import { InvitationClientModule } from './invitation-client.module';
@@ -79,6 +80,7 @@ import { AuthServiceAdapter } from './infrastructure/grpc-client/auth-service.ad
     AddParticipantUC,
     ListParticipantsUC,
     AddPendingParticipantUC,
+    AddProjectTutorUC,
     ListPendingParticipantsUC,
     ListProjectsAssignedToJurorUC,
     ListProjectsForReviewUC,
