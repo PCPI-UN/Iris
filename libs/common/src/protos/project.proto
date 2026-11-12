@@ -41,7 +41,12 @@ service ProjectsService {
 
   rpc ListProjectsForReview(ListProjectsForReviewRequest) returns (ListProjectsForReviewResponse);
   rpc DeleteProject (DeleteProjectRequest) returns (DeleteProjectResponse);
-  
+
+  // Juror import from the PF spreadsheet: validates every row, writes nothing
+  rpc PreviewJurorImport (PreviewJurorImportRequest) returns (PreviewJurorImportResponse);
+  // Data to build the downloadable template: departments and approved projects of the event
+  rpc GetJurorImportTemplate (GetJurorImportTemplateRequest) returns (GetJurorImportTemplateResponse);
+
 }
 
 enum ProjectState {
@@ -400,6 +405,85 @@ message ListUserParticipationsResponse {
   repeated UserParticipation participations = 1;
   AcademicInfo academic = 2;
   int32 total = 3;
+}
+
+/************** Juror import **************/
+enum JurorImportOutcome {
+  JUROR_IMPORT_OUTCOME_UNSPECIFIED = 0;
+  ASSIGN = 1;  // will be assigned on confirm
+  SKIP = 2;    // already assigned, nothing to do
+  ERROR = 3;   // blocks the confirmation
+}
+
+enum JurorImportUserStatus {
+  JUROR_IMPORT_USER_STATUS_UNSPECIFIED = 0;  // the email could not be resolved
+  NEW_USER = 1;         // no account: one is created and invited on confirm
+  EVENT_JUROR = 2;      // already a juror of the event
+  INVITE_TO_EVENT = 3;  // has an account but is not in the event: invited on confirm
+}
+
+// One juror of one project row of the "Asignación jurados" sheet, as read by the gateway.
+// A sheet row holds up to N jurors; each one with any data is sent as its own JurorImportRow.
+message JurorImportRow {
+  int32 rowNumber = 1;    // spreadsheet row (the first data row is 5)
+  string department = 2;
+  string projectCode = 3;
+  string firstName = 4;   // "Nombre(s) jurado N"
+  string email = 5;       // as written; project-service normalizes it
+  int32 jurorSlot = 6;    // N of "Nombre(s) jurado N", starting at 1
+  string lastName = 7;    // "Apellido(s) jurado N"; optional
+}
+
+message PreviewJurorImportRequest {
+  int32 eventId = 1;
+  repeated JurorImportRow rows = 2;
+}
+
+message JurorImportRowResult {
+  int32 rowNumber = 1;
+  JurorImportOutcome outcome = 2;
+  JurorImportUserStatus userStatus = 3;
+  string message = 4;     // in Spanish, for the person who uploaded the file
+  string email = 5;       // normalized
+  optional int32 projectId = 6;
+  optional string projectName = 7;
+  optional int32 userId = 8;
+  int32 jurorSlot = 9;    // same as the row it answers
+}
+
+message JurorImportTotals {
+  int32 rows = 1;
+  int32 toAssign = 2;
+  int32 skipped = 3;
+  int32 errors = 4;
+  int32 jurors = 5;          // distinct jurors in rows to assign
+  int32 newUsers = 6;
+  int32 invitesToEvent = 7;
+}
+
+message PreviewJurorImportResponse {
+  repeated JurorImportRowResult rows = 1;
+  JurorImportTotals totals = 2;
+  repeated string eventWarnings = 3;  // event-level problems; any of them blocks the confirmation
+  bool canConfirm = 4;                // no row errors and no event warnings
+}
+
+message GetJurorImportTemplateRequest {
+  int32 eventId = 1;
+}
+
+message JurorImportTemplateProject {
+  int32 projectId = 1;
+  string department = 2;   // category name; empty if the project has no category of the event
+  string projectCode = 3;  // empty if the project has no number yet
+  string name = 4;
+  repeated string members = 5;  // full names of the participants, confirmed first and then pending
+}
+
+message GetJurorImportTemplateResponse {
+  string eventName = 1;
+  reserved 2;  // departments
+  repeated JurorImportTemplateProject projects = 3;  // approved projects, by department and number
 }
 
 // ===== STUDENT DASHBOARD =====

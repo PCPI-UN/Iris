@@ -3,7 +3,7 @@ import { PrismaService } from '../../../../common/prisma/prisma.service';
 import { normalizeEmail } from '@app/common/utils/email.util';
 import { ProjectRepository } from '../../domain/repositories/project.repository';
 import { PendingProjectParticipant, Project, TypedDocument } from '../../domain/entities/project.entity';
-import { ProjectDocument, ProjectState, JurorKey, ProjectParticipant, UserParticipation } from '../../domain/entities/project.entity';
+import { ProjectDocument, ProjectState, JurorKey, ProjectParticipant, UserParticipation, ProjectWithJurorIds, JUROR_ROLE_ID } from '../../domain/entities/project.entity';
 
 
 type CreateProjectInput = {
@@ -401,6 +401,22 @@ export class PrismaProjectRepository implements ProjectRepository {
     return project as unknown as Project | null;
   }
 
+  async listWithJurorsByEvent(eventId: number): Promise<ProjectWithJurorIds[]> {
+    const projects = await this.prisma.project.findMany({
+      where: { eventId },
+      include: {
+        jurorsAssigned: {
+          where: { memberEventId: eventId, memberRoleId: JUROR_ROLE_ID },
+          select: { memberUserId: true },
+        },
+      },
+      orderBy: { id: 'asc' },
+    });
+    return projects.map(({ jurorsAssigned, ...project }) => ({
+      ...(project as unknown as Project),
+      jurorUserIds: jurorsAssigned.map((a) => a.memberUserId),
+    }));
+  }
   async listParticipationsByUser(userId: number, email: string): Promise<UserParticipation[]> {
     const participations = await this.prisma.projectParticipant.findMany({
       where: { userId },

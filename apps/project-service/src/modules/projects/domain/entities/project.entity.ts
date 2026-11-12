@@ -26,6 +26,11 @@ export interface ProjectDocument {
 /** Role id stored in project assignments for jurors */
 export const JUROR_ROLE_ID = 4;
 
+/** A project of an event with the users assigned to it as jurors */
+export interface ProjectWithJurorIds extends Project {
+  jurorUserIds: number[];
+}
+
 export interface JurorKey {
   memberUserId: number;
   memberEventId: number;
