@@ -34,6 +34,8 @@ describe('GetJurorImportTemplateUC', () => {
     listWithJurorsByEvent: jest.Mock;
     listParticipants: jest.Mock;
     listPendingParticipants: jest.Mock;
+    listTutorLinksByProjects: jest.Mock;
+    listPendingTutorsByProjects: jest.Mock;
   };
   let auth: { findUsersByIds: jest.Mock };
   let events: { getEventById: jest.Mock; listCategoriesByEvent: jest.Mock };
@@ -71,12 +73,44 @@ describe('GetJurorImportTemplateUC', () => {
               : [],
         ),
       ),
+      listTutorLinksByProjects: jest
+        .fn()
+        .mockResolvedValue([{ projectId: 3, userId: 31 }]),
+      listPendingTutorsByProjects: jest.fn().mockResolvedValue([
+        {
+          projectId: 3,
+          firstName: 'Rosa',
+          lastName: 'Gil',
+          email: 'rosa@x.co',
+          status: 'INVITED',
+        },
+        {
+          projectId: 2,
+          firstName: 'Tomás',
+          lastName: null,
+          email: 'tomas@x.co',
+          status: 'PENDING',
+        },
+        // already JOINED: it is in the linked list, not repeated
+        {
+          projectId: 3,
+          firstName: 'Tutor',
+          lastName: 'Unido',
+          email: 'unido@x.co',
+          status: 'JOINED',
+        },
+      ]),
     };
     auth = {
-      findUsersByIds: jest.fn().mockResolvedValue([
-        { id: 21, firstName: 'Ana', lastName: 'Pérez', email: 'a@x.co' },
-        { id: 22, firstName: 'Carlos', email: 'c@x.co' },
-      ]),
+      findUsersByIds: jest.fn((ids: number[]) =>
+        Promise.resolve(
+          [
+            { id: 21, firstName: 'Ana', lastName: 'Pérez', email: 'a@x.co' },
+            { id: 22, firstName: 'Carlos', email: 'c@x.co' },
+            { id: 31, firstName: 'Elena', lastName: 'Ruiz', email: 'e@x.co' },
+          ].filter((u) => ids.includes(u.id)),
+        ),
+      ),
     };
     events = {
       getEventById: jest.fn().mockResolvedValue({
@@ -108,6 +142,8 @@ describe('GetJurorImportTemplateUC', () => {
         projectCode: '3',
         name: 'Proyecto 7',
         members: [],
+        tutors: [],
+        tutorEmails: [],
       },
       {
         projectId: 3,
@@ -116,6 +152,9 @@ describe('GetJurorImportTemplateUC', () => {
         name: 'Proyecto 3',
         // confirmed participants first (names from auth), then the pending one
         members: ['Ana Pérez', 'Carlos', 'Luis'],
+        // linked tutors first (email from auth), then the pending one
+        tutors: ['Elena Ruiz', 'Rosa Gil'],
+        tutorEmails: ['e@x.co', 'rosa@x.co'],
       },
       {
         projectId: 2,
@@ -123,6 +162,8 @@ describe('GetJurorImportTemplateUC', () => {
         projectCode: '10',
         name: 'Proyecto 2',
         members: ['Marta Gómez'],
+        tutors: ['Tomás'],
+        tutorEmails: ['tomas@x.co'],
       },
       // approved without number: listed last in its department
       {
@@ -131,6 +172,8 @@ describe('GetJurorImportTemplateUC', () => {
         projectCode: '',
         name: 'Proyecto 4',
         members: [],
+        tutors: [],
+        tutorEmails: [],
       },
       {
         projectId: 1,
@@ -138,6 +181,8 @@ describe('GetJurorImportTemplateUC', () => {
         projectCode: '14',
         name: 'Proyecto 1',
         members: [],
+        tutors: [],
+        tutorEmails: [],
       },
     ]);
   });

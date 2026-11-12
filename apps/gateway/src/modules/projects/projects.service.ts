@@ -45,6 +45,9 @@ import {
   TypedDocument,
   ProjectDocumentInputDto,
 } from './dto/project-document-input.dto';
+import { ProjectTutorsInputDto } from './dto/project-tutors-input.dto';
+import { parseProjectTutors } from './parse-project-tutors';
+import { toProjectTutorsResponse } from './project-tutors-response';
 import { AzureBlobUploadService } from './azure-blob-upload.service';
 import { PendingParticipantInputDto } from './dto/pending-participant-input.dto';
 import {
@@ -81,6 +84,9 @@ import {
 } from './types/project-enrichment.types';
 import { RemoveJurorFromProjectDto } from './dto/remove-juror-from-project.dto';
 import { JurorRemovalResult } from './types/juror-removal.types';
+
+/** Platform roles a project tutor can be picked from: Professor (9) and Tutor (10). */
+const TUTOR_CANDIDATE_ROLE_IDS = [9, 10];
 
 export type {
   JurorProfile,
@@ -151,6 +157,8 @@ export class ProjectsService implements OnModuleInit {
         );
       }
     }
+
+    const tutors = parseProjectTutors(body.tutors);
 
     let documentMetadata: ProjectDocumentInputDto[] = [];
     if (body.documents) {
@@ -243,6 +251,8 @@ export class ProjectsService implements OnModuleInit {
           name: body.name,
           description: body.description,
           projectCode: body.projectCode,
+          tutorUserIds: tutors.userIds,
+          pendingTutors: tutors.pending,
           participants: participants.map((p) => ({
             firstName: p.firstName,
             lastName: p.lastName,
@@ -327,6 +337,8 @@ export class ProjectsService implements OnModuleInit {
         name: dto.name,
         description: dto.description,
         projectCode: dto.projectCode,
+        tutorUserIds: [],
+        pendingTutors: [],
         participants:
           dto.participants?.map((p) => ({
             firstName: p.firstName,
@@ -362,6 +374,34 @@ export class ProjectsService implements OnModuleInit {
     return firstValueFrom(
       this.projectsService.addPendingParticipant(request),
     );
+  }
+
+  /**
+   * Active users with the Tutor or Professor role whose name matches `search`.
+   * Id and name only: the email of other users is not exposed.
+   */
+  async searchTutorCandidates(search: string) {
+    const { users } = await this.authService.findUsersByRoles({
+      roleIds: TUTOR_CANDIDATE_ROLE_IDS,
+      search: search.trim(),
+      userIds: [],
+    });
+    return users.map((user) => ({
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+    }));
+  }
+
+  async setProjectTutors(projectId: number, dto: ProjectTutorsInputDto) {
+    const res = await firstValueFrom(
+      this.projectsService.setProjectTutors({
+        projectId,
+        tutorUserIds: dto.userIds,
+        pendingTutors: dto.pending,
+      }),
+    );
+    return { ...res, tutors: toProjectTutorsResponse(res.tutors) };
   }
 
   async assignJurorToProjects(dto: AssignJurorToProjectsDto) {
@@ -516,12 +556,18 @@ export class ProjectsService implements OnModuleInit {
   async getProjectForReview(id: number): Promise<ProjectForReviewResponseDto> {
     const project = await this.getProjectById(id);
 
-    const { participants, pendingParticipants, documents, ...projectInfo } =
-      project;
+    const {
+      participants,
+      pendingParticipants,
+      documents,
+      tutors,
+      ...projectInfo
+    } = project;
 
     return {
       confirmedParticipants: participants,
       pendingParticipants,
+      tutors,
       project: projectInfo,
       documents,
     };
@@ -540,7 +586,7 @@ export class ProjectsService implements OnModuleInit {
       throw new NotFoundException('Project not found');
     }
 
-    return project;
+    return { ...project, tutors: toProjectTutorsResponse(project.tutors) };
   }
 
   private mapDocumentStatusToProto(
@@ -948,7 +994,18 @@ export class ProjectsService implements OnModuleInit {
       userId,
       eventId,
     };
-    return lastValueFrom(this.projectsService.getMyProjectByEvent(request));
+    const res = await lastValueFrom(
+      this.projectsService.getMyProjectByEvent(request),
+    );
+    return res.project
+      ? {
+          ...res,
+          project: {
+            ...res.project,
+            tutors: toProjectTutorsResponse(res.project.tutors),
+          },
+        }
+      : res;
   }
 
   async listUserParticipations(

@@ -26,6 +26,16 @@ export abstract class ProjectServicePort {
   }): Promise<AddParticipantResponse>;
 
   /**
+   * Links a platform user as tutor of a project and marks the pending tutor
+   * with that email as joined. Fails when the project has no pending tutor with that email.
+   */
+  abstract addProjectTutor(params: {
+    projectId: number;
+    userId: number;
+    email: string;
+  }): Promise<void>;
+
+  /**
    * Retrieves the pending participants for a project.
    *
    * @param projectId - The project ID

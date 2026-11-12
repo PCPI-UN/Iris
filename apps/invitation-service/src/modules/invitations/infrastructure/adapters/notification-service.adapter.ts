@@ -43,6 +43,25 @@ export class NotificationServiceAdapter implements NotificationServicePort {
     });
   }
 
+  async sendProjectTutorInvitationEmail(params: {
+    to: string;
+    firstName: string;
+    lastName?: string;
+    invitationLink: string;
+    projectName: string;
+  }): Promise<{ success: boolean }> {
+    return this.sendEmail({
+      to: params.to,
+      template: EmailTemplate.PROJECT_TUTOR_INVITATION,
+      params: {
+        firstName: params.firstName,
+        lastName: params.lastName || '',
+        invitationLink: params.invitationLink,
+        projectName: params.projectName,
+      },
+    });
+  }
+
   async sendJurorInvitationEmail(params: {
     to: string;
     firstName: string;

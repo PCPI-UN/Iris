@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@common/prisma/prisma.service';
-import { ActiveRole, PlatformStaffRepositoryPort } from '@roles/domain/repositories/platform-staff.repository.port';
+import {
+  ActiveRole,
+  FindActiveUsersByRolesCriteria,
+  PlatformStaffRepositoryPort,
+  UserWithRoleIds,
+} from '@roles/domain/repositories/platform-staff.repository.port';
 import { PlatformStaff } from '@roles/domain/entities/platform-staff.entity';
 import { TransactionClient } from '@common/prisma/types/transaction-client.type';
 
@@ -118,15 +123,61 @@ export class PrismaPlatformStaffRepository
   ): Promise<void> {
     const prisma = tx ?? this.prisma;
 
-    const data = roleIds.map((roleId) => ({
-      userId,
-      roleId,
-      active: true,
-    }));
+    // upsert (not createMany) so a row deactivated earlier becomes active again
+    const upserts = roleIds.map((roleId) =>
+      prisma.platformStaff.upsert({
+        where: { userId_roleId: { userId, roleId } },
+        update: { active: true },
+        create: { userId, roleId, active: true },
+      }),
+    );
 
-    await prisma.platformStaff.createMany({
-      data,
-      skipDuplicates: true,
+    if (tx) {
+      await Promise.all(upserts);
+    } else {
+      await this.prisma.$transaction(upserts);
+    }
+  }
+
+  async findActiveUsersByRoles(
+    criteria: FindActiveUsersByRolesCriteria,
+  ): Promise<UserWithRoleIds[]> {
+    const { roleIds, search, userIds, limit } = criteria;
+    const activeRoleFilter = { active: true, roleId: { in: roleIds } };
+    // Every word must appear in the first or last name, so "Laura Gó" finds Laura Gómez
+    const words = search?.split(/\s+/).filter(Boolean) ?? [];
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        active: true,
+        platformRoles: { some: activeRoleFilter },
+        ...(userIds?.length ? { id: { in: userIds } } : {}),
+        ...(words.length
+          ? {
+              AND: words.map((word) => ({
+                OR: [
+                  { firstName: { contains: word, mode: 'insensitive' as const } },
+                  { lastName: { contains: word, mode: 'insensitive' as const } },
+                ],
+              })),
+            }
+          : {}),
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        platformRoles: { where: activeRoleFilter, select: { roleId: true } },
+      },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }, { id: 'asc' }],
+      take: limit,
     });
+
+    return users.map((user) => ({
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      roleIds: user.platformRoles.map((row) => row.roleId),
+    }));
   }
 }

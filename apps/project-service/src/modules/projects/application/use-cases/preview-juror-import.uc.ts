@@ -188,6 +188,10 @@ export class PreviewJurorImportUC {
       projectsByKey.set(key, [...(projectsByKey.get(key) ?? []), project]);
     }
 
+    const tutorsByProject = await this.loadTutors(
+      projects.filter((p) => p.state === 'APPROVED').map((p) => p.id),
+    );
+
     const emails = [
       ...new Set(
         rows.map((row) => normalizeEmail(row.email ?? '')).filter(isValidEmail),
@@ -205,6 +209,7 @@ export class PreviewJurorImportUC {
         projectsByKey,
         resolved,
         firstRowByKey,
+        tutorsByProject,
       }),
     );
 
@@ -243,6 +248,32 @@ export class PreviewJurorImportUC {
     return byName;
   }
 
+  /** Tutors of the projects: linked ones by user id, pending ones by email */
+  private async loadTutors(projectIds: number[]) {
+    const byProject = new Map<
+      number,
+      { userIds: Set<number>; emails: Set<string> }
+    >();
+    if (!projectIds.length) return byProject;
+    const entry = (projectId: number) => {
+      let tutors = byProject.get(projectId);
+      if (!tutors) {
+        tutors = { userIds: new Set(), emails: new Set() };
+        byProject.set(projectId, tutors);
+      }
+      return tutors;
+    };
+    const [links, pendings] = await Promise.all([
+      this.repo.listTutorLinksByProjects(projectIds),
+      this.repo.listPendingTutorsByProjects(projectIds),
+    ]);
+    for (const link of links) entry(link.projectId).userIds.add(link.userId);
+    for (const pending of pendings) {
+      entry(pending.projectId).emails.add(normalizeEmail(pending.email));
+    }
+    return byProject;
+  }
+
   private async resolveUser(
     email: string,
     eventId: number,
@@ -260,6 +291,10 @@ export class PreviewJurorImportUC {
       projectsByKey: Map<string, ProjectWithJurorIds[]>;
       resolved: Map<string, ResolvedUser>;
       firstRowByKey: Map<string, JurorPosition>;
+      tutorsByProject: Map<
+        number,
+        { userIds: Set<number>; emails: Set<string> }
+      >;
     },
   ): JurorImportRowResult {
     const department = (row.department ?? '').trim();
@@ -348,14 +383,19 @@ export class PreviewJurorImportUC {
       user: null,
       membership: null,
     };
+    // A tutor of the project can be assigned as juror: only a warning, it does not block
+    const tutors = ctx.tutorsByProject.get(project.id);
+    const tutorNote =
+      tutors?.emails.has(email) || (user && tutors?.userIds.has(user.id))
+        ? ' Aviso: es tutor de este proyecto.'
+        : '';
     if (!user) {
       return {
         ...base,
         ...projectInfo,
         outcome: 'ASSIGN',
         userStatus: 'NEW_USER',
-        message:
-          'Jurado nuevo: se creará su cuenta y recibirá la invitación al confirmar.',
+        message: `Jurado nuevo: se creará su cuenta y recibirá la invitación al confirmar.${tutorNote}`,
       };
     }
     const userInfo = { ...projectInfo, userId: user.id };
@@ -386,9 +426,10 @@ export class PreviewJurorImportUC {
       outcome: 'ASSIGN',
       userStatus,
       message:
-        userStatus === 'EVENT_JUROR'
+        (userStatus === 'EVENT_JUROR'
           ? 'Jurado del evento.'
-          : 'Usuario existente: recibirá la invitación al evento al confirmar.',
+          : 'Usuario existente: recibirá la invitación al evento al confirmar.') +
+        tutorNote,
     };
   }
 

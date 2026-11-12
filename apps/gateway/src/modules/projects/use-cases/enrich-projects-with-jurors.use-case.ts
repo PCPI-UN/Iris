@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ProjectComplete, JurorKey } from '@app/common/generated/project';
+import { toProjectTutorsResponse } from '../project-tutors-response';
 import {
   ProjectWithEnrichedJurors,
   ProjectJurorMap,
@@ -135,6 +136,7 @@ export class EnrichProjectsWithJurorsUseCase {
         participants: project.participants,
         documents: project.documents,
         pendingParticipants: project.pendingParticipants,
+        tutors: toProjectTutorsResponse(project.tutors),
         jurorAssignments,
         jurors: enrichedJurors,
         createdAt: project.createdAt,

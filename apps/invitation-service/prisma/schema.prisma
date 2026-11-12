@@ -17,6 +17,7 @@ enum InvitationTargetType {
   EVENT
   PLATFORM
   PROJECT
+  PROJECT_TUTOR
 }
 
 model Invitation {

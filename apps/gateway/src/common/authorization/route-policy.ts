@@ -192,6 +192,9 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
     access: 'session',
     why: 'projects assigned to the calling juror',
   },
+  // name search for the public submission form; returns id and name only
+  'GET /projects/tutor-candidates': { access: 'public' },
+  'PUT /projects/:id/tutors': { permission: ['manage:events'] },
   'GET /projects/by-event/:eventId': { access: 'public' },
   'GET /projects/by-event/:eventId/with-jurors': { access: 'public' },
   'PATCH /projects/documents/:id': { access: 'pending' },

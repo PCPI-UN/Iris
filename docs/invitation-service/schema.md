@@ -37,7 +37,7 @@ No column is nullable.
 | Enum | Values | Meaning |
 | --- | --- | --- |
 | `InvitationStatus` | `PENDING`, `EXPIRED`, `REJECTED`, `ACCEPTED` | `PENDING`: sent and not answered. `EXPIRED`: replaced by a resent invitation. `REJECTED` / `ACCEPTED`: answered. Expiry by date is computed from `expires_at`, not stored as a status. |
-| `InvitationTargetType` | `EVENT`, `PLATFORM`, `PROJECT` | What the invitation grants access to; selects how `target_id` is interpreted. |
+| `InvitationTargetType` | `EVENT`, `PLATFORM`, `PROJECT`, `PROJECT_TUTOR` | What the invitation grants access to; selects how `target_id` is interpreted. |
 
 ## Tables
 
@@ -49,7 +49,7 @@ No column is nullable.
 | `token` | `TEXT` | no | unique |
 | `email` | `VARCHAR(255)` | no | invited email |
 | `target_type` | `InvitationTargetType` | no | |
-| `target_id` | `INTEGER` | no | event id or project id, depending on `target_type`; not used for `PLATFORM` |
+| `target_id` | `INTEGER` | no | event id or project id, depending on `target_type` (`PROJECT` and `PROJECT_TUTOR` use the project id); not used for `PLATFORM` |
 | `status` | `InvitationStatus` | no | no default |
 | `expires_at` | `TIMESTAMPTZ` | no | |
 | `invited_by_user_id` | `INTEGER` | no | refers to a user in `auth-service` |

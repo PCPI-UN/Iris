@@ -9,7 +9,7 @@ import { EventServicePort } from '../../infrastructure/ports/event-service.port'
 import { ProjectServicePort } from '../../infrastructure/ports/project-service.port';
 import { AcceptInvitationResponse } from '@app/common/generated/invitation';
 import { normalizeEmail } from '@app/common/utils/email.util';
-import { InvitationTargetType } from '../../domain/entities/invitation.entity';
+import { InvitationTargetType, TUTOR_ROLE_ID } from '../../domain/entities/invitation.entity';
 
 @Injectable()
 export class AcceptInvitationUseCase {
@@ -137,6 +137,21 @@ export class AcceptInvitationUseCase {
           });
         }
 
+        break;
+
+      case InvitationTargetType.PROJECT_TUTOR:
+        // Link first: a tutor removed from the project after the invitation is rejected here
+        // and does not get the role
+        await this.projectService.addProjectTutor({
+          projectId: invitation.targetId,
+          userId: invitation.invitedUserId,
+          email: invitation.email,
+        });
+        // Additive: the Tutor role is added to the roles the user already has
+        await this.authService.assignPlatformRoles({
+          userId: invitation.invitedUserId,
+          roleIds: [TUTOR_ROLE_ID],
+        });
         break;
     }
 

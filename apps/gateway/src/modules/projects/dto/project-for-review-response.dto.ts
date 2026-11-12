@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { ProjectDocument, ProjectParticipant, PendingProjectParticipant } from '@app/common/generated/project';
+import { ProjectDocument, ProjectParticipant, PendingProjectParticipant, ProjectTutor } from '@app/common/generated/project';
 
 export class ProjectReviewInfoDto {
   @ApiProperty()
@@ -39,6 +39,12 @@ export class ProjectForReviewResponseDto {
 
   @ApiProperty({ type: [Object] })
   pendingParticipants: PendingProjectParticipant[];
+
+  @ApiProperty({
+    type: [Object],
+    description: 'Linked tutors (`pending: false`) and invited tutors who have not accepted yet (`pending: true`, with email)',
+  })
+  tutors: ProjectTutor[];
 
   @ApiProperty({ type: ProjectReviewInfoDto })
   project: ProjectReviewInfoDto;

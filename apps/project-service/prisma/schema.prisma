@@ -51,6 +51,8 @@ model Project {
   participants        ProjectParticipant[]
   jurorsAssigned      ProjectAssignment[]
   pendingParticipants PendingProjectParticipant[]
+  tutors              ProjectTutor[]
+  pendingTutors       PendingProjectTutor[]
 
   @@unique([eventId, name])
   @@map("projects")
@@ -115,4 +117,33 @@ model PendingProjectParticipant {
   @@unique([projectId, email])
   @@map("pending_project_participants")
   
+}
+
+// A tutor is a platform user (auth-service database), so userId has no foreign key
+model ProjectTutor {
+  projectId Int      @map("project_id")
+  userId    Int      @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp()
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@map("project_tutors")
+}
+
+// Tutor typed in by the student who has no account yet; linked when the invitation is accepted
+model PendingProjectTutor {
+  pendingId Int                      @id @default(autoincrement()) @map("pending_id")
+  projectId Int                      @map("project_id")
+  firstName String                   @map("first_name") @db.VarChar(100)
+  lastName  String?                  @map("last_name") @db.VarChar(100)
+  email     String                   @db.VarChar(255)
+  status    PendingParticipantStatus @default(PENDING)
+  invitedAt DateTime?                @map("invited_at") @db.Timestamp()
+  joinedAt  DateTime?                @map("joined_at") @db.Timestamp()
+  createdAt DateTime                 @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt DateTime                 @updatedAt @map("updated_at") @db.Timestamp()
+  project   Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, email])
+  @@map("pending_project_tutors")
 }

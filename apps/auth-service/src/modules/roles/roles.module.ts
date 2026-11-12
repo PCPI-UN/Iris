@@ -7,6 +7,7 @@ import { PrismaPlatformStaffRepository } from '@roles/infrastructure/prisma/pris
 import { ValidateRolesExistUseCase } from '@roles/application/use-cases/validate-roles-exist.use-case';
 import { AssignPlatformRoleUseCase } from '@roles/application/use-cases/assign-platform-role.use-case';
 import { AssignPlatformRolesPublicUseCase } from '@roles/application/use-cases/assign-platform-roles-public.use-case';
+import { FindUsersByRolesUseCase } from '@roles/application/use-cases/find-users-by-roles.use-case';
 import { GetRolesByIdsUseCase } from '@roles/application/use-cases/get-roles-by-ids.use-case';
 import { GetRolesUseCase } from '@roles/application/use-cases/get-roles.use-case';
 import { RemovePlatformRoleUseCase } from '@roles/application/use-cases/remove-platform-role.use-case';
@@ -23,6 +24,7 @@ import { AccountAdministrationPolicy } from './application/services/account-admi
     AssignPlatformRoleUseCase,
     AssignPlatformRolesPublicUseCase,
     GetRolesByIdsUseCase,
+    FindUsersByRolesUseCase,
     GetRolesUseCase,
     RemovePlatformRoleUseCase,
     ResolvePlatformRolesUseCase,

@@ -13,6 +13,7 @@ export interface RenderedEmail {
 
 const TEMPLATE_FILES: Partial<Record<EmailTemplate, string>> = {
   [EmailTemplate.PROJECT_SUBMITTED]: 'project_submitted',
+  [EmailTemplate.PROJECT_TUTOR_INVITATION]: 'project_tutor_invitation',
   [EmailTemplate.PROJECT_APPROVED]: 'project_approved',
   [EmailTemplate.PROJECT_REJECTED]: 'project_rejected',
   [EmailTemplate.REQUEST_CHANGES]: 'requested_changes',
