@@ -39,6 +39,7 @@ describe('JurorImportsService.preview', () => {
     rows: [
       {
         rowNumber: 2,
+        jurorSlot: 1,
         outcome: 'ASSIGN',
         userStatus: 'INVITE_TO_EVENT',
         message:
@@ -53,6 +54,7 @@ describe('JurorImportsService.preview', () => {
       },
       {
         rowNumber: 3,
+        jurorSlot: 2,
         outcome: 'ERROR',
         userStatus: 'JUROR_IMPORT_USER_STATUS_UNSPECIFIED',
         message: 'El correo «x» no es válido.',
@@ -126,6 +128,7 @@ describe('JurorImportsService.preview', () => {
     expect(result.rows).toEqual([
       {
         rowNumber: 2,
+        jurorSlot: 1,
         outcome: 'ASSIGN',
         userStatus: 'INVITE_TO_EVENT',
         message:
@@ -137,6 +140,7 @@ describe('JurorImportsService.preview', () => {
       },
       {
         rowNumber: 3,
+        jurorSlot: 2,
         outcome: 'ERROR',
         message: 'El correo «x» no es válido.',
         email: 'x',

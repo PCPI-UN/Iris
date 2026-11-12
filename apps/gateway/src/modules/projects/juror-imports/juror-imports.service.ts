@@ -19,6 +19,8 @@ import { buildJurorImportTemplate } from './build-juror-import-template';
 /** One row of the preview as the front receives it */
 export interface JurorImportPreviewRow {
   rowNumber: number;
+  /** N of "jurado N" in the row, starting at 1 */
+  jurorSlot: number;
   outcome: 'ASSIGN' | 'SKIP' | 'ERROR';
   userStatus?: 'NEW_USER' | 'EVENT_JUROR' | 'INVITE_TO_EVENT';
   message: string;
@@ -45,6 +47,7 @@ const toPreviewRow = (row: JurorImportRowResult): JurorImportPreviewRow => {
   const userStatus = String(row.userStatus);
   return {
     rowNumber: row.rowNumber,
+    jurorSlot: row.jurorSlot,
     outcome: String(row.outcome) as JurorImportPreviewRow['outcome'],
     ...(row.userStatus && userStatus !== UNSET_USER_STATUS
       ? { userStatus: userStatus as JurorImportPreviewRow['userStatus'] }
