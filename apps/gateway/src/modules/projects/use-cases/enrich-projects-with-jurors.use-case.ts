@@ -135,6 +135,7 @@ export class EnrichProjectsWithJurorsUseCase {
         participants: project.participants,
         documents: project.documents,
         pendingParticipants: project.pendingParticipants,
+        tutors: project.tutors,
         jurorAssignments,
         jurors: enrichedJurors,
         createdAt: project.createdAt,

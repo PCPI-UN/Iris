@@ -1,4 +1,4 @@
-import { TypedDocument ,ProjectState, ProjectDocument, Project, JurorKey, Status } from '../../domain/entities/project.entity';
+import { TypedDocument ,ProjectState, ProjectDocument, Project, JurorKey, Status, ProjectTutorView } from '../../domain/entities/project.entity';
 import {
   JurorImportOutcome as ProtoJurorImportOutcome,
   JurorImportUserStatus as ProtoJurorImportUserStatus,
@@ -144,11 +144,20 @@ export const toProtoPendingParticipant = (p: any) => ({
   createdAt: p.createdAt?.toISOString?.() ?? p.created_at,
   updatedAt: p.updatedAt?.toISOString?.() ?? p.updated_at,
 });
+export const toProtoTutor = (t: ProjectTutorView) => ({
+  userId: t.userId,
+  firstName: t.firstName,
+  lastName: t.lastName ?? undefined,
+  pending: t.pending,
+  email: t.email,
+});
+
 export const toProtoProjectComplete = (p: any) => ({
   ...toProtoProject(p),
   participants: (p.participants ?? []).map(toProtoParticipant),
   documents: (p.documents ?? []).map(toProtoDocument),
   pendingParticipants: (p.pendingParticipants ?? []).map(toProtoPendingParticipant),
+  tutors: (p.tutors ?? []).map(toProtoTutor),
 });
 
 const jurorImportOutcomeToProto: Record<

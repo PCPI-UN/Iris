@@ -72,6 +72,9 @@ export interface ProjectRepository {
   replaceTutors(projectId: number, userIds: number[], pendings: PendingProjectTutorInput[]): Promise<void>;
   addPendingTutor(projectId: number, input: PendingProjectTutorInput): Promise<PendingProjectTutor>;
   listPendingTutors(projectId: number): Promise<PendingProjectTutor[]>;
+  /** Linked tutors of several projects in one query. */
+  listTutorLinksByProjects(projectIds: number[]): Promise<{ projectId: number; userId: number }[]>;
+  listPendingTutorsByProjects(projectIds: number[]): Promise<PendingProjectTutor[]>;
   markPendingTutorsInvited(projectId: number, emails: string[], invitedAt: Date): Promise<number>;
   markPendingTutorJoined(projectId: number, email: string, joinedAt: Date): Promise<boolean>;
 

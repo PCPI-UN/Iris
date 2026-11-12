@@ -243,6 +243,9 @@ export class ProjectsService implements OnModuleInit {
           name: body.name,
           description: body.description,
           projectCode: body.projectCode,
+          // The tutor fields reach the endpoint with the gateway commit of this feat
+          tutorUserIds: [],
+          pendingTutors: [],
           participants: participants.map((p) => ({
             firstName: p.firstName,
             lastName: p.lastName,
@@ -327,6 +330,8 @@ export class ProjectsService implements OnModuleInit {
         name: dto.name,
         description: dto.description,
         projectCode: dto.projectCode,
+        tutorUserIds: [],
+        pendingTutors: [],
         participants:
           dto.participants?.map((p) => ({
             firstName: p.firstName,

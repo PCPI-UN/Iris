@@ -113,4 +113,25 @@ describe('PrismaProjectRepository (tutors)', () => {
     prisma.pendingProjectTutor.updateMany.mockResolvedValue({ count: 0 });
     await expect(repo.markPendingTutorJoined(3, 'b@x.com', at)).resolves.toBe(false);
   });
+
+  it('batch reads filter by the project ids and skip the query for an empty list', async () => {
+    prisma.projectTutor.findMany.mockResolvedValue([{ projectId: 1, userId: 7 }]);
+
+    await expect(repo.listTutorLinksByProjects([1, 2])).resolves.toEqual([{ projectId: 1, userId: 7 }]);
+    expect(prisma.projectTutor.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { projectId: { in: [1, 2] } } }),
+    );
+
+    await repo.listPendingTutorsByProjects([1, 2]);
+    expect(prisma.pendingProjectTutor.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { projectId: { in: [1, 2] } } }),
+    );
+
+    prisma.projectTutor.findMany.mockClear();
+    prisma.pendingProjectTutor.findMany.mockClear();
+    await expect(repo.listTutorLinksByProjects([])).resolves.toEqual([]);
+    await expect(repo.listPendingTutorsByProjects([])).resolves.toEqual([]);
+    expect(prisma.projectTutor.findMany).not.toHaveBeenCalled();
+    expect(prisma.pendingProjectTutor.findMany).not.toHaveBeenCalled();
+  });
 });
