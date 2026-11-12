@@ -165,6 +165,13 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
     access: 'session',
     why: "edits the caller's own profile; auth-service only accepts the editable fields",
   },
+  // modules/projects/juror-imports/juror-imports.controller.ts
+  'POST /events/:eventId/juror-imports/preview': {
+    permission: ['manage:events'],
+  },
+  'GET /events/:eventId/juror-imports/template': {
+    permission: ['manage:events'],
+  },
   // modules/projects/projects.controller.ts
   'POST /projects': { access: 'public' },
   'GET /projects/:id': { access: 'pending' },
