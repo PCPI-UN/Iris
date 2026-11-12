@@ -2,8 +2,8 @@
 export const JUROR_IMPORT_SHEET = 'Asignación jurados';
 export const JUROR_IMPORT_MAX_ROWS = 2000;
 export const JUROR_IMPORT_MAX_BYTES = 2 * 1024 * 1024;
-/** The title and the legend come first: the headers are searched in the first rows */
-export const JUROR_IMPORT_HEADER_SEARCH_ROWS = 10;
+/** The title and the color legend come first: the headers are searched in the first rows */
+export const JUROR_IMPORT_HEADER_SEARCH_ROWS = 20;
 
 /** One juror of one project row, ready for project-service (PreviewJurorImportRequest.rows) */
 export interface JurorImportSheetRow {

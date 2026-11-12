@@ -18,8 +18,9 @@ export interface JurorImportTemplateData {
 
 /** Jurors per project row, as in the template of decanatura */
 const JUROR_SLOTS = 4;
-/** First row with data: title, legend, a blank row and the headers come first */
-const HEADER_ROW = 4;
+/** First row with data: title, color legend, a blank row and the headers come first */
+const LEGEND_ROW = 2;
+const HEADER_ROW = 7;
 const FIRST_ROW = HEADER_ROW + 1;
 
 const NAVY = 'FF1F3864';
@@ -27,7 +28,6 @@ const OLIVE = 'FF7F6000';
 const INPUT_FILL = 'FFFFF2CC';
 const AUTO_FILL = 'FFF2F2F2';
 const GRID = 'FFBFBFBF';
-const SUBTITLE_FONT = 'FF595959';
 const MUTED_FONT = 'FF808080';
 const TUTOR_FILL = 'FFF8CBAD';
 const TUTOR_FONT = 'FF9C0006';
@@ -38,8 +38,18 @@ const NOTES_FILL = 'FFE2EFDA';
 /** The template of decanatura uses Arial 10 everywhere */
 const FONT: Partial<ExcelJS.Font> = { name: 'Arial', size: 10 };
 
-const LEGEND =
-  'Gris: datos del proyecto (no editar). Amarillo: decanatura escribe nombre(s), apellido(s) y correo de cada jurado. Verde: notas libres, IRIS no las lee. La columna Revisión avisa si un jurado parece ser tutor del proyecto. Departamento y Número coinciden con IRIS.';
+/** One line per color, painted with that color, under the "Colores" title */
+const LEGEND: { text: string; fill: string }[] = [
+  {
+    text: 'Amarillo: lo que diligencia decanatura (nombre(s), apellido(s) y correo de cada jurado).',
+    fill: INPUT_FILL,
+  },
+  {
+    text: 'Gris: lo genera IRIS o se calcula solo. No se edita.',
+    fill: AUTO_FILL,
+  },
+  { text: 'Verde: notas libres. IRIS no las lee.', fill: NOTES_FILL },
+];
 
 const LAST_COLUMN = 6 + JUROR_SLOTS * 3 + 2; // F + jurors + Revisión + Notas
 const col = (n: number) => String.fromCharCode(64 + n);
@@ -174,12 +184,16 @@ export async function buildJurorImportTemplate(
   title.font = { ...FONT, size: 14, bold: true, color: { argb: NAVY } };
   ws.getRow(1).height = 17.4;
 
-  const legend = ws.getCell(2, 1);
-  legend.value = LEGEND;
-  legend.font = { ...FONT, italic: true, color: { argb: SUBTITLE_FONT } };
-  legend.alignment = { vertical: 'top', wrapText: true };
-  ws.mergeCells(2, 1, 2, LAST_COLUMN);
-  ws.getRow(2).height = 30;
+  const legendTitle = ws.getCell(LEGEND_ROW, 1);
+  legendTitle.value = 'Colores';
+  legendTitle.font = { ...FONT, size: 11, bold: true, color: { argb: NAVY } };
+  LEGEND.forEach(({ text, fill: argb }, i) => {
+    const r = LEGEND_ROW + 1 + i;
+    ws.mergeCells(r, 1, r, 6);
+    const cell = ws.getCell(r, 1);
+    cell.value = text;
+    cell.fill = fill(argb);
+  });
 
   const headers = [
     ...FIXED_COLUMNS.map(({ header }) => header),
@@ -218,15 +232,11 @@ export async function buildJurorImportTemplate(
       const cell = row.getCell(c);
       const input = c > 6 && c <= 6 + JUROR_SLOTS * 3;
       cell.border = border;
-      if (c <= 6) cell.fill = fill(AUTO_FILL);
+      if (c <= 6 || c === LAST_COLUMN - 1) cell.fill = fill(AUTO_FILL);
       else if (input) cell.fill = fill(INPUT_FILL);
       else if (c === LAST_COLUMN) cell.fill = fill(NOTES_FILL);
       cell.font =
-        c === LAST_COLUMN - 1
-          ? { ...FONT, bold: true }
-          : c === LAST_COLUMN
-            ? { ...FONT, size: 9, color: { argb: OLIVE } }
-            : FONT;
+        c === LAST_COLUMN ? { ...FONT, size: 9, color: { argb: OLIVE } } : FONT;
       cell.alignment =
         c === 2 || c === 6
           ? { horizontal: 'center', vertical: 'top' }
@@ -269,13 +279,8 @@ export async function buildJurorImportTemplate(
   }
   ws.addConditionalFormatting({
     ref: `${REVIEW_COL}${FIRST_ROW}:${REVIEW_COL}${lastRow}`,
+    // Every message looks the same except the tutor one, which needs attention
     rules: [
-      {
-        type: 'expression',
-        priority: 151,
-        formulae: [`${REVIEW_COL}${FIRST_ROW}="Sin jurados"`],
-        style: { font: { italic: true, color: { argb: MUTED_FONT } } },
-      },
       {
         type: 'expression',
         priority: 150,

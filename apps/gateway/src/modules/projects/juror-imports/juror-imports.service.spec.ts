@@ -174,7 +174,7 @@ describe('JurorImportsService.preview', () => {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(file as unknown as ExcelJS.Buffer);
     const ws = wb.getWorksheet('Asignación jurados')!;
-    expect(ws.getCell('C5').value).toBe('Modelo');
-    expect(ws.getCell('E5').value).toBe('Ana Ríos\nLuis Mora');
+    expect(ws.getCell('C8').value).toBe('Modelo');
+    expect(ws.getCell('E8').value).toBe('Ana Ríos\nLuis Mora');
   });
 });

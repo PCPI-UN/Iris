@@ -53,13 +53,17 @@ describe('buildJurorImportTemplate', () => {
     ws = wb.getWorksheet('Asignación jurados')!;
   });
 
-  it('has a single sheet with the title, the legend and the headers in row 4', () => {
+  it('has a single sheet with the title, the color legend and the headers in row 7', () => {
     expect(wb.worksheets.map((s) => s.name)).toEqual(['Asignación jurados']);
     expect(ws.getCell('A1').value).toBe(
       'Asignación de jurados · 202610 - Feria de Proyectos Finales',
     );
-    expect(ws.getCell('A2').text).toContain('Amarillo');
-    expect(ws.getRow(4).values).toEqual([
+    expect(ws.getCell('A2').value).toBe('Colores');
+    expect(ws.getCell('A3').text).toContain('Amarillo');
+    expect(ws.getCell('A5').fill).toMatchObject({
+      fgColor: { argb: 'FFE2EFDA' },
+    });
+    expect(ws.getRow(7).values).toEqual([
       undefined,
       'Departamento',
       'Número',
@@ -75,11 +79,11 @@ describe('buildJurorImportTemplate', () => {
       'Revisión (auto)',
       'Notas sobre los datos',
     ]);
-    expect(ws.views[0]).toMatchObject({ state: 'frozen', ySplit: 4 });
+    expect(ws.views[0]).toMatchObject({ state: 'frozen', ySplit: 7 });
   });
 
   it('writes one gray row per project, keeping numbers as numbers and the missing one empty', () => {
-    const rows = [5, 6, 7].map((r) =>
+    const rows = [8, 9, 10].map((r) =>
       [1, 2, 3, 4, 5, 6].map((c) => ws.getRow(r).getCell(c).value),
     );
     expect(rows).toEqual([
@@ -87,24 +91,27 @@ describe('buildJurorImportTemplate', () => {
       [CIVIL, null, 'Sin número', null, null, 0],
       [INDUSTRIAL, 'A-3', 'Modelo', null, 'Sofía Díaz', 1],
     ]);
-    expect(ws.getCell('A5').fill).toMatchObject({
+    expect(ws.getCell('A8').fill).toMatchObject({
       fgColor: { argb: 'FFF2F2F2' },
     });
-    expect(ws.getCell('G5').fill).toMatchObject({
+    expect(ws.getCell('G8').fill).toMatchObject({
       fgColor: { argb: 'FFFFF2CC' },
     });
-    expect(ws.getCell('T5').value).toBeNull();
+    expect(ws.getCell('S8').fill).toMatchObject({
+      fgColor: { argb: 'FFF2F2F2' },
+    });
+    expect(ws.getCell('T8').value).toBeNull();
   });
 
   it('computes Revisión per row, with the tutor key in the hidden column U', () => {
     expect(ws.getColumn('U').hidden).toBe(true);
-    expect(ws.getCell('U5').formula).toContain('LOWER(D5)');
+    expect(ws.getCell('U8').formula).toContain('LOWER(D8)');
     const review = (r: number) => ws.getCell(`S${r}`).formula;
-    expect(review(5)).toContain('"Sin jurados"');
-    expect(review(5)).toContain('Jurado 4 parece ser tutor');
-    expect(review(5)).not.toContain('Sin número');
-    expect(review(6)).toContain('Sin número en IRIS');
-    expect(ws.getCell('S8').value).toBeNull();
+    expect(review(8)).toContain('"Sin jurados"');
+    expect(review(8)).toContain('Jurado 4 parece ser tutor');
+    expect(review(8)).not.toContain('Sin número');
+    expect(review(9)).toContain('Sin número en IRIS');
+    expect(ws.getCell('S11').value).toBeNull();
   });
 
   it('paints a juror that looks like the tutor and the Revisión messages', () => {
@@ -112,7 +119,7 @@ describe('buildJurorImportTemplate', () => {
       conditionalFormattings: { ref: string }[];
     };
     const refs = conditionalFormattings.map((c) => c.ref);
-    expect(refs).toEqual(['G5:H7', 'J5:K7', 'M5:N7', 'P5:Q7', 'S5:S7']);
+    expect(refs).toEqual(['G8:H10', 'J8:K10', 'M8:N10', 'P8:Q10', 'S8:S10']);
   });
 
   it('is read back by the parser once filled, and has no example rows', async () => {
@@ -120,17 +127,17 @@ describe('buildJurorImportTemplate', () => {
       parseJurorImportSheet(await buildJurorImportTemplate(DATA)),
     ).rejects.toThrow('El archivo no tiene jurados.');
 
-    ws.getCell('G5').value = 'Ana';
-    ws.getCell('H5').value = 'Pérez Ríos';
-    ws.getCell('I5').value = 'ana.perez@uninorte.edu.co';
-    ws.getCell('P7').value = 'Luis';
-    ws.getCell('Q7').value = 'Mora';
-    ws.getCell('R7').value = 'luis@x.co';
+    ws.getCell('G8').value = 'Ana';
+    ws.getCell('H8').value = 'Pérez Ríos';
+    ws.getCell('I8').value = 'ana.perez@uninorte.edu.co';
+    ws.getCell('P10').value = 'Luis';
+    ws.getCell('Q10').value = 'Mora';
+    ws.getCell('R10').value = 'luis@x.co';
     const filled = Buffer.from(await wb.xlsx.writeBuffer());
 
     await expect(parseJurorImportSheet(filled)).resolves.toEqual([
       {
-        rowNumber: 5,
+        rowNumber: 8,
         department: CIVIL,
         projectCode: '5',
         jurorSlot: 1,
@@ -139,7 +146,7 @@ describe('buildJurorImportTemplate', () => {
         email: 'ana.perez@uninorte.edu.co',
       },
       {
-        rowNumber: 7,
+        rowNumber: 10,
         department: INDUSTRIAL,
         projectCode: 'A-3',
         jurorSlot: 4,
@@ -155,7 +162,7 @@ describe('buildJurorImportTemplate', () => {
       await buildJurorImportTemplate({ ...DATA, projects: [] }),
     );
     expect(
-      empty.getWorksheet('Asignación jurados')!.getCell('A5').value,
+      empty.getWorksheet('Asignación jurados')!.getCell('A8').value,
     ).toBeNull();
   });
 });
