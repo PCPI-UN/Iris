@@ -85,7 +85,15 @@ export class JurorImportsService implements OnModuleInit {
     if (!file.originalname?.toLowerCase().endsWith('.xlsx')) {
       throw new BadRequestException('El archivo debe ser .xlsx.');
     }
-    const rows = await parseJurorImportSheet(file.buffer);
+    // Provisional until the parser reads the new sheet: one juror per row, in slot 1
+    const rows = (await parseJurorImportSheet(file.buffer)).map(
+      ({ jurorName, ...row }) => ({
+        ...row,
+        firstName: jurorName,
+        lastName: '',
+        jurorSlot: 1,
+      }),
+    );
     const res: PreviewJurorImportResponse = await firstValueFrom(
       this.projectsService.previewJurorImport({ eventId, rows }),
     );
@@ -102,15 +110,20 @@ export class JurorImportsService implements OnModuleInit {
     const data = await firstValueFrom(
       this.projectsService.getJurorImportTemplate({ eventId }),
     );
+    const projects = (data.projects ?? []).map((project) => ({
+      projectId: project.projectId,
+      department: project.department ?? '',
+      projectCode: project.projectCode ?? '',
+      name: project.name ?? '',
+    }));
+    // Provisional until the template is rewritten: the dropdown lists the departments of the projects
+    const departments = [
+      ...new Set(projects.map((p) => p.department).filter(Boolean)),
+    ].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
     const file = await buildJurorImportTemplate({
       eventName: data.eventName ?? '',
-      departments: data.departments ?? [],
-      projects: (data.projects ?? []).map((project) => ({
-        projectId: project.projectId,
-        department: project.department ?? '',
-        projectCode: project.projectCode ?? '',
-        name: project.name ?? '',
-      })),
+      departments,
+      projects,
     });
     return { fileName: `plantilla-jurados-evento-${eventId}.xlsx`, file };
   }

@@ -11,4 +11,6 @@ export interface AuthUser {
 export interface AuthServicePort {
   /** Returns null when no user has that email. */
   findUserByEmail(email: string): Promise<AuthUser | null>;
+  /** Users by id; ids with no user are left out of the result. */
+  findUsersByIds(ids: number[]): Promise<AuthUser[]>;
 }

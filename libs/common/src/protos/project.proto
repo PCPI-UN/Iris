@@ -422,13 +422,16 @@ enum JurorImportUserStatus {
   INVITE_TO_EVENT = 3;  // has an account but is not in the event: invited on confirm
 }
 
-// One row of the "Asignaciones" sheet, as read by the gateway
+// One juror of one project row of the "Asignación jurados" sheet, as read by the gateway.
+// A sheet row holds up to N jurors; each one with any data is sent as its own JurorImportRow.
 message JurorImportRow {
-  int32 rowNumber = 1;    // spreadsheet row (the first data row is 2)
+  int32 rowNumber = 1;    // spreadsheet row (the first data row is 5)
   string department = 2;
   string projectCode = 3;
-  string jurorName = 4;
+  string firstName = 4;   // "Nombre(s) jurado N"
   string email = 5;       // as written; project-service normalizes it
+  int32 jurorSlot = 6;    // N of "Nombre(s) jurado N", starting at 1
+  string lastName = 7;    // "Apellido(s) jurado N"; optional
 }
 
 message PreviewJurorImportRequest {
@@ -445,6 +448,7 @@ message JurorImportRowResult {
   optional int32 projectId = 6;
   optional string projectName = 7;
   optional int32 userId = 8;
+  int32 jurorSlot = 9;    // same as the row it answers
 }
 
 message JurorImportTotals {
@@ -473,11 +477,12 @@ message JurorImportTemplateProject {
   string department = 2;   // category name; empty if the project has no category of the event
   string projectCode = 3;  // empty if the project has no number yet
   string name = 4;
+  repeated string members = 5;  // full names of the participants, confirmed first and then pending
 }
 
 message GetJurorImportTemplateResponse {
   string eventName = 1;
-  repeated string departments = 2;                 // every category of the event, sorted by name
+  reserved 2;  // departments
   repeated JurorImportTemplateProject projects = 3;  // approved projects, by department and number
 }
 

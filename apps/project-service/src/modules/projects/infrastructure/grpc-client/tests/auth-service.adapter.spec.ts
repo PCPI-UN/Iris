@@ -53,3 +53,39 @@ describe('AuthServiceAdapter.findUserByEmail', () => {
     );
   });
 });
+
+describe('AuthServiceAdapter.findUsersByIds', () => {
+  let getUser: jest.Mock;
+  let adapter: AuthServiceAdapter;
+
+  beforeEach(() => {
+    getUser = jest.fn();
+    adapter = new AuthServiceAdapter({ getUser } as unknown as AuthGrpcClient);
+  });
+
+  it('asks once per distinct id and leaves out the ids with no user', async () => {
+    const found = (id: number) => ({
+      id,
+      firstName: `U${id}`,
+      email: `u${id}@x.co`,
+      status: 'CONFIRMED',
+    });
+    // calls go out in the order of the distinct ids: 1, 2, 9
+    getUser
+      .mockResolvedValueOnce(found(1))
+      .mockResolvedValueOnce(found(2))
+      .mockRejectedValueOnce({ code: status.NOT_FOUND });
+
+    const users = await adapter.findUsersByIds([1, 2, 1, 9]);
+
+    expect(users.map((u) => u.id)).toEqual([1, 2]);
+    expect(getUser).toHaveBeenCalledTimes(3);
+  });
+
+  it('rethrows any other error', async () => {
+    const unavailable = { code: status.UNAVAILABLE };
+    getUser.mockRejectedValue(unavailable);
+
+    await expect(adapter.findUsersByIds([1])).rejects.toBe(unavailable);
+  });
+});

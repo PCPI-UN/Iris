@@ -20,4 +20,8 @@ export class AuthGrpcClient implements OnModuleInit {
   async getUserByEmail(email: string): Promise<User> {
     return firstValueFrom(this.svc.getUserByEmail({ email }));
   }
+
+  async getUser(id: number): Promise<User> {
+    return firstValueFrom(this.svc.getUser({ id }));
+  }
 }

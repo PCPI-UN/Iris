@@ -27,25 +27,27 @@ const LOOKUP_CONCURRENCY = 10;
 
 export type JurorImportOutcome = 'ASSIGN' | 'SKIP' | 'ERROR';
 export type JurorImportUserStatus =
-  | 'NEW_USER'
-  | 'EVENT_JUROR'
-  | 'INVITE_TO_EVENT';
+  'NEW_USER' | 'EVENT_JUROR' | 'INVITE_TO_EVENT';
 
 export interface JurorImportRowInput {
   rowNumber: number;
   department: string;
   projectCode: string;
-  jurorName: string;
+  /** N of "Nombre(s) jurado N" in the sheet row, starting at 1 */
+  jurorSlot: number;
+  firstName: string;
+  /** Optional */
+  lastName?: string;
   email: string;
 }
 
 export interface JurorImportRowResult {
   rowNumber: number;
+  jurorSlot: number;
   outcome: JurorImportOutcome;
   userStatus?: JurorImportUserStatus;
   message: string;
   email: string;
-  jurorName: string;
   projectId?: number;
   projectName?: string;
   userId?: number;
@@ -68,6 +70,11 @@ export interface JurorImportPreview {
   canConfirm: boolean;
 }
 
+interface JurorPosition {
+  rowNumber: number;
+  jurorSlot: number;
+}
+
 interface ResolvedUser {
   user: AuthUser | null;
   membership: EventMembership | null;
@@ -86,11 +93,14 @@ const STATE_LABELS: Record<ProjectState, string> = {
   REQUEST_CHANGES: 'con cambios solicitados',
 };
 
-const REQUIRED_FIELDS: { key: keyof JurorImportRowInput; label: string }[] = [
+/** The last name is optional: some jurors have a single name */
+const requiredFields = (
+  slot: number,
+): { key: keyof JurorImportRowInput; label: string }[] => [
   { key: 'department', label: 'Departamento' },
   { key: 'projectCode', label: 'Número' },
-  { key: 'jurorName', label: 'Jurado' },
-  { key: 'email', label: 'Email' },
+  { key: 'firstName', label: `Nombre(s) del jurado ${slot}` },
+  { key: 'email', label: `Correo del jurado ${slot}` },
 ];
 
 /** Trimmed, single-spaced, lowercase and without accents: "Dpt.  Ingeniería" -> "dpt. ingenieria" */
@@ -155,11 +165,11 @@ export class PreviewJurorImportUC {
   }): Promise<JurorImportPreview> {
     const { eventId, rows } = input;
     if (!rows?.length) {
-      throw new ValidationError('El archivo no tiene filas con datos.');
+      throw new ValidationError('El archivo no tiene jurados con datos.');
     }
     if (rows.length > MAX_JUROR_IMPORT_ROWS) {
       throw new ValidationError(
-        `El archivo tiene ${rows.length} filas con datos; el máximo es ${MAX_JUROR_IMPORT_ROWS}.`,
+        `El archivo tiene ${rows.length} jurados con datos; el máximo es ${MAX_JUROR_IMPORT_ROWS}.`,
       );
     }
 
@@ -188,7 +198,7 @@ export class PreviewJurorImportUC {
       resolved.set(email, await this.resolveUser(email, eventId));
     });
 
-    const firstRowByKey = new Map<string, number>();
+    const firstRowByKey = new Map<string, JurorPosition>();
     const results = rows.map((row) =>
       this.evaluateRow(row, {
         categoriesByName,
@@ -249,15 +259,15 @@ export class PreviewJurorImportUC {
       categoriesByName: Map<string, EventCategory[]>;
       projectsByKey: Map<string, ProjectWithJurorIds[]>;
       resolved: Map<string, ResolvedUser>;
-      firstRowByKey: Map<string, number>;
+      firstRowByKey: Map<string, JurorPosition>;
     },
   ): JurorImportRowResult {
     const department = (row.department ?? '').trim();
     const code = (row.projectCode ?? '').trim();
-    const jurorName = (row.jurorName ?? '').trim();
     const rawEmail = (row.email ?? '').trim();
     const email = normalizeEmail(rawEmail);
-    const base = { rowNumber: row.rowNumber, email, jurorName };
+    const slot = row.jurorSlot;
+    const base = { rowNumber: row.rowNumber, jurorSlot: slot, email };
     const error = (
       message: string,
       extra: Partial<JurorImportRowResult> = {},
@@ -270,9 +280,9 @@ export class PreviewJurorImportUC {
       }) as JurorImportRowResult;
 
     // 1. Required fields
-    const missing = REQUIRED_FIELDS.filter(
-      ({ key }) => !String(row[key] ?? '').trim(),
-    ).map(({ label }) => label);
+    const missing = requiredFields(slot)
+      .filter(({ key }) => !String(row[key] ?? '').trim())
+      .map(({ label }) => label);
     if (missing.length === 1) {
       return error(`Falta el dato obligatorio: ${missing[0]}.`);
     }
@@ -282,16 +292,23 @@ export class PreviewJurorImportUC {
 
     // 2. Email format
     if (!isValidEmail(email)) {
-      return error(`El correo «${rawEmail}» no es válido.`);
+      return error(`El correo «${rawEmail}» del jurado ${slot} no es válido.`);
     }
 
-    // 3. Same department + number + email as an earlier row
+    // 3. Same department + number + email as an earlier juror (same row or another one)
     const rowKey = `${normalizeText(department)}|${normalizeCode(code)}|${email}`;
-    const firstRow = ctx.firstRowByKey.get(rowKey);
-    if (firstRow !== undefined) {
-      return error(`Fila repetida: igual a la fila ${firstRow}.`);
+    const first = ctx.firstRowByKey.get(rowKey);
+    if (first) {
+      return error(
+        first.rowNumber === row.rowNumber
+          ? `El correo ${email} ya está en el jurado ${first.jurorSlot} de esta fila.`
+          : `Jurado repetido: igual al jurado ${first.jurorSlot} de la fila ${first.rowNumber}.`,
+      );
     }
-    ctx.firstRowByKey.set(rowKey, row.rowNumber);
+    ctx.firstRowByKey.set(rowKey, {
+      rowNumber: row.rowNumber,
+      jurorSlot: slot,
+    });
 
     // 4. Department must be a category of the event
     const categories =

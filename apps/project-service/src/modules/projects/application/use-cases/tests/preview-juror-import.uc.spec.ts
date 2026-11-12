@@ -49,19 +49,26 @@ const MARIA = user(14, 'mtorres@uninorte.edu.co');
 /** Memberships in the event: Ana and María are jurors (role 4), Carlos is a participant (role 5) */
 const MEMBER_ROLES: Record<number, number> = { 11: 4, 12: 5, 14: 4 };
 
+/** `jurorName` is split into first name (first word) and last name (the rest) */
 const row = (
   rowNumber: number,
   department: string,
   projectCode: string,
   jurorName: string,
   email: string,
-): JurorImportRowInput => ({
-  rowNumber,
-  department,
-  projectCode,
-  jurorName,
-  email,
-});
+  jurorSlot = 1,
+): JurorImportRowInput => {
+  const [firstName, ...rest] = jurorName.split(' ');
+  return {
+    rowNumber,
+    jurorSlot,
+    department,
+    projectCode,
+    firstName,
+    lastName: rest.join(' '),
+    email,
+  };
+};
 
 /** The nine example rows of the delivered template */
 const TEMPLATE_ROWS = [
@@ -287,7 +294,7 @@ describe('PreviewJurorImportUC', () => {
 
     expect(result.rows.map((r) => r.message)).toEqual([
       'Falta el dato obligatorio: Número.',
-      'Faltan los datos obligatorios: Departamento, Número, Email.',
+      'Faltan los datos obligatorios: Departamento, Número, Correo del jurado 1.',
     ]);
   });
 
@@ -298,7 +305,7 @@ describe('PreviewJurorImportUC', () => {
 
     expect(result.rows[0]).toMatchObject({
       outcome: 'ERROR',
-      message: 'El correo «ana.perez@uninorte» no es válido.',
+      message: 'El correo «ana.perez@uninorte» del jurado 1 no es válido.',
     });
     expect(auth.findUserByEmail).not.toHaveBeenCalled();
   });
@@ -313,7 +320,7 @@ describe('PreviewJurorImportUC', () => {
 
     expect(result.rows[0]).toMatchObject({
       outcome: 'ERROR',
-      message: `El correo «${email}» no es válido.`,
+      message: `El correo «${email}» del jurado 1 no es válido.`,
     });
     expect(auth.findUserByEmail).not.toHaveBeenCalled();
   });
@@ -327,8 +334,41 @@ describe('PreviewJurorImportUC', () => {
     expect(result.rows[0].outcome).toBe('ASSIGN');
     expect(result.rows[1]).toMatchObject({
       outcome: 'ERROR',
-      message: 'Fila repetida: igual a la fila 2.',
+      message: 'Jurado repetido: igual al jurado 1 de la fila 2.',
     });
+  });
+
+  it('rejects the same email twice in one sheet row', async () => {
+    const result = await preview([
+      row(5, CIVIL, '6', 'Laura', LAURA.email, 1),
+      row(5, CIVIL, '6', 'Laura R', LAURA.email, 3),
+    ]);
+
+    expect(result.rows[0].outcome).toBe('ASSIGN');
+    expect(result.rows[1]).toMatchObject({
+      jurorSlot: 3,
+      outcome: 'ERROR',
+      message: `El correo ${LAURA.email} ya está en el jurado 1 de esta fila.`,
+    });
+  });
+
+  it('accepts a juror without last name and keeps the juror slot in the result', async () => {
+    const result = await preview([
+      { ...row(7, CIVIL, '6', 'Laura', LAURA.email, 2), lastName: undefined },
+    ]);
+
+    expect(result.rows[0]).toMatchObject({ rowNumber: 7, jurorSlot: 2 });
+    expect(result.rows[0].outcome).toBe('ASSIGN');
+  });
+
+  it('names the juror slot of a missing first name', async () => {
+    const result = await preview([
+      { ...row(7, CIVIL, '6', 'x', LAURA.email, 4), firstName: ' ' },
+    ]);
+
+    expect(result.rows[0].message).toBe(
+      'Falta el dato obligatorio: Nombre(s) del jurado 4.',
+    );
   });
 
   it('rejects a department that is not a category of the event', async () => {
@@ -392,7 +432,7 @@ describe('PreviewJurorImportUC', () => {
       row(i + 2, CIVIL, '6', 'Ana', ANA.email),
     );
     await expect(preview(tooMany)).rejects.toThrow(
-      `El archivo tiene ${MAX_JUROR_IMPORT_ROWS + 1} filas con datos; el máximo es ${MAX_JUROR_IMPORT_ROWS}.`,
+      `El archivo tiene ${MAX_JUROR_IMPORT_ROWS + 1} jurados con datos; el máximo es ${MAX_JUROR_IMPORT_ROWS}.`,
     );
   });
 });

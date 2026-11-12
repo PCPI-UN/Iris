@@ -183,6 +183,7 @@ export const toPreviewJurorImportResponse = (
     projectId: row.projectId,
     projectName: row.projectName,
     userId: row.userId,
+    jurorSlot: row.jurorSlot,
   })),
   totals: preview.totals,
   eventWarnings: preview.eventWarnings,
@@ -193,7 +194,6 @@ export const toGetJurorImportTemplateResponse = (
   template: JurorImportTemplate,
 ): GetJurorImportTemplateResponse => ({
   eventName: template.eventName,
-  departments: template.departments,
   projects: template.projects,
 });
 
