@@ -94,6 +94,22 @@ export class CreateProjectWithParticipantsMultipartDto {
   participants?: string;
 
   @ApiProperty({
+    description:
+      'JSON string with the project tutors: `userIds` (existing Tutor/Professor users) and `pending` ' +
+      '(name and email of tutors who are not registered; each one is invited). Optional.',
+    example: JSON.stringify({
+      userIds: [12],
+      pending: [
+        { firstName: 'Laura', lastName: 'Gómez', email: 'laura.gomez@university.edu' },
+      ],
+    }),
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  tutors?: string;
+
+  @ApiProperty({
     description: 'JSON string array of document metadata (type)',
     example: JSON.stringify([
       { type: 'POSTER' },

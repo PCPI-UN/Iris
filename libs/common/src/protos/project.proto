@@ -356,7 +356,7 @@ message CreateProjectWithParticipantsRequest {
   repeated ProjectDocumentInput documents = 8;
   string eventType = 9;
   optional string projectCode = 10;
-  // 0 to 3 tutors in total: existing Tutor/Professor users and tutors typed in by email
+  // Existing Tutor/Professor users and tutors typed in by email
   repeated int32 tutorUserIds = 11;
   repeated PendingTutorInput pendingTutors = 12;
 }
