@@ -61,6 +61,8 @@ service AuthService {
   rpc GetRoles(google.protobuf.Empty) returns (GetRolesByIdsResponse) {}
   // Removes a platform role from a user (soft delete)
   rpc RemovePlatformRole(RemovePlatformRoleRequest) returns (RemovePlatformRoleResponse) {}
+  // Replaces the platform roles of a user, applying the administrator rules
+  rpc SetUserPlatformRoles(SetUserPlatformRolesRequest) returns (SetUserPlatformRolesResponse) {}
 
   // ---- PERMISSIONS MODULE ----
   // Gets a user's platform roles and permissions
@@ -199,6 +201,8 @@ message CreatePlatformUserRequest {
   string email = 3;
   optional string phone = 4;
   repeated int32 roleIds = 5;
+  // User performing the operation (administrator rules depend on it)
+  int32 actorUserId = 6;
 }
 
 // The response message containing the newly created platform user.
@@ -253,6 +257,8 @@ message UpdateUserRequest {
   optional string firstName = 2;
   optional string lastName = 3;
   optional string phone = 4;
+  // User performing the operation; absent for internal calls (e.g. accepting an invitation)
+  optional int32 actorUserId = 5;
 }
 
 message UpdateOwnProfileRequest {
@@ -264,6 +270,20 @@ message UpdateOwnProfileRequest {
 
 message DeactivateUserRequest {
   int32 id = 1;
+  // User performing the operation (administrator rules depend on it)
+  int32 actorUserId = 2;
+}
+
+// Replaces the active platform roles of a user.
+message SetUserPlatformRolesRequest {
+  int32 userId = 1;
+  repeated int32 roleIds = 2;
+  // User performing the operation (administrator rules depend on it)
+  int32 actorUserId = 3;
+}
+
+message SetUserPlatformRolesResponse {
+  repeated Role roles = 1;
 }
 
 message DeactivateUserResponse {
