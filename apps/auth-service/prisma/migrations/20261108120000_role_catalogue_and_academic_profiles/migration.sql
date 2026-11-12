@@ -44,9 +44,9 @@ VALUES
     ('read', 'grades', 'View grades, rankings and evaluation results of any event, published or not', CURRENT_TIMESTAMP),
     ('manage', 'admins', 'Create, modify, deactivate and change the roles of administrator accounts', CURRENT_TIMESTAMP),
     -- Required by gateway endpoints but missing from the seed (only Admin could use them)
-    ('create', 'event-members', 'Create event categories (courses)', CURRENT_TIMESTAMP),
-    ('read', 'event-members', 'View the jurors of an event', CURRENT_TIMESTAMP),
-    ('delete', 'event-members', 'Delete event categories (courses)', CURRENT_TIMESTAMP)
+    ('create', 'event-members', 'Create event categories (courses) and add event members', CURRENT_TIMESTAMP),
+    ('read', 'event-members', 'View the members and jurors of an event', CURRENT_TIMESTAMP),
+    ('delete', 'event-members', 'Delete event categories (courses) and remove event members', CURRENT_TIMESTAMP)
 ON CONFLICT ("action", "resource") DO NOTHING;
 
 -- 2. Roles (fixed ids) -------------------------------------------------------------
@@ -86,13 +86,16 @@ FROM (VALUES
     ('Admin', 'create:event-members'), ('Admin', 'read:event-members'), ('Admin', 'delete:event-members'),
 
     -- EventManager: as in the original seed, plus read:grades to keep reading rankings,
-    -- which required manage:events before
+    -- which required manage:events before, and the event-members permissions that the
+    -- course and event member endpoints require
     ('EventManager', 'view:public_events'), ('EventManager', 'accept:invitations'),
     ('EventManager', 'manage:own_profile'), ('EventManager', 'view:own_data'), ('EventManager', 'read:users'),
     ('EventManager', 'create:invitations'), ('EventManager', 'read:invitations'),
     ('EventManager', 'manage:events'), ('EventManager', 'read:events'), ('EventManager', 'create:events'),
     ('EventManager', 'update:events'), ('EventManager', 'delete:events'), ('EventManager', 'manage:courses'),
     ('EventManager', 'read:grades'),
+    ('EventManager', 'create:event-members'), ('EventManager', 'read:event-members'),
+    ('EventManager', 'delete:event-members'),
 
     -- User (student and anyone who signs up)
     ('User', 'view:public_events'), ('User', 'accept:invitations'), ('User', 'manage:own_profile'), ('User', 'view:own_data'),

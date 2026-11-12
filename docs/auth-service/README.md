@@ -34,7 +34,7 @@ The role and permission catalogue lives in the migrations of this service, not i
 | Id | Role | Scope | Who | Access |
 | --- | --- | --- | --- | --- |
 | 1 | `Admin` | PLATFORM | Principal administrator (technical team) | Everything; the gateway lets it through every permission check |
-| 2 | `EventManager` | PLATFORM | Event manager (kept for existing accounts) | Manages events, invitations and courses; reads users and grades |
+| 2 | `EventManager` | PLATFORM | Event manager (kept for existing accounts) | Manages events, invitations, courses and event members; reads users and grades |
 | 3 | `User` | PLATFORM | Student and anyone who signs up | Own profile and public events |
 | 4 | `Juror` | EVENT | Juror of an event (through event membership) | Evaluates assigned projects |
 | 5 | `Participant` | EVENT | Participant of an event (through event membership) | Submits and edits their project |
