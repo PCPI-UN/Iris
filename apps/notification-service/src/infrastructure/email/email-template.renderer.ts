@@ -73,6 +73,9 @@ const ENTITIES: Record<string, string> = {
   '&#x3D;': '=',
 };
 
+/** Built from the keys of ENTITIES, so a new entity is decoded without touching the regex. */
+const ENTITY_PATTERN = new RegExp(Object.keys(ENTITIES).join('|'), 'g');
+
 /** Plain-text alternative for clients that do not render HTML. */
 export function htmlToText(html: string): string {
   return html
@@ -81,10 +84,7 @@ export function htmlToText(html: string): string {
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/(p|div|h[1-6]|li|tr|table)>/gi, '\n')
     .replace(/<[^>]+>/g, '')
-    .replace(
-      /&(nbsp|lt|gt|quot|#39|#x27|#x60|#x3D);/g,
-      (entity) => ENTITIES[entity],
-    )
+    .replace(ENTITY_PATTERN, (entity) => ENTITIES[entity])
     .replace(/&amp;/g, '&')
     .replace(/[ \t]+/g, ' ')
     .replace(/ *\n */g, '\n')
