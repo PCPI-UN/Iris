@@ -491,7 +491,6 @@ export class EventsController {
     return this.eventsService.createMember(createEventMemberDTO);
   }
 
-  @Public()
   @RequirePermission('delete:event-members')
   @Delete('members/delete')
   @ApiOperation({ summary: 'Delete event member' })
@@ -509,7 +508,6 @@ export class EventsController {
     return this.eventsService.deleteMember(deleteEventMemberDTO);
   }
 
-  @Public()
   @RequirePermission('read:event-members')
   @Get('members/:eventId')
   @ApiOperation({ summary: 'Get event members by event ID' })
