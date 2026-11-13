@@ -8,7 +8,6 @@ import * as request from 'supertest';
 import { App } from 'supertest/types';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
-import { CacheService } from '../../common/cache/cache.service';
 import { IS_PUBLIC_KEY } from '../../common/decorators/public.decorator';
 import { PERMISSIONS_KEY } from '../../common/decorators/require-permission.decorator';
 import { StudentDashboardController } from './student-dashboard.controller';
@@ -48,7 +47,6 @@ describe('StudentDashboardController (access)', () => {
       providers: [
         TestJwtStrategy,
         { provide: StudentDashboardService, useValue: service },
-        { provide: CacheService, useValue: {} },
         // Same global guards, in the same order, as AppModule
         { provide: APP_GUARD, useClass: JwtAuthGuard },
         { provide: APP_GUARD, useClass: PermissionsGuard },
