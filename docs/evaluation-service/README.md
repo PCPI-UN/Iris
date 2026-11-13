@@ -65,6 +65,17 @@ There is no exception for an incomplete rubric: fixing it would grade the remain
 
 Rubric changes and evaluations of an event never interleave: both run in a transaction holding a Postgres advisory lock on the event (shared for evaluations, exclusive for changes). If the lock cannot be taken in time the call fails with `ABORTED` and can be retried. Inside that transaction an evaluation also locks its (project, juror, event), so two simultaneous submissions of the same juror cannot both be saved. Repositories must query through `this.prisma.db`, which points to that transaction.
 
+## Result for participants
+
+`GetProjectResult` gives the consolidated result of one project, which the gateway shows to its participants once the admin publishes the event results:
+
+- `finalScore`: average of the jurors' grades, rounded with `roundGrade` as in the ranking.
+- `maxScore`: stored value of the highest raw score (4) in the event's evaluation type, which is also the highest grade.
+- `criteria`: average stored score per criterion, with its component and the effective weight stored with the evaluations.
+- `consolidatedFeedback`: the jurors' comments in one text, empty ones skipped.
+
+It never returns juror ids nor how many jurors evaluated, and it does not check publication or who asks: the gateway does.
+
 ## Dependencies
 
 - **Uses**: PostgreSQL, `project-service` (project, its jurors, and the category of each project of an event), `event-service` (event and its courses) and `auth-service` (role catalog, to find the `Juror` role id).

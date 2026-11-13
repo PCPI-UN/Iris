@@ -26,6 +26,7 @@ const event = (
   active: true,
   finished: true,
   inProgress: false,
+  resultsPublished: false,
   ...overrides,
 });
 
@@ -144,6 +145,7 @@ describe('buildStudentParticipationStats', () => {
         eventEndDate: '2025-08-10T15:00:00.000Z',
         semester: '2025-30',
         finished: false,
+        resultsPublished: false,
         awards: [],
       },
       {
@@ -157,6 +159,7 @@ describe('buildStudentParticipationStats', () => {
         eventEndDate: '2025-03-10T15:00:00.000Z',
         semester: '2025-10',
         finished: true,
+        resultsPublished: false,
         awards: [
           {
             awardId: 100,
@@ -179,7 +182,25 @@ describe('buildStudentParticipationStats', () => {
     expect(stats.totalAwards).toBe(0);
   });
 
-  it('hides awards until the event ranking is published', () => {
+  it('tells for each participation whether its event results are published', () => {
+    const stats = buildStudentParticipationStats(
+      [project(1, 10), project(2, 20)],
+      [
+        event(10, '2025-03-10T15:00:00.000Z', { resultsPublished: true }),
+        event(20, '2025-09-10T15:00:00.000Z'),
+      ],
+      [],
+    );
+
+    expect(
+      stats.participations.map((p) => [p.projectId, p.resultsPublished]),
+    ).toEqual([
+      [2, false],
+      [1, true],
+    ]);
+  });
+
+  it('hides awards until the event results are published', () => {
     const stats = buildStudentParticipationStats(
       [project(1, 10), project(2, 20)],
       [
@@ -257,6 +278,7 @@ describe('pickCurrentProject', () => {
       courseName: 'Sistemas',
       state: 'UNDER_REVIEW',
       canEdit: false,
+      resultsPublished: false,
     });
   });
 
@@ -339,6 +361,20 @@ describe('pickCurrentProject', () => {
     );
 
     expect(current?.projectId).toBe(2);
+  });
+
+  it('tells whether the results of the current event are published', () => {
+    const current = pickCurrentProject(
+      [withState(1, 10, 'APPROVED')],
+      [
+        event(10, '2026-11-01T15:00:00.000Z', {
+          ...inProgress,
+          resultsPublished: true,
+        }),
+      ],
+    );
+
+    expect(current?.resultsPublished).toBe(true);
   });
 
   it('shows a rejected project when it is the only candidate', () => {

@@ -8,6 +8,8 @@ service EvaluationService {
   rpc FindEvaluationById(FindEvaluationByIdRequest) returns (EvaluationProto);
   rpc FindEvaluationsByEvaluator(FindEvaluationsByEvaluatorRequest) returns (FindEvaluationsByEvaluatorResponse);
   rpc GetProjectStats(GetProjectStatsRequest) returns (GetProjectStatsResponse);
+  // Consolidated result of a project for its participants: no juror ids nor juror count
+  rpc GetProjectResult(GetProjectResultRequest) returns (GetProjectResultResponse);
   rpc CheckEvaluationStatus(CheckEvaluationStatusRequest) returns (CheckEvaluationStatusResponse);
   rpc GetTopProjectsByCourse(GetTopProjectsByCourseRequest) returns (GetTopProjectsByCourseResponse);
   rpc GetDashboardStats(GetEvaluationDashboardStatsRequest) returns (GetEvaluationDashboardStatsResponse);
@@ -125,6 +127,32 @@ message GetProjectStatsResponse {
   int32 evaluationCount = 3;
   repeated CategoryStatsResponse categoryStats = 4;
   repeated int32 evaluatorIds = 5;
+}
+
+message GetProjectResultRequest {
+  int32 projectId = 1;
+}
+
+message CriterionResultProto {
+  int32 criterionId = 1;
+  string criterion = 2;
+  string component = 3;
+  // Effective weight of the criterion in the grade (fraction, 0-1)
+  double weight = 4;
+  // Average of the jurors' stored scores
+  double score = 5;
+}
+
+message GetProjectResultResponse {
+  // false when no juror has evaluated the project yet; the other fields are then empty
+  bool evaluated = 1;
+  // Average of the jurors' grades, rounded as the ranking does
+  double finalScore = 2;
+  // Highest grade possible with the event's evaluation type
+  double maxScore = 3;
+  repeated CriterionResultProto criteria = 4;
+  // The jurors' comments in one text, without saying who wrote each one
+  string consolidatedFeedback = 5;
 }
 
 message CheckEvaluationStatusRequest {

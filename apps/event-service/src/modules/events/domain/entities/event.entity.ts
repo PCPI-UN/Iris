@@ -9,6 +9,8 @@ export interface Event {
   inscriptionDeadline: Date;
   inscriptionCost?: number | null;
   evaluationsOpened: boolean;
+  /** Participants can see their scores and awards */
+  resultsPublished: boolean;
   startDate: Date;
   endDate: Date;
   active: boolean;

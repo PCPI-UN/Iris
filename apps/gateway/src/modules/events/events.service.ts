@@ -110,6 +110,7 @@ import {
   GetAwardWinnerResponse,
   ListAwardWinnersRequest,
   ListAwardWinnersResponse,
+  ListAwardsByProjectsResponse,
   DeleteAwardWinnerRequest,
   DeleteAwardWinnerResponse,
   CreateEventInscriptionDetailRequest,
@@ -263,6 +264,24 @@ export class EventService implements OnModuleInit {
       .filter((value) => value.length > 0);
 
     return [...confirmed, ...pending];
+  }
+
+  /** The event as event-service returns it, without the catalog enrichment of `get` */
+  async getEventById(id: number): Promise<EventProto | undefined> {
+    const response = await firstValueFrom(this.eventService.getEvent({ id }));
+    return response.event;
+  }
+
+  /** Approved projects of one category of the event, every page */
+  async listApprovedProjects(
+    eventId: number,
+    categoryId: number,
+  ): Promise<ProjectComplete[]> {
+    return this.listAllProjectsByEvent(
+      eventId,
+      categoryId,
+      ProjectStateFilter.APPROVED,
+    );
   }
 
   /**
@@ -1254,6 +1273,13 @@ export class EventService implements OnModuleInit {
     return firstValueFrom(
       this.eventService.getAwardWinner({ id } as GetAwardWinnerRequest),
     );
+  }
+
+  /** Awards won by the given projects in active categories, with the event publication flag */
+  async listAwardsByProjects(
+    projectIds: number[],
+  ): Promise<ListAwardsByProjectsResponse> {
+    return firstValueFrom(this.eventService.listAwardsByProjects({ projectIds }));
   }
 
   async listAwardWinners(

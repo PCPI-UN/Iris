@@ -65,6 +65,7 @@ export class UpdateEventUC {
         ? parseBogotaToUTC(input.inscriptionDeadline)
         : undefined,
       evaluationsOpened: input.evaluationsOpened,
+      resultsPublished: input.resultsPublished,
       startDate: input.startDate 
         ? parseBogotaToUTC(input.startDate) 
         : undefined,

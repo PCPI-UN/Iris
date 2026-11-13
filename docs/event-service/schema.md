@@ -17,6 +17,7 @@ erDiagram
         timestamptz inscription_deadline
         float inscription_cost "nullable"
         boolean evaluations_opened
+        boolean results_published
         timestamptz start_date
         timestamptz end_date
         boolean active
@@ -140,6 +141,7 @@ erDiagram
 | `inscription_deadline` | `TIMESTAMPTZ` | no | |
 | `inscription_cost` | `DOUBLE PRECISION` | yes | |
 | `evaluations_opened` | `BOOLEAN` | no | |
+| `results_published` | `BOOLEAN` | no | `false`. Set by the admin; until then participants do not see their scores or awards |
 | `start_date` | `TIMESTAMPTZ` | no | |
 | `end_date` | `TIMESTAMPTZ` | no | |
 | `active` | `BOOLEAN` | no | `true` |
