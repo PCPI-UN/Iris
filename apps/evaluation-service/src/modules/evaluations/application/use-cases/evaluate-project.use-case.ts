@@ -9,10 +9,8 @@ import { CriterionRepositoryPort } from '../../../criterions/domain/repositories
 import { Evaluation } from '../../domain/entities/evaluation.entity';
 import { EvaluationDetail } from '../../domain/entities/evaluation-detail.entity';
 import { EvaluateProjectDto } from '../dto/evaluate-project.dto';
-import { EvaluationType } from '../../../../common/constants/evaluation-type.constants';
-import { EvaluationType as EventEvaluationType } from '@app/common/generated/event';
-import { ScoreMapperFactory } from '../mappers/score-mapper.factory';
-import { ScoreValidatorFactory } from '../validators/score-validator.factory';
+import { EventGradingScaleResolver } from '../../../grading-scales/application/event-grading-scale.resolver';
+import { ScaleScorer } from '../../../grading-scales/domain/scale-scorer';
 import { Role } from '@app/common/generated/auth';
 import { isFullWeight, roundGrade } from '../../../../common/utils/grade.utils';
 import { buildRubric } from '../../../criterions/domain/services/rubric';
@@ -21,43 +19,13 @@ import { buildRubric } from '../../../criterions/domain/services/rubric';
 export class EvaluateProjectUseCase {
     private readonly logger = new Logger(EvaluateProjectUseCase.name);
 
-    private resolveEvaluationType(evaluationType: unknown): EvaluationType {
-        if (
-            evaluationType === undefined ||
-            evaluationType === null ||
-            evaluationType === EventEvaluationType.EVALUATION_TYPE_UNSPECIFIED ||
-            evaluationType === EventEvaluationType.FINAL_PROJECTS ||
-            evaluationType === EvaluationType.FINAL_PROJECTS
-        ) {
-            return EvaluationType.FINAL_PROJECTS;
-        }
-
-        if (
-            evaluationType === EventEvaluationType.ZERO_TO_FIVE ||
-            evaluationType === EvaluationType.ZERO_TO_FIVE
-        ) {
-            return EvaluationType.ZERO_TO_FIVE;
-        }
-
-        if (
-            evaluationType === EventEvaluationType.ZERO_TO_HUNDRED ||
-            evaluationType === EvaluationType.ZERO_TO_HUNDRED
-        ) {
-            return EvaluationType.ZERO_TO_HUNDRED;
-        }
-
-        throw new RpcException({
-            code: status.INVALID_ARGUMENT,
-            message: `Unsupported evaluation type: ${evaluationType}`,
-        });
-    }
-
     constructor(
         private readonly evaluationRepository: EvaluationRepositoryPort,
         private readonly projectService: ProjectServicePort,
         private readonly eventService: EventServicePort,
         private readonly authService: AuthServicePort,
         private readonly criterionRepository: CriterionRepositoryPort,
+        private readonly gradingScaleResolver: EventGradingScaleResolver,
     ) { }
 
     async execute(request: EvaluateProjectDto): Promise<{ evaluation: Evaluation; scores: EvaluationDetail[] }> {
@@ -154,7 +122,7 @@ export class EvaluateProjectUseCase {
         courseId: number,
         memberEventId: number,
         memberRoleId: number,
-        eventEvaluationType: unknown,
+        legacyEvaluationType: unknown,
     ): Promise<{ savedEvaluation: Evaluation; evaluationDetails: EvaluationDetail[] }> {
         const { projectId, userId: memberUserId, scores, comments } = request;
 
@@ -223,10 +191,10 @@ export class EvaluateProjectUseCase {
         const rubricById = new Map(rubric.map((criterion) => [criterion.id, criterion]));
         const scoredCriterionIds = new Set<number>();
 
-        // Resolve score validation and mapping from the event evaluation type
-        const evaluationType = this.resolveEvaluationType(eventEvaluationType);
-        const scoreValidator = ScoreValidatorFactory.create(evaluationType);
-        const scoreMapper = ScoreMapperFactory.create(evaluationType);
+        // The juror picks a level per criterion; the event's grading scale gives its points. It is read under
+        // the rubric lock, so the scale cannot change while this evaluation is graded.
+        const gradingScale = await this.gradingScaleResolver.resolve(memberEventId, legacyEvaluationType);
+        const scorer = new ScaleScorer(gradingScale);
 
         for (const scoreItem of scores) {
             if (scoredCriterionIds.has(scoreItem.criterionId)) {
@@ -245,23 +213,16 @@ export class EvaluateProjectUseCase {
                 });
             }
 
-            if (!Number.isInteger(scoreItem.score)) {
+            const mappedValue = Number.isInteger(scoreItem.score) ? scorer.pointsFor(scoreItem.score) : undefined;
+
+            if (mappedValue === undefined) {
                 throw new RpcException({
                     code: status.INVALID_ARGUMENT,
-                    message: `Score for criterion ${scoreItem.criterionId} must be an integer level`,
+                    message:
+                        `Score for criterion ${scoreItem.criterionId} must be a level of the grading scale ` +
+                        `"${gradingScale.name}": ${scorer.levels.join(', ')}`,
                 });
             }
-
-            const validation = scoreValidator.validate(scoreItem.score, evaluationType);
-
-            if (!validation.valid) {
-                throw new RpcException({
-                    code: status.INVALID_ARGUMENT,
-                    message: validation.error,
-                });
-            }
-
-            const mappedValue = scoreMapper.map(scoreItem.score, evaluationType);
 
             const effectiveWeight = effectiveWeights.get(criterion.id)!;
             totalGrade += mappedValue * effectiveWeight;

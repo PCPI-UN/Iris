@@ -145,6 +145,12 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'PATCH /events/recaps/:id': { access: 'pending' },
   'GET /events/statuses': { access: 'public' },
   'PATCH /events/update-ranking-config/:id': { permission: ['manage:events'] },
+  // modules/grading-scales/grading-scales.controller.ts
+  'GET /grading-scales': { permission: ['read:events'] },
+  'POST /grading-scales': { permission: ['manage:events'] },
+  'DELETE /grading-scales/:id': { permission: ['manage:events'] },
+  'GET /grading-scales/:id': { permission: ['read:events'] },
+  'PUT /grading-scales/:id': { permission: ['manage:events'] },
   // modules/invitations/invitations.controller.ts
   'POST /invitations': { access: 'pending' },
   'POST /invitations/:invitationId/resend': { permission: ['manage:events'] },

@@ -1,15 +1,21 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CheckEvaluationStatusUseCase } from '../check-evaluation-status.use-case';
 import { EvaluationRepositoryPort } from '../../../domain/repositories/evaluation.repository.port';
-import { EventServicePort } from '../../../infrastructure/ports/event.service.port';
 import { Evaluation } from '../../../domain/entities/evaluation.entity';
 import { EvaluationDetail } from '../../../domain/entities/evaluation-detail.entity';
 import { CheckEvaluationStatusDto } from '../../dto/check-evaluation-status.dto';
 import { EvaluationType as EventEvaluationType } from '@app/common/generated/event';
+import { EventGradingScaleResolver } from '../../../../grading-scales/application/event-grading-scale.resolver';
+import {
+    buildResolver,
+    customScale,
+    InMemoryGradingScaleRepository,
+} from '../../../../grading-scales/testing/grading-scales.fixture';
 
 describe('CheckEvaluationStatusUseCase', () => {
     let useCase: CheckEvaluationStatusUseCase;
     let evaluationRepository: EvaluationRepositoryPort;
+    let scaleRepository: InMemoryGradingScaleRepository;
 
     const mockEvaluationRepository = {
         findByProjectIdsAndEvaluator: jest.fn(),
@@ -25,6 +31,7 @@ describe('CheckEvaluationStatusUseCase', () => {
             evaluationType: EventEvaluationType.FINAL_PROJECTS,
         });
 
+        scaleRepository = new InMemoryGradingScaleRepository();
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CheckEvaluationStatusUseCase,
@@ -33,8 +40,8 @@ describe('CheckEvaluationStatusUseCase', () => {
                     useValue: mockEvaluationRepository,
                 },
                 {
-                    provide: EventServicePort,
-                    useValue: mockEventService,
+                    provide: EventGradingScaleResolver,
+                    useFactory: () => buildResolver(scaleRepository, mockEventService.getEvent),
                 },
             ],
         }).compile();
@@ -213,5 +220,34 @@ describe('CheckEvaluationStatusUseCase', () => {
 
         expect(status.evaluation!.scores.map((score) => score.score)).toEqual([4, 3, 2, 1]);
         expect(status.evaluation!.scores.every((score) => score.weight === 0.25)).toBe(true);
+    });
+
+    it('reads the stored points back with the scale assigned to the event', async () => {
+        scaleRepository.scales.set(50, customScale(50, [10, 20, 30, 40.5]));
+        scaleRepository.eventScales.set(1, 50);
+        mockEvaluationRepository.findByProjectIdsAndEvaluator.mockResolvedValue([
+            {
+                evaluation: new Evaluation(1, 1, 1, 1, 1, 25, null, new Date()),
+                scores: [40.5, 30, 20, 10].map((points, index) => new EvaluationDetail(1, index + 1, points, 0.25)),
+            },
+        ]);
+
+        const [status] = await useCase.execute({ userId: 1, eventId: 1, projectIds: [1] });
+
+        expect(status.evaluation!.scores.map((score) => score.score)).toEqual([4, 3, 2, 1]);
+        expect(mockEventService.getEvent).not.toHaveBeenCalled();
+    });
+
+    it('fails clearly when a stored score is not a value of the event scale', async () => {
+        mockEvaluationRepository.findByProjectIdsAndEvaluator.mockResolvedValue([
+            {
+                evaluation: new Evaluation(1, 1, 1, 1, 1, 25, null, new Date()),
+                scores: [new EvaluationDetail(1, 1, 33, 1)],
+            },
+        ]);
+
+        await expect(useCase.execute({ userId: 1, eventId: 1, projectIds: [1] })).rejects.toThrow(
+            'Stored score 33 is not a value of the grading scale "Proyectos finales"',
+        );
     });
 });

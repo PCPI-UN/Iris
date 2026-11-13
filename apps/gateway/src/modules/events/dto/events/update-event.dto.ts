@@ -261,7 +261,8 @@ export class UpdateEventPayloadDTO {
   locationDetails?: string;
 
   @ApiProperty({
-    description: 'Updated evaluation scale configured for the event',
+    description: 'Deprecated: use gradingScaleId. Kept for compatibility',
+    deprecated: true,
     enum: EvaluationType,
     required: false,
     example: 'FINAL_PROJECTS',
@@ -270,6 +271,18 @@ export class UpdateEventPayloadDTO {
   @Transform(transformEvaluationType)
   @IsEnum(EvaluationType)
   evaluationType?: EvaluationType;
+
+  @ApiProperty({
+    description:
+      'Grading scale of the event, from the catalog (GET /grading-scales). To use a new scale, create it first ' +
+      'with POST /grading-scales. Without it, a new event gets "Proyectos finales" and an existing event keeps its scale.',
+    required: false,
+    example: 1,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  gradingScaleId?: number;
 
   @ApiProperty({
     description: 'Updated inscription requirements',

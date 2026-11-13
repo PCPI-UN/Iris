@@ -5,58 +5,35 @@ import {
     EvaluationWithDetails
 } from '../../domain/repositories/evaluation.repository.port';
 import { CheckEvaluationStatusDto } from '../dto/check-evaluation-status.dto';
-import { ScoreMapper } from '../../domain/ports/score-mapper.port';
-import { EventServicePort } from '../../infrastructure/ports/event.service.port';
-import { ScoreMapperFactory } from '../mappers/score-mapper.factory';
-import { EvaluationType } from '../../../../common/constants/evaluation-type.constants';
-import { EvaluationType as EventEvaluationType } from '@app/common/generated/event';
+import { RpcException } from '@nestjs/microservices';
+import { status } from '@grpc/grpc-js';
+import { EventGradingScaleResolver } from '../../../grading-scales/application/event-grading-scale.resolver';
+import { ScaleScorer } from '../../../grading-scales/domain/scale-scorer';
 
 @Injectable()
 export class CheckEvaluationStatusUseCase {
     constructor(
         private readonly evaluationRepository: EvaluationRepositoryPort,
-        private readonly eventService: EventServicePort,
+        private readonly gradingScaleResolver: EventGradingScaleResolver,
     ) {}
-
-    private resolveEvaluationType(evaluationType: unknown): EvaluationType {
-        if (
-            evaluationType === undefined ||
-            evaluationType === null ||
-            evaluationType === EventEvaluationType.EVALUATION_TYPE_UNSPECIFIED ||
-            evaluationType === EventEvaluationType.FINAL_PROJECTS ||
-            evaluationType === EvaluationType.FINAL_PROJECTS
-        ) {
-            return EvaluationType.FINAL_PROJECTS;
-        }
-
-        if (
-            evaluationType === EventEvaluationType.ZERO_TO_FIVE ||
-            evaluationType === EvaluationType.ZERO_TO_FIVE
-        ) {
-            return EvaluationType.ZERO_TO_FIVE;
-        }
-
-        if (
-            evaluationType === EventEvaluationType.ZERO_TO_HUNDRED ||
-            evaluationType === EvaluationType.ZERO_TO_HUNDRED
-        ) {
-            return EvaluationType.ZERO_TO_HUNDRED;
-        }
-
-        return EvaluationType.FINAL_PROJECTS;
-    }
 
   async execute(
     dto: CheckEvaluationStatusDto,
   ): Promise<ProjectEvaluationStatus[]> {
     const { projectIds, userId, eventId } = dto;
 
-    // Get event to determine evaluation type
-    const event = await this.eventService.getEvent(eventId);
-    const evaluationType = this.resolveEvaluationType(event.evaluationType);
-
-    // Every evaluation type has its own mapper (ZERO_TO_HUNDRED used to get none and crashed here)
-    const scoreMapper: ScoreMapper = ScoreMapperFactory.create(evaluationType);
+    // Stored scores are points of the event's grading scale; the juror sees them as levels again
+    const scorer = new ScaleScorer(await this.gradingScaleResolver.resolve(eventId));
+    const toLevel = (points: number): number => {
+      const level = scorer.levelFor(points);
+      if (level === undefined) {
+        throw new RpcException({
+          code: status.INTERNAL,
+          message: `Stored score ${points} is not a value of the grading scale "${scorer.scale.name}" of event ${eventId}`,
+        });
+      }
+      return level;
+    };
 
     // Fetch all evaluations for these projects by this evaluator
     const evaluations =
@@ -86,7 +63,7 @@ export class CheckEvaluationStatusUseCase {
       const reverseMappedScores = evalData.scores.map((score: any) => ({
         evaluationId: score.evaluationId,
         criterionId: score.criterionId,
-        score: scoreMapper.toOriginalValue(score.score),
+        score: toLevel(score.score),
         weight: score.weight,
       }));
 

@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   Inject,
+  Logger,
   OnModuleInit,
 } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
@@ -147,6 +148,9 @@ import { UpdateRankingEventDTO } from './dto/ranking-event/update-ranking-event.
 import {
   EVALUATION_SERVICE_NAME,
   EvaluationServiceClient,
+  GRADING_SCALE_SERVICE_NAME,
+  GradingScaleProto,
+  GradingScaleServiceClient,
 } from '@app/common/generated/evaluation';
 import { ProjectComplete } from '@app/common/generated/project';
 import {
@@ -206,6 +210,8 @@ export class EventService implements OnModuleInit {
   private eventService!: EventServiceClient;
   private authService!: AuthServiceClient;
   private evaluationService!: EvaluationServiceClient;
+  private gradingScaleService!: GradingScaleServiceClient;
+  private readonly logger = new Logger(EventService.name);
   private statusCache: EventStatusMapping[] | null = null;
   private rolesCache: any[] | null = null;
 
@@ -227,6 +233,94 @@ export class EventService implements OnModuleInit {
       this.evaluationClient.getService<EvaluationServiceClient>(
         EVALUATION_SERVICE_NAME,
       );
+    this.gradingScaleService =
+      this.evaluationClient.getService<GradingScaleServiceClient>(
+        GRADING_SCALE_SERVICE_NAME,
+      );
+  }
+
+  /**
+   * Assigns the grading scale of an event in evaluation-service: a catalog scale (gradingScaleId) or,
+   * without one, the system scale of its deprecated evaluationType.
+   */
+  private assignGradingScale(
+    eventId: number,
+    gradingScaleId: number | undefined,
+  ): Promise<GradingScaleProto> {
+    return firstValueFrom(
+      this.gradingScaleService.assignEventGradingScale({
+        eventId,
+        scaleId: gradingScaleId ?? undefined,
+      }),
+    );
+  }
+
+  /**
+   * Undoes a failed event creation: deletes the event and then its grading scale assignment, so the
+   * scale is not kept in use by an event that no longer exists. Each step logs its own failure and
+   * never throws, so the caller reports the error that made the creation fail.
+   */
+  private async rollBackCreatedEvent(eventId: number): Promise<void> {
+    try {
+      await this.delete({ id: eventId });
+    } catch (error) {
+      this.logger.error(
+        `Could not delete event ${eventId} after its creation failed: ${(error as Error)?.message}`,
+      );
+      // The event still exists, so it keeps its scale
+      return;
+    }
+    try {
+      await firstValueFrom(
+        this.gradingScaleService.unassignEventGradingScale({ eventId }),
+      );
+    } catch (error) {
+      this.logger.error(
+        `Could not remove the grading scale of deleted event ${eventId}: ${(error as Error)?.message}`,
+      );
+    }
+  }
+
+  /**
+   * Updates the event fields after its grading scale changed; when that update fails, the previous
+   * scale is assigned again so the event is left as it was.
+   */
+  private async updateEventRestoringScale(
+    eventPayload: UpdateEventRequest,
+    previousScale: GradingScaleProto | null,
+    newScale: GradingScaleProto | null,
+  ): Promise<UpdateEventResponse> {
+    try {
+      return await firstValueFrom(this.eventService.updateEvent(eventPayload));
+    } catch (error) {
+      if (previousScale && newScale && previousScale.id !== newScale.id) {
+        try {
+          await this.assignGradingScale(eventPayload.id, previousScale.id);
+        } catch (restoreError) {
+          this.logger.error(
+            `Could not restore grading scale ${previousScale.id} of event ${eventPayload.id} after its update failed: ` +
+              `${(restoreError as Error)?.message}`,
+          );
+        }
+      }
+      throw error;
+    }
+  }
+
+  /** Grading scale shown with the event; `null` when evaluation-service cannot give it. */
+  private async findEventGradingScale(
+    eventId: number,
+  ): Promise<GradingScaleProto | null> {
+    try {
+      return await firstValueFrom(
+        this.gradingScaleService.getEventGradingScale({ eventId }),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Could not load the grading scale of event ${eventId}: ${(error as Error)?.message}`,
+      );
+      return null;
+    }
   }
 
   /**
@@ -846,6 +940,7 @@ export class EventService implements OnModuleInit {
       awards,
       specificInscriptionDetails,
       eventInscriptionDetails,
+      gradingScaleId,
       ...eventPayload
     } = createEventDTO as CreateEventDTO & {
       category?: CreateCategoryDTO;
@@ -859,6 +954,19 @@ export class EventService implements OnModuleInit {
     const response = await firstValueFrom(
       this.eventService.createEvent(eventPayload as CreateEventRequest),
     );
+
+    let eventGradingScale: GradingScaleProto | null = null;
+    if (response.event) {
+      try {
+        eventGradingScale = await this.assignGradingScale(
+          response.event.id,
+          gradingScaleId,
+        );
+      } catch (error) {
+        await this.rollBackCreatedEvent(response.event.id);
+        throw error;
+      }
+    }
 
     if (response.event) {
       let createdCategoryId: number | undefined;
@@ -887,7 +995,7 @@ export class EventService implements OnModuleInit {
             await this.deleteCategory(createdCategoryId);
           } catch {}
         }
-        await this.delete({ id: response.event.id });
+        await this.rollBackCreatedEvent(response.event.id);
         throw error;
       }
     }
@@ -903,7 +1011,7 @@ export class EventService implements OnModuleInit {
           ),
         );
       } catch (error) {
-        await this.delete({ id: response.event.id });
+        await this.rollBackCreatedEvent(response.event.id);
         throw error;
       }
     }
@@ -914,7 +1022,9 @@ export class EventService implements OnModuleInit {
         response.event,
         statuses,
       );
-      return { event: enrichedEvent as EventProto };
+      return {
+        event: { ...enrichedEvent, gradingScale: eventGradingScale } as any,
+      };
     }
 
     return response;
@@ -937,9 +1047,11 @@ export class EventService implements OnModuleInit {
         response.event,
         statuses,
       );
-      const enrichedEventWithCatalog =
-        await this.enrichEventWithCatalogData(enrichedEvent);
-      return { event: enrichedEventWithCatalog as any };
+      const [enrichedEventWithCatalog, gradingScale] = await Promise.all([
+        this.enrichEventWithCatalogData(enrichedEvent),
+        this.findEventGradingScale(response.event.id),
+      ]);
+      return { event: { ...enrichedEventWithCatalog, gradingScale } as any };
     }
 
     return response;
@@ -959,11 +1071,30 @@ export class EventService implements OnModuleInit {
       statusDescription,
       createdByUserId,
       category,
+      gradingScaleId,
       ...eventPayload
     } = normalizedDTO;
 
-    const response = await firstValueFrom(
-      this.eventService.updateEvent(eventPayload as UpdateEventRequest),
+    // The scale goes first: when it cannot change (the event already has evaluations) nothing is
+    // updated, and when the event update fails the previous scale is assigned again
+    let previousGradingScale: GradingScaleProto | null = null;
+    let eventGradingScale: GradingScaleProto | null = null;
+    if (gradingScaleId !== undefined && gradingScaleId !== null) {
+      previousGradingScale = await firstValueFrom(
+        this.gradingScaleService.getEventGradingScale({
+          eventId: eventPayload.id,
+        }),
+      );
+      eventGradingScale = await this.assignGradingScale(
+        eventPayload.id,
+        gradingScaleId,
+      );
+    }
+
+    const response = await this.updateEventRestoringScale(
+      eventPayload as UpdateEventRequest,
+      previousGradingScale,
+      eventGradingScale,
     );
 
     await this.updateEventCatalogData(
@@ -979,9 +1110,11 @@ export class EventService implements OnModuleInit {
         response.event,
         statuses,
       );
-      const enrichedEventWithCatalog =
-        await this.enrichEventWithCatalogData(enrichedEvent);
-      return { event: enrichedEventWithCatalog as any };
+      const [enrichedEventWithCatalog, gradingScale] = await Promise.all([
+        this.enrichEventWithCatalogData(enrichedEvent),
+        eventGradingScale ?? this.findEventGradingScale(response.event.id),
+      ]);
+      return { event: { ...enrichedEventWithCatalog, gradingScale } as any };
     }
 
     return response;

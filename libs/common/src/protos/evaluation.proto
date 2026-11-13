@@ -369,3 +369,96 @@ message DeleteTieBreakResponse {
   bool success = 1;
   string message = 2;
 }
+
+// ===== GRADING SCALE SERVICE =====
+// Catalog of 4-level grading scales. Every event uses one scale: the juror picks a level (1-4)
+// per criterion and the points of that level are what the grade is computed with.
+service GradingScaleService {
+  rpc CreateGradingScale (CreateGradingScaleRequest) returns (GradingScaleProto) {}
+  rpc ListGradingScales (Empty) returns (ListGradingScalesResponse) {}
+  rpc GetGradingScale (GetGradingScaleRequest) returns (GradingScaleProto) {}
+  rpc UpdateGradingScale (UpdateGradingScaleRequest) returns (GradingScaleProto) {}
+  rpc DeleteGradingScale (DeleteGradingScaleRequest) returns (DeleteGradingScaleResponse) {}
+
+  // Assigns a catalog scale (scaleId) to an event. New scales are created with CreateGradingScale
+  // first. Without scaleId, the event gets the system scale of its deprecated evaluationType
+  // ("Proyectos finales" by default).
+  rpc AssignEventGradingScale (AssignEventGradingScaleRequest) returns (GradingScaleProto) {}
+  rpc GetEventGradingScale (GetEventGradingScaleRequest) returns (GradingScaleProto) {}
+  // Removes the scale assignment of an event that has no evaluations, such as an event whose
+  // creation is being rolled back. Succeeds when the event has no assignment.
+  rpc UnassignEventGradingScale (UnassignEventGradingScaleRequest) returns (UnassignEventGradingScaleResponse) {}
+}
+
+message GradingScaleLevelProto {
+  int32 level = 1;
+  string label = 2;
+  double points = 3;
+}
+
+message GradingScaleProto {
+  int32 id = 1;
+  string name = 2;
+  optional string description = 3;
+  bool isSystem = 4;
+  // FINAL_PROJECTS, ZERO_TO_FIVE or ZERO_TO_HUNDRED for the system scales
+  optional string code = 5;
+  optional int32 createdByUserId = 6;
+  string createdAt = 7;
+  repeated GradingScaleLevelProto levels = 8;
+  // True when the scale can no longer be edited or deleted
+  bool locked = 9;
+}
+
+message GradingScaleInput {
+  string name = 1;
+  optional string description = 2;
+  repeated GradingScaleLevelProto levels = 3;
+}
+
+message CreateGradingScaleRequest {
+  GradingScaleInput scale = 1;
+  optional int32 userId = 2;
+}
+
+message ListGradingScalesResponse {
+  repeated GradingScaleProto scales = 1;
+}
+
+message GetGradingScaleRequest {
+  int32 id = 1;
+}
+
+message UpdateGradingScaleRequest {
+  int32 id = 1;
+  GradingScaleInput scale = 2;
+}
+
+message DeleteGradingScaleRequest {
+  int32 id = 1;
+}
+
+message DeleteGradingScaleResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message AssignEventGradingScaleRequest {
+  int32 eventId = 1;
+  optional int32 scaleId = 2;
+  reserved 3, 4;
+  reserved "scale", "userId";
+}
+
+message GetEventGradingScaleRequest {
+  int32 eventId = 1;
+}
+
+message UnassignEventGradingScaleRequest {
+  int32 eventId = 1;
+}
+
+message UnassignEventGradingScaleResponse {
+  // False when the event had no assignment
+  bool removed = 1;
+}

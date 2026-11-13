@@ -6,6 +6,7 @@ import {
   IsBoolean,
   IsDateString,
   IsEnum,
+  IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -229,7 +230,8 @@ export class CreateEventDTO {
   locationDetails?: string;
 
   @ApiProperty({
-    description: 'Evaluation scale configured for the event',
+    description: 'Deprecated: use gradingScaleId. Kept for compatibility; without gradingScaleId, a new event gets the system scale of this type',
+    deprecated: true,
     enum: EvaluationType,
     required: false,
     example: 'FINAL_PROJECTS',
@@ -238,6 +240,18 @@ export class CreateEventDTO {
   @Transform(transformEvaluationType)
   @IsEnum(EvaluationType)
   evaluationType?: EvaluationType;
+
+  @ApiProperty({
+    description:
+      'Grading scale of the event, from the catalog (GET /grading-scales). To use a new scale, create it first ' +
+      'with POST /grading-scales. Without it, a new event gets "Proyectos finales" and an existing event keeps its scale.',
+    required: false,
+    example: 1,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  gradingScaleId?: number;
 
   @ApiProperty({
     description: 'Additional inscription requirements for participants',
