@@ -82,6 +82,21 @@ export function translateValidationMessage(message: string): string {
   return message;
 }
 
+/** Keywords class-validator writes before the property name in some default messages. */
+const PROPERTY_LEAD = /^(each value in |nested property |property )/;
+
+/**
+ * Puts the parent path in front of the property name, after any leading keyword, so the
+ * message still matches its pattern: `each value in tags ...` → `each value in items.0.tags ...`.
+ */
+function withParentPath(message: string, parentPath: string): string {
+  if (!parentPath) {
+    return message;
+  }
+  const lead = PROPERTY_LEAD.exec(message)?.[0] ?? '';
+  return `${lead}${parentPath}.${message.slice(lead.length)}`;
+}
+
 /**
  * Flattens validation errors, nested ones included (as `parent.0.child ...`, like Nest's
  * ValidationPipe), into Spanish messages.
@@ -95,9 +110,7 @@ export function validationErrorMessages(
       ? `${parentPath}.${error.property}`
       : error.property;
     const own = Object.values(error.constraints ?? {}).map((message) =>
-      translateValidationMessage(
-        parentPath ? `${parentPath}.${message}` : message,
-      ),
+      translateValidationMessage(withParentPath(message, parentPath)),
     );
     const nested = validationErrorMessages(error.children ?? [], path);
     if (own.length === 0 && nested.length === 0) {

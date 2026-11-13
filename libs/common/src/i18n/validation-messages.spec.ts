@@ -60,6 +60,26 @@ describe('validation messages in Spanish', () => {
     ]);
   });
 
+  it('keeps "each value in" translated inside nested objects', async () => {
+    class ItemDto {
+      @IsString({ each: true })
+      tags!: string[];
+    }
+    class OrderDto {
+      @ValidateNested({ each: true })
+      @Type(() => ItemDto)
+      items!: ItemDto[];
+    }
+
+    const errors = await validate(
+      plainToInstance(OrderDto, { items: [{ tags: ['ok', 3] }] }),
+    );
+
+    expect(validationErrorMessages(errors)).toEqual([
+      'Cada valor de items.0.tags debe ser un texto',
+    ]);
+  });
+
   it('translates "each value in" messages and leaves unknown messages unchanged', () => {
     expect(
       translateValidationMessage('each value in ids must be an integer number'),
