@@ -589,6 +589,33 @@ export class ProjectsService implements OnModuleInit {
     return { ...project, tutors: toProjectTutorsResponse(project.tutors) };
   }
 
+  /**
+   * Names of the given projects, looked up once each and in parallel through GetProject
+   * (project-service has no batch lookup). A project that cannot be read (deleted, or
+   * project-service failing for it) is left out, so one missing project does not break
+   * a whole listing.
+   */
+  async getProjectNamesByIds(ids: number[]): Promise<Map<number, string>> {
+    const uniqueIds = [...new Set(ids)];
+    const results = await Promise.allSettled(
+      uniqueIds.map((id) =>
+        firstValueFrom(this.projectsService.getProject({ id })),
+      ),
+    );
+
+    const names = new Map<number, string>();
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled' && result.value.project) {
+        names.set(uniqueIds[index], result.value.project.name);
+      } else if (result.status === 'rejected') {
+        this.logger.warn(
+          `[getProjectNamesByIds] Project ${uniqueIds[index]} could not be read`,
+        );
+      }
+    });
+    return names;
+  }
+
   private mapDocumentStatusToProto(
     state: DocumentStatusFilter,
   ): DocumentStatus | undefined {

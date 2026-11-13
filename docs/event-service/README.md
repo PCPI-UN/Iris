@@ -21,7 +21,7 @@ Each module follows the layering described in `LLM_RULES.md` (`domain`, `applica
 
 | Module | Responsibility |
 | --- | --- |
-| `events` | Event CRUD and listings, results publication (`results_published`: participants see their scores and awards only once the admin sets it), dashboard stats, AR listing, event members, ranking configuration, and the catalog (categories, awards, award winners, inscription details, recaps). For the student dashboard: `ListEventsByIds` (deleted events included, with `active = false`), `ListAwardsByProjects` (awards won by a set of projects in active categories, with their category, event and whether the event results are published) and `ListCategoriesByIds` |
+| `events` | Event CRUD and listings, results publication (`results_published`: participants see their scores and awards only once the admin sets it), dashboard stats, AR listing, event members, ranking configuration, and the catalog (categories, awards, award winners, inscription details, recaps). For the student dashboard: `ListEventsByIds` (deleted events included, with `active = false`), `ListAwardsByProjects` (awards won by a set of projects in active categories, with their category, event and whether the event results are published) and `ListCategoriesByIds`. For the public winners page: `ListPublishedWinners` |
 | `courses` | Legacy "course" API. There is no courses table: it reads and writes `categories` (`code` maps to `name`) |
 
 ## Dependencies
@@ -58,6 +58,16 @@ sequenceDiagram
 - A user has at most one role per event: the primary key of `event_members` is (`user_id`, `event_id`).
 - Removing a member is a soft delete (`active = false`); the row stays.
 - `is_publicly_joinable` does not apply here: accepting an invitation adds the member even to a private event. The flag only gates public project submissions (project-service `CreateProject`).
+
+## Public winners across events
+
+`ListPublishedWinners(page, limit)` is the permanent winners view across events (ClickUp 86e3wzr5x). It reads `award_winners` with their award, category and event, and applies the same rule as the gateway public ranking report:
+
+- An event is included only when it is active, its ranking is public (`ranking_event.visible_public`) and it has at least one winner in an active category. Events without a ranking configuration are left out.
+- Events are ordered by `end_date` descending, then `id` descending, and paginated by event (`limit` defaults to 10, at most 50).
+- Each event lists its categories, each category its awards ordered by `position`, and each award its winners. Co-winners are several winners of the same award; `coWinners` is true when an award has more than one.
+- `grade` is unset unless the event ranking shows grades (`ranking_event.grade_visible`).
+- The response carries project ids only; the gateway adds the project names.
 
 ## Related
 

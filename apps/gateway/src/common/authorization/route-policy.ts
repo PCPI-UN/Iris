@@ -139,6 +139,7 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'GET /events/public/:id': { access: 'public' },
   'GET /events/public/past': { access: 'public' },
   'GET /events/public/past/:id': { access: 'public' },
+  'GET /events/public/winners': { access: 'public' },
   'POST /events/ranking-config': { permission: ['manage:events'] },
   'DELETE /events/ranking-config/:id': { permission: ['manage:events'] },
   'GET /events/ranking-config/:id': { permission: ['read:events'] },

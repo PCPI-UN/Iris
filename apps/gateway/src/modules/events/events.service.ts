@@ -143,6 +143,10 @@ import {
   GetEventsForARResponse,
 } from '@app/common/generated/event';
 import { CreateRankingEventDTO } from './dto/ranking-event/create-ranking-event.dto';
+import {
+  ListPublishedWinnersDTO,
+  ListPublishedWinnersResult,
+} from './dto/winners/list-published-winners.dto';
 import { UpdateRankingEventDTO } from './dto/ranking-event/update-ranking-event.dto';
 import {
   EVALUATION_SERVICE_NAME,
@@ -1290,6 +1294,67 @@ export class EventService implements OnModuleInit {
     return firstValueFrom(
       this.eventService.getRankingEvent({ id } as GetRankingEventRequest),
     );
+  }
+
+  /**
+   * Public winners view across events (CU-86e3wzr5x): winners and co-winners of every
+   * event with a published ranking, newest event first, with each project's name.
+   * event-service already leaves out unpublished rankings and hides grades the ranking
+   * does not show.
+   */
+  async listPublishedWinners(
+    dto: ListPublishedWinnersDTO,
+  ): Promise<ListPublishedWinnersResult> {
+    const response = await firstValueFrom(
+      this.eventService.listPublishedWinners({
+        page: dto.page,
+        limit: dto.limit,
+      }),
+    );
+    const events = response.events ?? [];
+
+    const projectIds = events.flatMap((event) =>
+      (event.categories ?? []).flatMap((category) =>
+        (category.awards ?? []).flatMap((award) =>
+          (award.winners ?? []).map((winner) => winner.projectId),
+        ),
+      ),
+    );
+    const projectNames = projectIds.length
+      ? await this.projectsService.getProjectNamesByIds(projectIds)
+      : new Map<number, string>();
+
+    return {
+      events: events.map((event) => ({
+        eventId: event.eventId,
+        name: event.name,
+        startDate: event.startDate,
+        endDate: event.endDate,
+        categories: (event.categories ?? []).map((category) => ({
+          categoryId: category.categoryId,
+          name: category.name,
+          awards: (category.awards ?? []).map((award) => ({
+            awardId: award.awardId,
+            title: award.title,
+            position: award.position,
+            coWinners: award.coWinners ?? false,
+            winners: (award.winners ?? []).map((winner) => ({
+              winnerId: winner.winnerId,
+              projectId: winner.projectId,
+              projectName: projectNames.get(winner.projectId) ?? null,
+              grade: winner.grade ?? null,
+            })),
+          })),
+        })),
+      })),
+      meta: {
+        total: response.meta?.total ?? 0,
+        itemsOnCurrentPage: response.meta?.itemsOnCurrentPage ?? events.length,
+        itemsPerPage: response.meta?.itemsPerPage ?? dto.limit ?? 10,
+        currentPage: response.meta?.currentPage ?? dto.page ?? 1,
+        totalPages: response.meta?.totalPages ?? 0,
+      },
+    };
   }
 
   async getRankingEventByEventId(eventId: number): Promise<RankingEventResponse> {

@@ -22,7 +22,7 @@ Single HTTP entry point of the platform. It authenticates the browser session, c
 | --- | --- | --- |
 | `auth` | Login, Microsoft sign-in, signup, activation, refresh, logout, password flows, current user | `auth` |
 | `users` | Platform user administration and platform roles | `auth` |
-| `events` | Events, courses and categories, awards, inscription details, recaps, members, ranking configuration and rankings | `event`, `auth`, `evaluation`, `invitation` |
+| `events` | Events, courses and categories, awards, inscription details, recaps, members, ranking configuration, rankings and the public winners page | `event`, `auth`, `evaluation`, `invitation`, `project` (through `projects`) |
 | `projects` | Project submission with files, review, participants, juror assignment, documents | `project`, `event`, `evaluation` |
 | `criterions` | Evaluation criteria and components | `evaluation` |
 | `evaluations` | Evaluate a project, project statistics, top projects per course | `evaluation`, `project` |
@@ -52,6 +52,12 @@ Cross-cutting code lives in `src/common`: guards, decorators (`@Public`, `@Requi
 | `permission` | The permissions listed |
 
 See [auth-service](../auth-service/) for how tokens are issued and refreshed.
+
+## Public winners page
+
+`GET /events/public/winners?page=&limit=` is public (no session). It returns the winners and co-winners of every event whose ranking is public, grouped by event, category and award, newest event first, with pagination by event (`limit` at most 50). The selection and the grade rule live in event-service `ListPublishedWinners` (see [event-service](../event-service/README.md#public-winners-across-events)); `grade` is `null` unless the event ranking shows grades.
+
+The gateway adds each winner's `projectName`. `project.proto` has no batch lookup by ids, so the gateway calls `GetProject` once per distinct project, in parallel. A page holds at most 50 events with a few awards each, so the number of calls stays small and no new RPC is needed; a batch RPC in project-service is the next step if pages grow. A project that cannot be read (for example, deleted) keeps its winner entry with `projectName: null` instead of failing the page.
 
 ## File uploads
 
