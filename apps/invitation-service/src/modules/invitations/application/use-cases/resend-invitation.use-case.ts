@@ -30,14 +30,14 @@ export class ResendInvitationUseCase {
         if (!invitation) {
             throw new RpcException({
                 code: status.NOT_FOUND,
-                message: 'Invitation not found',
+                message: 'No se encontró la invitación',
             });
         }
 
         if (invitation.status !== InvitationStatus.EXPIRED && invitation.status !== InvitationStatus.PENDING) {
             throw new RpcException({
                 code: status.FAILED_PRECONDITION,
-                message: 'Only EXPIRED or PENDING invitations can be resent',
+                message: 'Solo se pueden reenviar invitaciones expiradas o pendientes',
             });
         }
 
@@ -58,7 +58,7 @@ export class ResendInvitationUseCase {
 
             throw new RpcException({
                 code: status.ALREADY_EXISTS,
-                message: `User has already accepted an invitation for this ${targetName}`,
+                message: `El usuario ya aceptó una invitación para este ${targetName}`,
             });
         }
 
@@ -69,7 +69,7 @@ export class ResendInvitationUseCase {
         } catch (error) {
             throw new RpcException({
                 code: status.NOT_FOUND,
-                message: 'User not found for resend invitation',
+                message: 'No se encontró el usuario para reenviar la invitación',
             });
         }
 

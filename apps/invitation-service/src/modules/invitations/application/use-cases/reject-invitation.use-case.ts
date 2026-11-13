@@ -19,7 +19,7 @@ export class RejectInvitationUseCase {
     if (!invitation) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: 'Invitation not found',
+        message: 'No se encontró la invitación',
       });
     }
 
@@ -27,7 +27,7 @@ export class RejectInvitationUseCase {
     if (!invitation.canBeRejected()) {
       throw new RpcException({
         code: status.FAILED_PRECONDITION,
-        message: 'Invitation cannot be rejected (expired or already processed)',
+        message: 'La invitación no se puede rechazar (expiró o ya se procesó)',
       });
     }
 

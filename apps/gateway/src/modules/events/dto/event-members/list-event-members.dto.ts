@@ -26,7 +26,7 @@ export class ListEventMembersDTO {
     required: false,
   })
   @IsInt() @IsPositive() @IsOptional()
-  @Max(20, { message: 'limit cannot exceed 20' })
+  @Max(20, { message: 'limit no puede ser mayor que 20' })
   @Type(() => Number)
   limit?: number = 20;
 

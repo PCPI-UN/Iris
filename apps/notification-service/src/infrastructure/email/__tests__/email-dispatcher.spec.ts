@@ -72,7 +72,7 @@ describe('EmailDispatcher', () => {
     );
 
     await expect(dispatcher.sendEmail(request)).rejects.toThrow(
-      'Failed to send email',
+      'No se pudo enviar el correo',
     );
   });
 
@@ -85,7 +85,7 @@ describe('EmailDispatcher', () => {
     );
 
     await expect(dispatcher.sendEmail(request)).rejects.toThrow(
-      'Failed to send email',
+      'No se pudo enviar el correo',
     );
   });
 });

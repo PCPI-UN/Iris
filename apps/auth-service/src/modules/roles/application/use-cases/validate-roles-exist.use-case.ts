@@ -11,7 +11,7 @@ export class ValidateRolesExistUseCase {
     if (!roleIds || roleIds.length === 0) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: 'At least one role must be provided',
+        message: 'Se debe indicar al menos un rol',
       });
     }
 
@@ -21,7 +21,7 @@ export class ValidateRolesExistUseCase {
     if (foundRolesCount !== uniqueRoleIds.length) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: 'One or more of the provided roles do not exist',
+        message: 'Uno o más de los roles indicados no existen',
       });
     }
   }

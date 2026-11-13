@@ -27,7 +27,7 @@ const READ_SAS_TTL_SEC = 3600;
  */
 const OPEN_SAS_TTL_SEC = 3600;
 
-const STORAGE_UNAVAILABLE = 'Document storage is not configured';
+const STORAGE_UNAVAILABLE = 'El almacenamiento de documentos no está configurado';
 
 export interface AzureBlobUploadResponse {
   blobName: string;
@@ -187,7 +187,7 @@ export class AzureBlobUploadService {
         error.stack,
       );
       throw new Error(
-        `Failed to upload file to Azure Blob Storage: ${error.message}`,
+        `No se pudo subir el archivo a Azure Blob Storage: ${error.message}`,
       );
     }
   }

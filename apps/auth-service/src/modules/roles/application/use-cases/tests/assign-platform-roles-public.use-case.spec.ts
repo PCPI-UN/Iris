@@ -51,7 +51,7 @@ describe('AssignPlatformRolesPublicUseCase', () => {
       mockValidateRolesExistUseCase.execute.mockRejectedValue(
         new RpcException({
           code: status.NOT_FOUND,
-          message: 'One or more of the provided roles do not exist',
+          message: 'Uno o más de los roles indicados no existen',
         }),
       );
 

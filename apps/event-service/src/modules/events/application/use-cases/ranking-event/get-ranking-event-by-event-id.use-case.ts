@@ -12,7 +12,7 @@ export class GetRankingEventByEventIdUseCase {
     if (!rankingEvent) {
       throw new RpcException({
         code: 5,
-        message: `RankingEvent for event ${input.eventId} not found`,
+        message: `No se encontró la configuración de ranking del evento ${input.eventId}`,
       });
     }
     return rankingEvent;

@@ -16,7 +16,7 @@ export class GetUserByEmailUseCase {
     if (!user) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: `User with email ${email} not found`,
+        message: `No se encontró el usuario con el correo ${email}`,
       });
     }
 

@@ -24,7 +24,7 @@ export class NotificateStudentUC {
       params: { firstName, lastName, projectName },
     });
     if (!result.success) {
-        throw new ConflictError('Error sending notification email');
+        throw new ConflictError('Error al enviar el correo de notificación');
   }
     return { success: true };
     }

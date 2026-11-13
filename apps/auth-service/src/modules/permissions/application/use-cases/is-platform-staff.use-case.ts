@@ -35,7 +35,7 @@ export class IsPlatformStaffUseCase {
       if (!user) {
         throw new RpcException({
           code: status.NOT_FOUND,
-          message: `User with email '${dto.email}' not found`,
+          message: `No se encontró el usuario con el correo '${dto.email}'`,
         });
       }
       userId = user.id;
@@ -44,7 +44,7 @@ export class IsPlatformStaffUseCase {
     } else {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: 'Either userId or email must be provided',
+        message: 'Se debe indicar userId o email',
       });
     }
 

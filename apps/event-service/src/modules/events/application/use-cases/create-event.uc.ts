@@ -19,14 +19,14 @@ export class CreateEventUC {
       throw new RpcException({
         code: 3,
         message:
-          'Validation failed: inscriptionDeadline must be before startDate',
+          'Validación fallida: inscriptionDeadline debe ser anterior a startDate',
       });
     }
 
     if (startDate >= endDate) {
       throw new RpcException({
         code: 3,
-        message: 'Validation failed: startDate must be before endDate',
+        message: 'Validación fallida: startDate debe ser anterior a endDate',
       });
     }
 
@@ -34,7 +34,7 @@ export class CreateEventUC {
     if (existingEvent) {
       throw new RpcException({
         code: 6,
-        message: `Event with accessCode "${input.accessCode}" already exists`,
+        message: `Ya existe un evento con el código de acceso "${input.accessCode}"`,
       });
     }
 

@@ -40,7 +40,7 @@ export class OwnProfileFieldsDto {
   @IsOptional()
   @Transform(trim)
   @Matches(/^\d{10}$/, {
-    message: 'phone must be a 10-digit Colombian phone number',
+    message: 'phone debe ser un número de teléfono colombiano de 10 dígitos',
   })
   @IsPhoneNumber('CO')
   phone?: string;

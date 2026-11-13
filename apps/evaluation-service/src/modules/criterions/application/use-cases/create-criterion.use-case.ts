@@ -42,7 +42,7 @@ export class CreateCriterionUseCase {
     if (!name || name.trim().length === 0) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: 'Name is required and cannot be empty',
+        message: 'El nombre es obligatorio y no puede estar vacío',
       });
     }
 
@@ -50,7 +50,7 @@ export class CreateCriterionUseCase {
     if (!(weight > 0)) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: 'Weight must be greater than 0',
+        message: 'El peso debe ser mayor que 0',
       });
     }
 
@@ -59,7 +59,7 @@ export class CreateCriterionUseCase {
     } catch {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: `Event with ID ${eventId} not found`,
+        message: `No se encontró el evento con ID ${eventId}`,
       });
     }
 
@@ -70,13 +70,13 @@ export class CreateCriterionUseCase {
     if (!component) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: `Component with ID ${componentId} not found`,
+        message: `No se encontró el componente con ID ${componentId}`,
       });
     }
     if (component.eventId !== eventId) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: `Component ${componentId} does not belong to event ${eventId}`,
+        message: `El componente ${componentId} no pertenece al evento ${eventId}`,
       });
     }
 
@@ -90,7 +90,7 @@ export class CreateCriterionUseCase {
       if (!valid) {
         throw new RpcException({
           code: status.INVALID_ARGUMENT,
-          message: `Courses [${invalidCourses.join(', ')}] do not belong to event ${eventId}`,
+          message: `Las categorías [${invalidCourses.join(', ')}] no pertenecen al evento ${eventId}`,
         });
       }
     }
@@ -124,7 +124,7 @@ export class CreateCriterionUseCase {
       if (error instanceof RpcException) throw error;
       throw new RpcException({
         code: status.INTERNAL,
-        message: 'Failed to create criterion. Please try again later.',
+        message: 'No se pudo crear el criterio. Intenta de nuevo más tarde.',
       });
     }
   }

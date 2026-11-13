@@ -21,14 +21,14 @@ export class GrpcErrorFilter implements RpcExceptionFilter {
       switch (exception.code) {
         case 'P2002': // unique constraint
           return throwError(() =>
-            ({ code: status.ALREADY_EXISTS, message: `Unique constraint failed: ${exception.meta?.target}` })
+            ({ code: status.ALREADY_EXISTS, message: `Ya existe un registro con el mismo valor en: ${exception.meta?.target}` })
           );
         case 'P2025': // record not found
-          return throwError(() => ({ code: status.NOT_FOUND, message: 'Record not found' }));
+          return throwError(() => ({ code: status.NOT_FOUND, message: 'No se encontró el registro' }));
         case 'P2003': // FK violation
-          return throwError(() => ({ code: status.FAILED_PRECONDITION, message: 'Foreign key constraint failed' }));
+          return throwError(() => ({ code: status.FAILED_PRECONDITION, message: 'El registro hace referencia a datos que no existen' }));
         default:
-          return throwError(() => ({ code: status.INTERNAL, message: 'Database error' }));
+          return throwError(() => ({ code: status.INTERNAL, message: 'Error de base de datos' }));
       }
     }
 
@@ -50,6 +50,6 @@ export class GrpcErrorFilter implements RpcExceptionFilter {
     }
 
     // Desconocido
-    return throwError(() => ({ code: status.INTERNAL, message: 'Internal error' }));
+    return throwError(() => ({ code: status.INTERNAL, message: 'Error interno' }));
   }
 }

@@ -30,7 +30,7 @@ export class SetUserPlatformRolesUseCase {
     if (!user) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: `User with ID #${userId} not found`,
+        message: `No se encontró el usuario con ID #${userId}`,
       });
     }
 
@@ -39,7 +39,7 @@ export class SetUserPlatformRolesUseCase {
     // IRIS-V3-ADM-02: nobody changes their own roles; only the principal administrator
     // grants, removes or touches administrator roles; the last Admin keeps the role
     const actor = await this.administrationPolicy.loadActor(actorUserId);
-    this.administrationPolicy.assertNotSelf(actor, userId, 'change the roles of');
+    this.administrationPolicy.assertNotSelf(actor, userId, 'cambiar los roles de');
     const currentRoles = await this.administrationPolicy.assertCanManageAccount(actor, userId);
     this.administrationPolicy.assertCanGrant(actor, roles);
     if (!roles.some((role) => role.name === ADMIN_ROLE_NAME)) {

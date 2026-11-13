@@ -28,7 +28,7 @@ export class AcceptInvitationUseCase {
     if (!invitation || !invitation.canBeAccepted()) {
       throw new RpcException({
         code: status.FAILED_PRECONDITION,
-        message: 'Invitation cannot be accepted',
+        message: 'La invitación no se puede aceptar',
       });
     }
 
@@ -39,7 +39,7 @@ export class AcceptInvitationUseCase {
       if (!dto.password && !dto.microsoftToken) {
         throw new RpcException({
           code: status.INVALID_ARGUMENT,
-          message: 'Password or Microsoft authentication token is required for new user activation',
+          message: 'Para activar un usuario nuevo se requiere una contraseña o el token de Microsoft',
         });
       }
 
@@ -98,7 +98,7 @@ export class AcceptInvitationUseCase {
         if (!project) {
           throw new RpcException({
             code: status.NOT_FOUND,
-            message: `Project with ID ${invitation.targetId} not found`,
+            message: `No se encontró el proyecto con ID ${invitation.targetId}`,
           });
         }
 
@@ -115,7 +115,7 @@ export class AcceptInvitationUseCase {
           if (!studentCode) {
             throw new RpcException({
               code: status.INVALID_ARGUMENT,
-              message: 'studentCode could not be resolved from pending participants for this invitation',
+              message: 'No se pudo obtener el código de estudiante de los participantes pendientes de esta invitación',
             });
           }
 

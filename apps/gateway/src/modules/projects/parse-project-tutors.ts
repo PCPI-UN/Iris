@@ -15,12 +15,12 @@ export function parseProjectTutors(raw?: string): ProjectTutorsInputDto {
     parsed = JSON.parse(raw);
   } catch {
     throw new BadRequestException(
-      'Invalid tutors format. Must be a valid JSON object.',
+      'El formato de los tutores no es válido. Debe ser un objeto JSON válido.',
     );
   }
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new BadRequestException(
-      'Invalid tutors format. Must be a valid JSON object.',
+      'El formato de los tutores no es válido. Debe ser un objeto JSON válido.',
     );
   }
 

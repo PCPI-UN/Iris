@@ -91,7 +91,7 @@ describe('ActivateUserUseCase', () => {
         expect.objectContaining({
           error: expect.objectContaining({
             code: status.NOT_FOUND,
-            message: 'User not found',
+            message: 'No se encontró el usuario',
           }),
         }),
       );
@@ -124,7 +124,7 @@ describe('ActivateUserUseCase', () => {
         expect.objectContaining({
           error: expect.objectContaining({
             code: status.FAILED_PRECONDITION,
-            message: 'User is not pending activation',
+            message: 'El usuario no está pendiente de activación',
           }),
         }),
       );

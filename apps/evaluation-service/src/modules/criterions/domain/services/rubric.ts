@@ -15,8 +15,8 @@ export function exceedsFullWeight(otherWeight: number, requestedWeight: number, 
 
 export function exceedsFullWeightMessage(eventId: number, otherWeight: number, requestedWeight: number): string {
   return (
-    `Total component weight for event ${eventId} would exceed 100%. ` +
-    `Other components: ${(otherWeight * 100).toFixed(2)}%, Requested: ${(requestedWeight * 100).toFixed(2)}%`
+    `El peso total de los componentes del evento ${eventId} superaría el 100%. ` +
+    `Otros componentes: ${(otherWeight * 100).toFixed(2)}%, solicitado: ${(requestedWeight * 100).toFixed(2)}%`
   );
 }
 

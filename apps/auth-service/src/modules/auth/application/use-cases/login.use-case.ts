@@ -27,28 +27,28 @@ export class LoginUseCase {
     if (!user) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: 'No user found with the provided email',
+        message: 'No existe un usuario con el correo indicado',
       });
     }
 
     if (!user.active) {
       throw new RpcException({
         code: status.PERMISSION_DENIED,
-        message: 'This user account is inactive',
+        message: 'La cuenta de este usuario está inactiva',
       });
     }
 
     if (!user.password) {
       throw new RpcException({
         code: status.UNAUTHENTICATED,
-        message: 'Invalid credentials provided',
+        message: 'Las credenciales no son válidas',
       });
     }
 
     if (user.status !== 'CONFIRMED') {
       throw new RpcException({
         code: status.PERMISSION_DENIED,
-        message: 'User account is not confirmed, check your email',
+        message: 'La cuenta no está confirmada; revisa tu correo',
       });
     }
 
@@ -60,7 +60,7 @@ export class LoginUseCase {
     if (!isPasswordValid) {
       throw new RpcException({
         code: status.UNAUTHENTICATED,
-        message: 'Invalid credentials provided',
+        message: 'Las credenciales no son válidas',
       });
     }
 

@@ -70,7 +70,7 @@ describe('CreateInvitationUseCase - PROJECT_TUTOR', () => {
     projectService.getProject.mockResolvedValue(null);
 
     await expect(useCase.execute(dto)).rejects.toMatchObject(
-      new RpcException({ code: status.NOT_FOUND, message: 'Project with ID 10 not found' }),
+      new RpcException({ code: status.NOT_FOUND, message: 'No se encontró el proyecto con ID 10' }),
     );
     expect(invitationRepository.save).not.toHaveBeenCalled();
     expect(notificationService.sendProjectTutorInvitationEmail).not.toHaveBeenCalled();

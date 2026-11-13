@@ -75,7 +75,7 @@ export class CacheManagementController {
   async clearUserCache(@Param('userId', ParseIntPipe) userId: number) {
     await this.cacheService.invalidateUserCache(userId);
     return {
-      message: `Cache cleared for user ${userId}`,
+      message: `Se limpió la caché del usuario ${userId}`,
     };
   }
 
@@ -92,7 +92,7 @@ export class CacheManagementController {
   async clearEndpointCache(@Query('path') path: string) {
     if (!path) {
       return {
-        error: 'Missing required query parameter: path',
+        error: 'Falta el parámetro obligatorio de la consulta: path',
       };
     }
 
@@ -115,7 +115,7 @@ export class CacheManagementController {
   async clearEventCache(@Param('eventId', ParseIntPipe) eventId: number) {
     await this.cacheService.invalidateEventCache(eventId);
     return {
-      message: `Cache cleared for event ${eventId}`,
+      message: `Se limpió la caché del evento ${eventId}`,
     };
   }
 
@@ -133,7 +133,7 @@ export class CacheManagementController {
   async clearCachePattern(@Query('pattern') pattern: string) {
     if (!pattern) {
       return {
-        error: 'Missing required query parameter: pattern',
+        error: 'Falta el parámetro obligatorio de la consulta: pattern',
       };
     }
 

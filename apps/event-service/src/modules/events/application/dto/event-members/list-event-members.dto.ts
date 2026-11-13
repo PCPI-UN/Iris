@@ -13,7 +13,7 @@ export class ListEventMembersDTO {
   @IsOptional()
   @IsInt()
   @IsPositive()
-  @Max(50, { message: 'limit cannot exceed 50' })
+  @Max(50, { message: 'limit no puede ser mayor que 50' })
   limit?: number = 10;
 
   @IsOptional()

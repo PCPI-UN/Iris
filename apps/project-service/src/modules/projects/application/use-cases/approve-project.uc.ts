@@ -15,7 +15,7 @@ export class ApproveProjectUC implements OnModuleInit {
 
   async execute(input: { id: number; actingUserId: number, eventType: string }) {
     const project = await this.repo.findById(input.id);
-    if (!project) throw new NotFoundError('Project not found');
+    if (!project) throw new NotFoundError('No se encontró el proyecto');
     //console.log('Approving project:', project);
 
     if (project.state === 'APPROVED') {
@@ -25,7 +25,7 @@ export class ApproveProjectUC implements OnModuleInit {
 
     if (project.state !== 'UNDER_REVIEW') {
       throw new ValidationError(
-        `Project in invalid state for approval: ${project.state}`,
+        `El proyecto no se puede aprobar en el estado ${project.state}`,
       );
     }
 

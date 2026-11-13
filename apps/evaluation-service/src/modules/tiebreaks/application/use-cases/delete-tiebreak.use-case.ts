@@ -14,7 +14,7 @@ export class DeleteTieBreakUseCase {
         if (!existing) {
             throw new RpcException({
                 code: status.NOT_FOUND,
-                message: `TieBreak with id ${dto.id} not found`,
+                message: `No se encontró el desempate con ID ${dto.id}`,
             });
         }
 

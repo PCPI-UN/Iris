@@ -46,7 +46,7 @@ export class PermissionsGuard implements CanActivate {
 
     if (!user || !user.platformPermissions) {
       this.logger.warn(`Permission check failed: No user or permissions found`);
-      throw new ForbiddenException('User does not have required permissions');
+      throw new ForbiddenException('El usuario no tiene los permisos necesarios');
     }
 
     // Admin users bypass all permission checks
@@ -61,7 +61,7 @@ export class PermissionsGuard implements CanActivate {
 
     if (missingPermissions.length > 0) {
       throw new ForbiddenException(
-        `Missing required permissions: ${missingPermissions.join(', ')}`,
+        `Faltan los permisos: ${missingPermissions.join(', ')}`,
       );
     }
 

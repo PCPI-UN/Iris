@@ -101,7 +101,7 @@ describe('RefreshUseCase', () => {
         expect.objectContaining({
           error: expect.objectContaining({
             code: status.UNAUTHENTICATED,
-            message: 'Invalid or expired refresh token',
+            message: 'La sesión no es válida o expiró; inicia sesión de nuevo',
           }),
         }),
       );
@@ -130,7 +130,7 @@ describe('RefreshUseCase', () => {
         expect.objectContaining({
           error: expect.objectContaining({
             code: status.UNAUTHENTICATED,
-            message: 'Invalid or expired refresh token',
+            message: 'La sesión no es válida o expiró; inicia sesión de nuevo',
           }),
         }),
       );
@@ -159,7 +159,7 @@ describe('RefreshUseCase', () => {
         expect.objectContaining({
           error: expect.objectContaining({
             code: status.UNAUTHENTICATED,
-            message: 'Invalid or expired refresh token',
+            message: 'La sesión no es válida o expiró; inicia sesión de nuevo',
           }),
         }),
       );
@@ -201,7 +201,7 @@ describe('RefreshUseCase', () => {
         expect.objectContaining({
           error: expect.objectContaining({
             code: status.PERMISSION_DENIED,
-            message: 'User not found or account is inactive',
+            message: 'No se encontró el usuario o la cuenta está inactiva',
           }),
         }),
       );

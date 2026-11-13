@@ -14,7 +14,7 @@ export class UpdateCourseUseCase {
     if (!current) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: 'Course not found',
+        message: 'No se encontró la categoría',
       });
     }
 
@@ -24,7 +24,7 @@ export class UpdateCourseUseCase {
       if (exists) {
         throw new RpcException({
           code: status.ALREADY_EXISTS,
-          message: 'Course code already exists for this event',
+          message: 'Ya existe una categoría con este código en el evento',
         });
       }
     }

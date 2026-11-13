@@ -31,7 +31,7 @@ export class CreatePlatformUserUseCase {
     if (emailExists) {
       throw new RpcException({
         code: status.ALREADY_EXISTS,
-        message: 'Another user with this email already exists',
+        message: 'Ya existe otro usuario con este correo',
       });
     }
 
@@ -40,7 +40,7 @@ export class CreatePlatformUserUseCase {
       if (phoneExists) {
         throw new RpcException({
           code: status.ALREADY_EXISTS,
-          message: 'Another user with this phone number already exists',
+          message: 'Ya existe otro usuario con este número de teléfono',
         });
       }
     }

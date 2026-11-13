@@ -84,7 +84,7 @@ describe('RejectInvitationUseCase', () => {
       await expect(useCase.execute({ token: 'invalid-token' })).rejects.toThrow(
         new RpcException({
           code: status.NOT_FOUND,
-          message: 'Invitation not found',
+          message: 'No se encontró la invitación',
         }),
       );
 
@@ -116,7 +116,7 @@ describe('RejectInvitationUseCase', () => {
       await expect(useCase.execute({ token: 'token-abc' })).rejects.toThrow(
         new RpcException({
           code: status.FAILED_PRECONDITION,
-          message: 'Invitation cannot be rejected (expired or already processed)',
+          message: 'La invitación no se puede rechazar (expiró o ya se procesó)',
         }),
       );
 
@@ -148,7 +148,7 @@ describe('RejectInvitationUseCase', () => {
       await expect(useCase.execute({ token: 'token-abc' })).rejects.toThrow(
         new RpcException({
           code: status.FAILED_PRECONDITION,
-          message: 'Invitation cannot be rejected (expired or already processed)',
+          message: 'La invitación no se puede rechazar (expiró o ya se procesó)',
         }),
       );
 
@@ -180,7 +180,7 @@ describe('RejectInvitationUseCase', () => {
       await expect(useCase.execute({ token: 'token-abc' })).rejects.toThrow(
         new RpcException({
           code: status.FAILED_PRECONDITION,
-          message: 'Invitation cannot be rejected (expired or already processed)',
+          message: 'La invitación no se puede rechazar (expiró o ya se procesó)',
         }),
       );
 

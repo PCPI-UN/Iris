@@ -12,12 +12,12 @@ export class ChangeToUnderReviewProjectUC {
         const project = await this.projectRepository.findById(input.projectId);
 
         if (!project) {
-            throw new NotFoundError('Project not found');
+            throw new NotFoundError('No se encontró el proyecto');
         }
 
         const isParticipant = await this.projectRepository.isUserParticipant(input.projectId, input.activeUserId);
         if (!isParticipant) {
-            throw new ForbiddenError('Only project participants can change project status to under review');
+            throw new ForbiddenError('Solo los participantes del proyecto pueden pasarlo a revisión');
         }
 
         if (project.state === 'UNDER_REVIEW'){
@@ -25,7 +25,7 @@ export class ChangeToUnderReviewProjectUC {
         }
 
         if (project.state !== 'REQUEST_CHANGES') {
-            throw new ValidationError('Project must be in REQUEST_CHANGES state to be changed to UNDER_REVIEW');
+            throw new ValidationError('El proyecto debe estar en estado REQUEST_CHANGES para pasar a UNDER_REVIEW');
         }
 
         return this.projectRepository.setProjectStateWithReason(project.id, 'UNDER_REVIEW', ' ');

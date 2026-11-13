@@ -52,7 +52,7 @@ export class ValidateJurorHasNotEvaluatedUseCase implements OnModuleInit {
     );
 
     if (!projectResponse.project) {
-      throw new NotFoundException('Project not found');
+      throw new NotFoundException('No se encontró el proyecto');
     }
 
     const evaluationResponse = await lastValueFrom(

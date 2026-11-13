@@ -220,7 +220,7 @@ export class AuthController {
       ...(cookieDomain && { domain: cookieDomain }),
     });
 
-    return { success: true, message: 'Token refreshed successfully' };
+    return { success: true, message: 'Sesión renovada correctamente' };
   }
 
   @Get('me')
@@ -303,7 +303,7 @@ export class AuthController {
   private parseJwtExpiration(expiration: string): number {
     const match = expiration.match(/^(\d+)([smhd])$/);
     if (!match) {
-      throw new Error(`Invalid expiration format: ${expiration}`);
+      throw new Error(`Formato de expiración no válido: ${expiration}`);
     }
 
     const value = parseInt(match[1], 10);
