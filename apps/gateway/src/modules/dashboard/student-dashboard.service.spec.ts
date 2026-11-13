@@ -88,7 +88,7 @@ describe('StudentDashboardService', () => {
     overrides: {
       stats?: object;
       academic?: object;
-      results?: Record<number, { evaluated: boolean; finalScore: number }>;
+      grades?: { projectId: number; averageGrade: number }[];
     } = {},
   ) => {
     const projects = {
@@ -105,12 +105,11 @@ describe('StudentDashboardService', () => {
       listUserParticipations: jest.fn(),
     };
     const evaluations = {
-      getProjectResult: jest.fn((projectId: number) => {
-        const result = overrides.results?.[projectId];
-        return result
-          ? Promise.resolve(result)
-          : Promise.reject(new Error('unavailable'));
-      }),
+      getAverageGrades: jest.fn(() =>
+        overrides.grades
+          ? Promise.resolve(overrides.grades)
+          : Promise.reject(new Error('unavailable')),
+      ),
     };
     return {
       service: new StudentDashboardService(
@@ -236,7 +235,7 @@ describe('StudentDashboardService', () => {
 
     const dashboard = await service.getDashboard(user);
 
-    expect(evaluations.getProjectResult).not.toHaveBeenCalled();
+    expect(evaluations.getAverageGrades).not.toHaveBeenCalled();
     expect(dashboard.evaluation).toEqual({
       resultsPublished: false,
       finalScore: null,
@@ -253,16 +252,15 @@ describe('StudentDashboardService', () => {
         ],
         currentProject: { ...stats.currentProject, resultsPublished: true },
       },
-      results: {
-        34: { evaluated: true, finalScore: 72.5 },
-        20: { evaluated: false, finalScore: 0 },
-      },
+      // Project 20 has no evaluations: it is left out of the averages
+      grades: [{ projectId: 34, averageGrade: 72.5 }],
     });
 
     const dashboard = await service.getDashboard(user);
 
-    // The current project is also in the trajectory: its score is read once
-    expect(evaluations.getProjectResult).toHaveBeenCalledTimes(2);
+    // One call for every score; the current project is also in the trajectory
+    expect(evaluations.getAverageGrades).toHaveBeenCalledTimes(1);
+    expect(evaluations.getAverageGrades).toHaveBeenCalledWith([34, 20]);
     expect(dashboard.evaluation).toEqual({
       resultsPublished: true,
       finalScore: 72.5,
@@ -273,7 +271,7 @@ describe('StudentDashboardService', () => {
     ]);
   });
 
-  it('keeps the dashboard when a score cannot be read', async () => {
+  it('keeps the dashboard when the scores cannot be read', async () => {
     const { service } = build({
       stats: {
         participations: [

@@ -81,28 +81,24 @@ export class StudentDashboardService {
   }
 
   /**
-   * Final score of each project, only for projects that were evaluated. If a score cannot
-   * be read the dashboard is still answered, without that score.
+   * Final score of each project that was evaluated, in one call (the same value as the
+   * results endpoint). If the scores cannot be read the dashboard is still answered,
+   * without scores.
    */
   private async publishedScores(
     projectIds: number[],
   ): Promise<Map<number, number>> {
     const ids = [...new Set(projectIds)];
-    const entries = await Promise.all(
-      ids.map(async (projectId): Promise<[number, number] | null> => {
-        try {
-          const result =
-            await this.evaluationsService.getProjectResult(projectId);
-          return result.evaluated ? [projectId, result.finalScore] : null;
-        } catch (error: unknown) {
-          this.logger.warn(
-            `Score of project ${projectId} unavailable for the student dashboard: ${(error as Error)?.message}`,
-          );
-          return null;
-        }
-      }),
-    );
-    return new Map(entries.filter((e): e is [number, number] => e !== null));
+    if (!ids.length) return new Map();
+    try {
+      const grades = await this.evaluationsService.getAverageGrades(ids);
+      return new Map(grades.map((g) => [g.projectId, g.averageGrade]));
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Scores unavailable for the student dashboard: ${(error as Error)?.message}`,
+      );
+      return new Map();
+    }
   }
 }
 
