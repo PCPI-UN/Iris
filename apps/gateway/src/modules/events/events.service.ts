@@ -255,7 +255,11 @@ export class EventService implements OnModuleInit {
     );
   }
 
-  /** Deletes an event whose creation failed; the original error is the one reported. */
+  /**
+   * Undoes a failed event creation: deletes the event and then its grading scale assignment, so the
+   * scale is not kept in use by an event that no longer exists. Each step logs its own failure and
+   * never throws, so the caller reports the error that made the creation fail.
+   */
   private async rollBackCreatedEvent(eventId: number): Promise<void> {
     try {
       await this.delete({ id: eventId });
@@ -263,6 +267,43 @@ export class EventService implements OnModuleInit {
       this.logger.error(
         `Could not delete event ${eventId} after its creation failed: ${(error as Error)?.message}`,
       );
+      // The event still exists, so it keeps its scale
+      return;
+    }
+    try {
+      await firstValueFrom(
+        this.gradingScaleService.unassignEventGradingScale({ eventId }),
+      );
+    } catch (error) {
+      this.logger.error(
+        `Could not remove the grading scale of deleted event ${eventId}: ${(error as Error)?.message}`,
+      );
+    }
+  }
+
+  /**
+   * Updates the event fields after its grading scale changed; when that update fails, the previous
+   * scale is assigned again so the event is left as it was.
+   */
+  private async updateEventRestoringScale(
+    eventPayload: UpdateEventRequest,
+    previousScale: GradingScaleProto | null,
+    newScale: GradingScaleProto | null,
+  ): Promise<UpdateEventResponse> {
+    try {
+      return await firstValueFrom(this.eventService.updateEvent(eventPayload));
+    } catch (error) {
+      if (previousScale && newScale && previousScale.id !== newScale.id) {
+        try {
+          await this.assignGradingScale(eventPayload.id, previousScale.id);
+        } catch (restoreError) {
+          this.logger.error(
+            `Could not restore grading scale ${previousScale.id} of event ${eventPayload.id} after its update failed: ` +
+              `${(restoreError as Error)?.message}`,
+          );
+        }
+      }
+      throw error;
     }
   }
 
@@ -954,7 +995,7 @@ export class EventService implements OnModuleInit {
             await this.deleteCategory(createdCategoryId);
           } catch {}
         }
-        await this.delete({ id: response.event.id });
+        await this.rollBackCreatedEvent(response.event.id);
         throw error;
       }
     }
@@ -970,7 +1011,7 @@ export class EventService implements OnModuleInit {
           ),
         );
       } catch (error) {
-        await this.delete({ id: response.event.id });
+        await this.rollBackCreatedEvent(response.event.id);
         throw error;
       }
     }
@@ -1034,17 +1075,26 @@ export class EventService implements OnModuleInit {
       ...eventPayload
     } = normalizedDTO;
 
-    // The scale goes first: when it cannot change (the event already has evaluations) nothing is updated
+    // The scale goes first: when it cannot change (the event already has evaluations) nothing is
+    // updated, and when the event update fails the previous scale is assigned again
+    let previousGradingScale: GradingScaleProto | null = null;
     let eventGradingScale: GradingScaleProto | null = null;
     if (gradingScaleId !== undefined && gradingScaleId !== null) {
+      previousGradingScale = await firstValueFrom(
+        this.gradingScaleService.getEventGradingScale({
+          eventId: eventPayload.id,
+        }),
+      );
       eventGradingScale = await this.assignGradingScale(
         eventPayload.id,
         gradingScaleId,
       );
     }
 
-    const response = await firstValueFrom(
-      this.eventService.updateEvent(eventPayload as UpdateEventRequest),
+    const response = await this.updateEventRestoringScale(
+      eventPayload as UpdateEventRequest,
+      previousGradingScale,
+      eventGradingScale,
     );
 
     await this.updateEventCatalogData(

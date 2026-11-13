@@ -96,6 +96,11 @@ export class PrismaGradingScaleRepository implements GradingScaleRepositoryPort 
         });
     }
 
+    async unassignEvent(eventId: number): Promise<boolean> {
+        const result = await this.prisma.db.eventGradingScale.deleteMany({ where: { eventId } });
+        return result.count > 0;
+    }
+
     async assignIfMissing(assignments: EventScaleAssignment[]): Promise<number> {
         if (assignments.length === 0) {
             return 0;

@@ -89,6 +89,10 @@ export class InMemoryGradingScaleRepository implements GradingScaleRepositoryPor
         this.eventScales.set(eventId, scaleId);
     }
 
+    async unassignEvent(eventId: number): Promise<boolean> {
+        return this.eventScales.delete(eventId);
+    }
+
     async assignIfMissing(assignments: EventScaleAssignment[]): Promise<number> {
         let inserted = 0;
         for (const { eventId, scaleId } of assignments) {

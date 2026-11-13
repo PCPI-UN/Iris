@@ -18,6 +18,8 @@ export abstract class GradingScaleRepositoryPort {
     abstract findEventScale(eventId: number): Promise<GradingScale | null>;
     /** Assigns the scale to the event, replacing the previous assignment. */
     abstract assignToEvent(eventId: number, scaleId: number): Promise<void>;
+    /** Removes the assignment of the event; returns false when it had none. */
+    abstract unassignEvent(eventId: number): Promise<boolean>;
     /** Inserts the assignments whose event has none yet and returns how many were inserted. */
     abstract assignIfMissing(assignments: EventScaleAssignment[]): Promise<number>;
     /** Events that use the scale. */

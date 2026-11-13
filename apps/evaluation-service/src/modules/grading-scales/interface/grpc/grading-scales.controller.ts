@@ -11,6 +11,8 @@ import {
     GradingScaleInput as GradingScaleInputProto,
     GradingScaleProto,
     ListGradingScalesResponse,
+    UnassignEventGradingScaleRequest,
+    UnassignEventGradingScaleResponse,
     UpdateGradingScaleRequest,
 } from '@app/common/generated/evaluation';
 import { GradingScaleInput } from '../../domain/grading-scale';
@@ -21,6 +23,7 @@ import { GetEventGradingScaleUseCase } from '../../application/use-cases/get-eve
 import { GetGradingScaleUseCase } from '../../application/use-cases/get-grading-scale.use-case';
 import { GradingScaleView, ListGradingScalesUseCase } from '../../application/use-cases/list-grading-scales.use-case';
 import { UpdateGradingScaleUseCase } from '../../application/use-cases/update-grading-scale.use-case';
+import { UnassignEventGradingScaleUseCase } from '../../application/use-cases/unassign-event-grading-scale.use-case';
 
 export function toGradingScaleProto({ scale, locked }: GradingScaleView): GradingScaleProto {
     return {
@@ -53,6 +56,7 @@ export class GradingScalesController {
         private readonly deleteGradingScale: DeleteGradingScaleUseCase,
         private readonly assignEventGradingScale: AssignEventGradingScaleUseCase,
         private readonly getEventGradingScale: GetEventGradingScaleUseCase,
+        private readonly unassignEventGradingScale: UnassignEventGradingScaleUseCase,
     ) {}
 
     @GrpcMethod(GRADING_SCALE_SERVICE_NAME, 'CreateGradingScale')
@@ -96,5 +100,10 @@ export class GradingScalesController {
     @GrpcMethod(GRADING_SCALE_SERVICE_NAME, 'GetEventGradingScale')
     async getForEvent(request: GetEventGradingScaleRequest): Promise<GradingScaleProto> {
         return toGradingScaleProto(await this.getEventGradingScale.execute(request.eventId));
+    }
+
+    @GrpcMethod(GRADING_SCALE_SERVICE_NAME, 'UnassignEventGradingScale')
+    async unassign(request: UnassignEventGradingScaleRequest): Promise<UnassignEventGradingScaleResponse> {
+        return { removed: await this.unassignEventGradingScale.execute(request.eventId) };
     }
 }

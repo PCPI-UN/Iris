@@ -385,6 +385,9 @@ service GradingScaleService {
   // ("Proyectos finales" by default).
   rpc AssignEventGradingScale (AssignEventGradingScaleRequest) returns (GradingScaleProto) {}
   rpc GetEventGradingScale (GetEventGradingScaleRequest) returns (GradingScaleProto) {}
+  // Removes the scale assignment of an event that has no evaluations, such as an event whose
+  // creation is being rolled back. Succeeds when the event has no assignment.
+  rpc UnassignEventGradingScale (UnassignEventGradingScaleRequest) returns (UnassignEventGradingScaleResponse) {}
 }
 
 message GradingScaleLevelProto {
@@ -449,4 +452,13 @@ message AssignEventGradingScaleRequest {
 
 message GetEventGradingScaleRequest {
   int32 eventId = 1;
+}
+
+message UnassignEventGradingScaleRequest {
+  int32 eventId = 1;
+}
+
+message UnassignEventGradingScaleResponse {
+  // False when the event had no assignment
+  bool removed = 1;
 }

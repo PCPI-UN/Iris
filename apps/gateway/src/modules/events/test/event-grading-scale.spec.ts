@@ -21,6 +21,7 @@ describe('EventService - grading scale of the event', () => {
     const gradingScaleGrpc = {
       assignEventGradingScale: jest.fn(() => of(finalProjects)),
       getEventGradingScale: jest.fn(() => of(finalProjects)),
+      unassignEventGradingScale: jest.fn(() => of({ removed: true })),
     };
     const services: Record<string, unknown> = {
       EventService: eventGrpc,
@@ -72,6 +73,30 @@ describe('EventService - grading scale of the event', () => {
       expect.objectContaining({ code: 3 }),
     );
     expect(eventGrpc.deleteEvent).toHaveBeenCalledWith({ id: 9 });
+    expect(gradingScaleGrpc.unassignEventGradingScale).toHaveBeenCalledWith({ eventId: 9 });
+  });
+
+  it('deletes the new event and frees its scale when its category cannot be created', async () => {
+    const { service, eventGrpc, gradingScaleGrpc } = build();
+    jest.spyOn(service, 'createCategory').mockRejectedValue({ code: 14, details: 'unavailable' });
+
+    await expect(service.create({ name: 'Feria', gradingScaleId: 4 } as any)).rejects.toEqual(
+      expect.objectContaining({ code: 14 }),
+    );
+    expect(eventGrpc.deleteEvent).toHaveBeenCalledWith({ id: 9 });
+    expect(gradingScaleGrpc.unassignEventGradingScale).toHaveBeenCalledWith({ eventId: 9 });
+  });
+
+  it('reports the original error when removing the scale of the deleted event fails', async () => {
+    const { service, gradingScaleGrpc } = build();
+    jest.spyOn(service, 'createCategory').mockRejectedValue({ code: 14, details: 'unavailable' });
+    gradingScaleGrpc.unassignEventGradingScale.mockReturnValue(
+      throwError(() => new Error('evaluation-service down')) as any,
+    );
+
+    await expect(service.create({ name: 'Feria' } as any)).rejects.toEqual(
+      expect.objectContaining({ code: 14 }),
+    );
   });
 
   it('reports the scale error even when the new event cannot be deleted', async () => {
@@ -85,6 +110,8 @@ describe('EventService - grading scale of the event', () => {
       expect.objectContaining({ code: 5 }),
     );
     expect(eventGrpc.deleteEvent).toHaveBeenCalledWith({ id: 9 });
+    // The event still exists, so it keeps its scale
+    expect(gradingScaleGrpc.unassignEventGradingScale).not.toHaveBeenCalled();
   });
 
   it('changes the scale before the event fields, so a locked scale leaves the event untouched', async () => {
@@ -97,6 +124,40 @@ describe('EventService - grading scale of the event', () => {
       expect.objectContaining({ code: 9 }),
     );
     expect(eventGrpc.updateEvent).not.toHaveBeenCalled();
+  });
+
+  it('assigns the previous scale again when the event update fails', async () => {
+    const { service, eventGrpc, gradingScaleGrpc } = build();
+    gradingScaleGrpc.assignEventGradingScale.mockReturnValueOnce(of({ ...finalProjects, id: 2 }) as any);
+    eventGrpc.updateEvent.mockReturnValue(throwError(() => ({ code: 5, details: 'Event not found' })) as any);
+
+    await expect(service.update({ id: 9, name: 'Nueva', gradingScaleId: 2 } as any)).rejects.toEqual(
+      expect.objectContaining({ code: 5 }),
+    );
+    expect(gradingScaleGrpc.assignEventGradingScale).toHaveBeenNthCalledWith(1, { eventId: 9, scaleId: 2 });
+    expect(gradingScaleGrpc.assignEventGradingScale).toHaveBeenNthCalledWith(2, { eventId: 9, scaleId: 1 });
+  });
+
+  it('reports the update error even when the previous scale cannot be restored', async () => {
+    const { service, eventGrpc, gradingScaleGrpc } = build();
+    gradingScaleGrpc.assignEventGradingScale
+      .mockReturnValueOnce(of({ ...finalProjects, id: 2 }) as any)
+      .mockReturnValueOnce(throwError(() => new Error('evaluation-service down')) as any);
+    eventGrpc.updateEvent.mockReturnValue(throwError(() => ({ code: 3, details: 'Invalid dates' })) as any);
+
+    await expect(service.update({ id: 9, gradingScaleId: 2 } as any)).rejects.toEqual(
+      expect.objectContaining({ code: 3 }),
+    );
+  });
+
+  it('does not reassign anything when the event update fails with the same scale', async () => {
+    const { service, eventGrpc, gradingScaleGrpc } = build();
+    eventGrpc.updateEvent.mockReturnValue(throwError(() => ({ code: 3, details: 'Invalid dates' })) as any);
+
+    await expect(service.update({ id: 9, gradingScaleId: 1 } as any)).rejects.toEqual(
+      expect.objectContaining({ code: 3 }),
+    );
+    expect(gradingScaleGrpc.assignEventGradingScale).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the scale of an event updated without scale fields', async () => {

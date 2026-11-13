@@ -8,6 +8,7 @@ import { GetEventGradingScaleUseCase } from '../use-cases/get-event-grading-scal
 import { GetGradingScaleUseCase } from '../use-cases/get-grading-scale.use-case';
 import { ListGradingScalesUseCase } from '../use-cases/list-grading-scales.use-case';
 import { UpdateGradingScaleUseCase } from '../use-cases/update-grading-scale.use-case';
+import { UnassignEventGradingScaleUseCase } from '../use-cases/unassign-event-grading-scale.use-case';
 import { GradingScaleBackfillService } from '../grading-scale-backfill.service';
 import {
     buildResolver,
@@ -136,6 +137,36 @@ describe('Grading scale use cases', () => {
             await remove().execute(50);
 
             expect(repository.scales.has(50)).toBe(false);
+        });
+    });
+
+    describe('unassign from an event', () => {
+        const unassign = () => new UnassignEventGradingScaleUseCase(repository, criterionRepository);
+
+        it('removes the assignment so the scale can be deleted', async () => {
+            const created = await repository.create({ name: 'Decenas', levels: levels([10, 20, 30, 40]) }, 3);
+            repository.eventScales.set(7, created.id);
+
+            await expect(unassign().execute(7)).resolves.toBe(true);
+
+            expect(repository.eventScales.has(7)).toBe(false);
+            expect(withRubricLock).toHaveBeenCalledWith([7], 'exclusive', expect.any(Function));
+            await new DeleteGradingScaleUseCase(repository, criterionRepository).execute(created.id);
+            expect(repository.scales.has(created.id)).toBe(false);
+        });
+
+        it('succeeds when the event has no assignment', async () => {
+            await expect(unassign().execute(7)).resolves.toBe(false);
+        });
+
+        it('keeps the scale of an event that has evaluations', async () => {
+            repository.eventScales.set(7, 1);
+            repository.evaluatedEvents.add(7);
+
+            await expect(unassign().execute(7)).rejects.toEqual(
+                rpcError(status.FAILED_PRECONDITION, 'already has evaluations'),
+            );
+            expect(repository.eventScales.get(7)).toBe(1);
         });
     });
 

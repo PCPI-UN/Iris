@@ -13,6 +13,7 @@ import { UpdateGradingScaleUseCase } from './application/use-cases/update-gradin
 import { DeleteGradingScaleUseCase } from './application/use-cases/delete-grading-scale.use-case';
 import { AssignEventGradingScaleUseCase } from './application/use-cases/assign-event-grading-scale.use-case';
 import { GetEventGradingScaleUseCase } from './application/use-cases/get-event-grading-scale.use-case';
+import { UnassignEventGradingScaleUseCase } from './application/use-cases/unassign-event-grading-scale.use-case';
 import { GradingScalesController } from './interface/grpc/grading-scales.controller';
 
 @Module({
@@ -30,6 +31,7 @@ import { GradingScalesController } from './interface/grpc/grading-scales.control
         DeleteGradingScaleUseCase,
         AssignEventGradingScaleUseCase,
         GetEventGradingScaleUseCase,
+        UnassignEventGradingScaleUseCase,
     ],
     exports: [EventGradingScaleResolver],
 })
