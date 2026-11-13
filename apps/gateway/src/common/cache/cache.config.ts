@@ -47,16 +47,10 @@ export const CacheConfig = {
   },
 
   /**
-   * TTL for permission checks cache
-   */
-  PERMISSION_CHECK_TTL: 900, // 15 minutes
-
-  /**
    * Cache key prefixes for different data types
    */
   KEY_PREFIX: {
     HTTP_RESPONSE: 'http:response:',
-    PERMISSION_CHECK: 'permission:check:',
     USER_PERMISSIONS: 'user:permissions:',
   },
 
