@@ -63,11 +63,14 @@ export class EmailTemplateRenderer {
 
 const ENTITIES: Record<string, string> = {
   '&nbsp;': ' ',
-  '&amp;': '&',
   '&lt;': '<',
   '&gt;': '>',
   '&quot;': '"',
   '&#39;': "'",
+  // Escapes written by handlebars in {{ }} values, e.g. the "=" of "?token=" in a link
+  '&#x27;': "'",
+  '&#x60;': '`',
+  '&#x3D;': '=',
 };
 
 /** Plain-text alternative for clients that do not render HTML. */
@@ -78,7 +81,11 @@ export function htmlToText(html: string): string {
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/(p|div|h[1-6]|li|tr|table)>/gi, '\n')
     .replace(/<[^>]+>/g, '')
-    .replace(/&(nbsp|amp|lt|gt|quot|#39);/g, (entity) => ENTITIES[entity])
+    .replace(
+      /&(nbsp|lt|gt|quot|#39|#x27|#x60|#x3D);/g,
+      (entity) => ENTITIES[entity],
+    )
+    .replace(/&amp;/g, '&')
     .replace(/[ \t]+/g, ' ')
     .replace(/ *\n */g, '\n')
     .replace(/\n{3,}/g, '\n\n')
