@@ -23,7 +23,7 @@ export class CreateEventMemberUseCase {
     if (!event) {
       throw new RpcException({
         code: 5,
-        message: `Event with ID ${input.eventId} not found`,
+        message: `No se encontró el evento con ID ${input.eventId}`,
       });
     }
 
@@ -31,7 +31,7 @@ export class CreateEventMemberUseCase {
     if (!event.active) {
       throw new RpcException({
         code: 9,
-        message: 'Event is not active and cannot accept new members',
+        message: 'El evento no está activo y no puede recibir miembros nuevos',
       });
     }
 
@@ -41,14 +41,14 @@ export class CreateEventMemberUseCase {
       if (!user) {
         throw new RpcException({
           code: 3,
-          message: `User with ID ${input.userId} not found`,
+          message: `No se encontró el usuario con ID ${input.userId}`,
         });
       }
     } catch (error) {
       this.logger.error(`Error fetching user ${input.userId}: ${error.message}`);
       throw new RpcException({
         code: 3,
-        message: `User with ID ${input.userId} not found`,
+        message: `No se encontró el usuario con ID ${input.userId}`,
       });
     }
 
@@ -60,7 +60,7 @@ export class CreateEventMemberUseCase {
       if (!rolesResponse.roles || rolesResponse.roles.length === 0) {
         throw new RpcException({
           code: 3,
-          message: `Role with ID ${input.roleId} not found`,
+          message: `No se encontró el rol con ID ${input.roleId}`,
         });
       }
 
@@ -68,7 +68,7 @@ export class CreateEventMemberUseCase {
       if (role.scope !== 'EVENT') {
         throw new RpcException({
           code: 3,
-          message: `Role with ID ${input.roleId} is not an EVENT-scoped role (scope: ${role.scope})`,
+          message: `El rol con ID ${input.roleId} no es un rol de evento (alcance: ${role.scope})`,
         });
       }
     } catch (error) {
@@ -78,7 +78,7 @@ export class CreateEventMemberUseCase {
       this.logger.error(`Error fetching role ${input.roleId}: ${error.message}`);
       throw new RpcException({
         code: 3,
-        message: `Role with ID ${input.roleId} not found`,
+        message: `No se encontró el rol con ID ${input.roleId}`,
       });
     }
 
@@ -90,7 +90,7 @@ export class CreateEventMemberUseCase {
       this.logger.log(`Event ${input.eventId} has already ended on ${event.endDate.toISOString()}. Cannot add new members.`);
       throw new RpcException({
         code: 9,
-        message: 'Event has already ended',
+        message: 'El evento ya terminó',
       });
     }
 

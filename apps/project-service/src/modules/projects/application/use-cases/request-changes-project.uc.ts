@@ -15,7 +15,7 @@ export class RequestChangesProjectUC {
 
   async execute(input: { id: number; actingUserId: number; reason?: string }) {
     const project = await this.repo.findById(input.id);
-    if (!project) throw new NotFoundError('Project not found');
+    if (!project) throw new NotFoundError('No se encontró el proyecto');
 
     if (project.state === 'REQUEST_CHANGES') {
       console.log('You have already requested changes to this project:', project.id);
@@ -24,7 +24,7 @@ export class RequestChangesProjectUC {
 
     if (project.state !== 'UNDER_REVIEW') {
       throw new ValidationError(
-        `Project in invalid state for request changes: ${project.state}`,
+        `No se pueden solicitar cambios a un proyecto en el estado ${project.state}`,
       );
     }
 

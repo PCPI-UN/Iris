@@ -18,7 +18,7 @@ export class DeleteEventMemberUseCase {
     if (!event) {
       throw new RpcException({
         code: 5,
-        message: `Event with ID ${input.eventId} not found`,
+        message: `No se encontró el evento con ID ${input.eventId}`,
       });
     }
 
@@ -30,7 +30,7 @@ export class DeleteEventMemberUseCase {
     if (!existingMember) {
       throw new RpcException({
         code: 5,
-        message: `Active membership not found for user ${input.userId} in event ${input.eventId}`,
+        message: `El usuario ${input.userId} no es miembro activo del evento ${input.eventId}`,
       });
     }
 

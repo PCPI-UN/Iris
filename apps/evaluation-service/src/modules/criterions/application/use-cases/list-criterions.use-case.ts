@@ -56,7 +56,7 @@ export class ListCriterionsUseCase {
     } catch (error) {
       throw new RpcException({
         code: status.INTERNAL,
-        message: 'Failed to retrieve criterions. Please try again later.',
+        message: 'No se pudieron obtener los criterios. Intenta de nuevo más tarde.',
       });
     }
   }

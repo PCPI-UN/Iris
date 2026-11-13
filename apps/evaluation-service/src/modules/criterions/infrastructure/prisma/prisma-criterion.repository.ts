@@ -67,7 +67,7 @@ export class PrismaCriterionRepository implements CriterionRepositoryPort {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2028') {
         throw new RpcException({
           code: status.ABORTED,
-          message: `The evaluation rubric of event ${lockedEventIds.join(', ')} is busy with another change; try again`,
+          message: `La rúbrica de evaluación del evento ${lockedEventIds.join(', ')} se está modificando en otra operación; intenta de nuevo`,
         });
       }
       throw error;

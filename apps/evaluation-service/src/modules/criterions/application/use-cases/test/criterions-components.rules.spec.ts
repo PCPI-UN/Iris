@@ -151,7 +151,7 @@ describe('Criteria and components CRUD - rules', () => {
 
             await expect(
                 useCase.execute({ eventId: 1, name: 'Claridad', courseIds: [10], componentId: 5 }),
-            ).rejects.toEqual(rpcError(status.INVALID_ARGUMENT, 'does not belong to event 1'));
+            ).rejects.toEqual(rpcError(status.INVALID_ARGUMENT, 'no pertenece al evento 1'));
         });
 
         it('drops duplicated courses', async () => {
@@ -171,7 +171,7 @@ describe('Criteria and components CRUD - rules', () => {
             const useCase = new CreateComponentUseCase(criterionRepository);
 
             await expect(useCase.execute({ name: 'Oral', weight: 0.4, eventId: 1 })).rejects.toEqual(
-                rpcError(status.INVALID_ARGUMENT, 'would exceed 100%'),
+                rpcError(status.INVALID_ARGUMENT, 'superaría el 100%'),
             );
         });
 
@@ -190,7 +190,7 @@ describe('Criteria and components CRUD - rules', () => {
             const useCase = new UpdateComponentUseCase(criterionRepository);
 
             await expect(useCase.execute({ id: 5, weight: 0.4 })).rejects.toEqual(
-                rpcError(status.INVALID_ARGUMENT, 'would exceed 100%'),
+                rpcError(status.INVALID_ARGUMENT, 'superaría el 100%'),
             );
         });
 
@@ -226,7 +226,7 @@ describe('Criteria and components CRUD - rules', () => {
             const useCase = new DeleteComponentUseCase(criterionRepository);
 
             await expect(useCase.execute({ id: 5 })).rejects.toEqual(
-                rpcError(status.FAILED_PRECONDITION, 'still has 3 active criteria'),
+                rpcError(status.FAILED_PRECONDITION, 'todavía tiene 3 criterios activos'),
             );
             expect(criterionRepository.deleteComponent).not.toHaveBeenCalled();
         });
@@ -259,7 +259,7 @@ describe('Criteria and components CRUD - rules', () => {
 
             await expect(
                 useCase.execute({ eventId: 1, name: 'Extra', courseIds: [10], componentId: 5 }),
-            ).rejects.toEqual(rpcError(status.FAILED_PRECONDITION, 'Categories [10] of event 1 already have evaluations'));
+            ).rejects.toEqual(rpcError(status.FAILED_PRECONDITION, 'Las categorías [10] del evento 1 ya tienen evaluaciones'));
         });
 
         it.each([
@@ -271,7 +271,7 @@ describe('Criteria and components CRUD - rules', () => {
             const useCase = new UpdateCriterionUseCase(criterionRepository, eventService, categoryLock);
 
             await expect(useCase.execute({ id: 1, ...change })).rejects.toEqual(
-                rpcError(status.FAILED_PRECONDITION, 'already have evaluations'),
+                rpcError(status.FAILED_PRECONDITION, 'ya tienen evaluaciones'),
             );
             expect(criterionRepository.update).not.toHaveBeenCalled();
         });
@@ -326,7 +326,7 @@ describe('Criteria and components CRUD - rules', () => {
             const useCase = new UpdateCriterionUseCase(criterionRepository, eventService, categoryLock);
 
             await expect(useCase.execute({ id: 1, courseIds: [10, 10] })).rejects.toEqual(
-                rpcError(status.FAILED_PRECONDITION, 'Categories [11]'),
+                rpcError(status.FAILED_PRECONDITION, 'Las categorías [11]'),
             );
         });
 
@@ -343,7 +343,7 @@ describe('Criteria and components CRUD - rules', () => {
             const useCase = new DeleteCriterionUseCase(criterionRepository, categoryLock);
 
             await expect(useCase.execute({ id: 1 })).rejects.toEqual(
-                rpcError(status.FAILED_PRECONDITION, 'already have evaluations'),
+                rpcError(status.FAILED_PRECONDITION, 'ya tienen evaluaciones'),
             );
             expect(criterionRepository.delete).not.toHaveBeenCalled();
         });
@@ -352,7 +352,7 @@ describe('Criteria and components CRUD - rules', () => {
             const useCase = new CreateComponentUseCase(criterionRepository);
 
             await expect(useCase.execute({ name: 'Extra', weight: 0.1, eventId: 1 })).rejects.toEqual(
-                rpcError(status.FAILED_PRECONDITION, 'already has evaluations'),
+                rpcError(status.FAILED_PRECONDITION, 'ya tiene evaluaciones'),
             );
         });
 
@@ -360,7 +360,7 @@ describe('Criteria and components CRUD - rules', () => {
             const useCase = new UpdateComponentUseCase(criterionRepository);
 
             await expect(useCase.execute({ id: 5, weight: 0.4 })).rejects.toEqual(
-                rpcError(status.FAILED_PRECONDITION, 'already has evaluations'),
+                rpcError(status.FAILED_PRECONDITION, 'ya tiene evaluaciones'),
             );
             await expect(useCase.execute({ id: 5, name: 'Comunicación Oral' })).resolves.toEqual(
                 expect.objectContaining({ name: 'Comunicación Oral', weight: 0.3, eventId: 1 }),
@@ -371,7 +371,7 @@ describe('Criteria and components CRUD - rules', () => {
             const useCase = new DeleteComponentUseCase(criterionRepository);
 
             await expect(useCase.execute({ id: 5 })).rejects.toEqual(
-                rpcError(status.FAILED_PRECONDITION, 'already has evaluations'),
+                rpcError(status.FAILED_PRECONDITION, 'ya tiene evaluaciones'),
             );
             expect(criterionRepository.deleteComponent).not.toHaveBeenCalled();
         });
@@ -399,7 +399,7 @@ describe('Criteria and components CRUD - rules', () => {
             const useCase = new UpdateComponentUseCase(criterionRepository);
 
             await expect(useCase.execute({ id: 5, weight: 0.42 })).rejects.toEqual(
-                rpcError(status.FAILED_PRECONDITION, 'already has evaluations'),
+                rpcError(status.FAILED_PRECONDITION, 'ya tiene evaluaciones'),
             );
         });
 
@@ -407,7 +407,7 @@ describe('Criteria and components CRUD - rules', () => {
             const useCase = new CreateComponentUseCase(criterionRepository);
 
             await expect(useCase.execute({ name: 'Extra', weight: 0.021, eventId: 1 })).rejects.toEqual(
-                rpcError(status.FAILED_PRECONDITION, 'already has evaluations'),
+                rpcError(status.FAILED_PRECONDITION, 'ya tiene evaluaciones'),
             );
         });
 
@@ -415,7 +415,7 @@ describe('Criteria and components CRUD - rules', () => {
             const useCase = new DeleteComponentUseCase(criterionRepository);
 
             await expect(useCase.execute({ id: 5 })).rejects.toEqual(
-                rpcError(status.FAILED_PRECONDITION, 'already has evaluations'),
+                rpcError(status.FAILED_PRECONDITION, 'ya tiene evaluaciones'),
             );
             expect(criterionRepository.deleteComponent).not.toHaveBeenCalled();
         });
@@ -424,7 +424,7 @@ describe('Criteria and components CRUD - rules', () => {
             const useCase = new UpdateCriterionUseCase(criterionRepository, eventService, categoryLock);
 
             await expect(useCase.execute({ id: 1, weight: 2 })).rejects.toEqual(
-                rpcError(status.FAILED_PRECONDITION, 'Categories [10] of event 1 already have evaluations'),
+                rpcError(status.FAILED_PRECONDITION, 'Las categorías [10] del evento 1 ya tienen evaluaciones'),
             );
         });
 
@@ -433,7 +433,7 @@ describe('Criteria and components CRUD - rules', () => {
 
             await expect(
                 useCase.execute({ eventId: 1, name: 'Otro', courseIds: [10], componentId: 5 }),
-            ).rejects.toEqual(rpcError(status.FAILED_PRECONDITION, 'Categories [10] of event 1 already have evaluations'));
+            ).rejects.toEqual(rpcError(status.FAILED_PRECONDITION, 'Las categorías [10] del evento 1 ya tienen evaluaciones'));
         });
     });
 
@@ -500,7 +500,7 @@ describe('Criteria and components CRUD - rules', () => {
             const useCase = new UpdateCriterionUseCase(criterionRepository, eventService, categoryLock);
 
             await expect(useCase.execute({ id: 1, name: 'Renamed' })).rejects.toEqual(
-                rpcError(status.INVALID_ARGUMENT, 'must belong to a component'),
+                rpcError(status.INVALID_ARGUMENT, 'debe pertenecer a un componente'),
             );
         });
 
@@ -522,7 +522,7 @@ describe('Criteria and components CRUD - rules', () => {
             const useCase = new UpdateCriterionUseCase(criterionRepository, eventService, categoryLock);
 
             await expect(useCase.execute({ id: 1, name: 'Renamed' })).rejects.toEqual(
-                rpcError(status.INTERNAL, 'Failed to update criterion'),
+                rpcError(status.INTERNAL, 'No se pudo actualizar el criterio'),
             );
         });
     });

@@ -25,14 +25,14 @@ export class UpdateOwnProfileUseCase {
     if (!user) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: `User with ID #${userId} not found`,
+        message: `No se encontró el usuario con ID #${userId}`,
       });
     }
 
     if (!user.active) {
       throw new RpcException({
         code: status.PERMISSION_DENIED,
-        message: 'Inactive users cannot edit their profile',
+        message: 'Los usuarios inactivos no pueden editar su perfil',
       });
     }
 

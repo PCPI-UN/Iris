@@ -23,7 +23,7 @@ export class ActivateUserWithMicrosoftUseCase {
         const oid = payload.oid;
 
         if (!email) {
-            throw new RpcException({ code: status.INVALID_ARGUMENT, message: 'Token missing email claim' });
+            throw new RpcException({ code: status.INVALID_ARGUMENT, message: 'El token de Microsoft no incluye el correo' });
         }
 
         const user = await this.userRepository.findById(dto.userId);
@@ -31,7 +31,7 @@ export class ActivateUserWithMicrosoftUseCase {
         if (!user) {
             throw new RpcException({
                 code: status.NOT_FOUND,
-                message: 'User not found',
+                message: 'No se encontró el usuario',
             });
         }
 
@@ -39,7 +39,7 @@ export class ActivateUserWithMicrosoftUseCase {
         if (normalizeEmail(user.email) !== normalizeEmail(email)) {
             throw new RpcException({
                 code: status.PERMISSION_DENIED,
-                message: 'Microsoft account email does not match the invited email',
+                message: 'El correo de la cuenta de Microsoft no coincide con el correo invitado',
             });
         }
 
@@ -57,13 +57,13 @@ export class ActivateUserWithMicrosoftUseCase {
     private decodeToken(token: string): any {
         try {
             const parts = token.split('.');
-            if (parts.length !== 3) throw new Error('Invalid token format');
+            if (parts.length !== 3) throw new Error('El formato del token no es válido');
             const payload = Buffer.from(parts[1], 'base64').toString('utf-8');
             return JSON.parse(payload);
         } catch (e) {
             throw new RpcException({
                 code: status.INVALID_ARGUMENT,
-                message: 'Invalid Microsoft token',
+                message: 'El token de Microsoft no es válido',
             });
         }
     }
@@ -73,7 +73,7 @@ export class ActivateUserWithMicrosoftUseCase {
         if (!email || !email.endsWith('@uninorte.edu.co')) {
             throw new RpcException({
                 code: status.PERMISSION_DENIED,
-                message: 'Only uninorte.edu.co accounts are allowed',
+                message: 'Solo se permiten cuentas uninorte.edu.co',
             });
         }
     }

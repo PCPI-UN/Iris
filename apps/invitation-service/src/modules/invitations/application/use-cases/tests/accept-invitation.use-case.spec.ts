@@ -335,7 +335,7 @@ describe('AcceptInvitationUseCase', () => {
       ).rejects.toThrow(
         new RpcException({
           code: status.FAILED_PRECONDITION,
-          message: 'Invitation cannot be accepted',
+          message: 'La invitación no se puede aceptar',
         }),
       );
 
@@ -367,7 +367,7 @@ describe('AcceptInvitationUseCase', () => {
       await expect(useCase.execute({ token: 'token-abc' })).rejects.toThrow(
         new RpcException({
           code: status.FAILED_PRECONDITION,
-          message: 'Invitation cannot be accepted',
+          message: 'La invitación no se puede aceptar',
         }),
       );
     });
@@ -397,7 +397,7 @@ describe('AcceptInvitationUseCase', () => {
       await expect(useCase.execute({ token: 'token-abc' })).rejects.toThrow(
         new RpcException({
           code: status.FAILED_PRECONDITION,
-          message: 'Invitation cannot be accepted',
+          message: 'La invitación no se puede aceptar',
         }),
       );
     });
@@ -427,7 +427,7 @@ describe('AcceptInvitationUseCase', () => {
       await expect(useCase.execute({ token: 'token-abc' })).rejects.toThrow(
         new RpcException({
           code: status.FAILED_PRECONDITION,
-          message: 'Invitation cannot be accepted',
+          message: 'La invitación no se puede aceptar',
         }),
       );
     });
@@ -535,7 +535,7 @@ describe('AcceptInvitationUseCase', () => {
       await expect(useCase.execute({ token: 'token-abc' })).rejects.toThrow(
         new RpcException({
           code: status.INVALID_ARGUMENT,
-          message: 'studentCode could not be resolved from pending participants for this invitation',
+          message: 'No se pudo obtener el código de estudiante de los participantes pendientes de esta invitación',
         }),
       );
 
@@ -592,10 +592,10 @@ describe('AcceptInvitationUseCase', () => {
       invitationRepository.findByToken.mockResolvedValue(invitation);
       invitationRoleRepository.findByInvitationId.mockResolvedValue([]);
       projectService.addProjectTutor.mockRejectedValue(
-        new Error('The project has no pending tutor with this email'),
+        new Error('El proyecto no tiene un tutor pendiente con este correo'),
       );
 
-      await expect(useCase.execute({ token: 'token-tutor' })).rejects.toThrow('no pending tutor');
+      await expect(useCase.execute({ token: 'token-tutor' })).rejects.toThrow('no tiene un tutor pendiente');
       expect(authService.assignPlatformRoles).not.toHaveBeenCalled();
       expect(invitationRepository.save).not.toHaveBeenCalled();
     });

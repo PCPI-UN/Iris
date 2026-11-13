@@ -19,7 +19,7 @@ export class GetComponentUseCase {
     if (!component) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: `Component with ID ${id} not found`,
+        message: `No se encontró el componente con ID ${id}`,
       });
     }
 

@@ -14,7 +14,7 @@ export class GetCourseUseCase {
     if (!c) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: 'Course not found',
+        message: 'No se encontró la categoría',
       });
     }
     return c;

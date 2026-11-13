@@ -20,7 +20,7 @@ export class ResolvePlatformRolesUseCase {
     if (uniqueRoleIds.length === 0) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: 'At least one role must be provided',
+        message: 'Se debe indicar al menos un rol',
       });
     }
 
@@ -28,7 +28,7 @@ export class ResolvePlatformRolesUseCase {
     if (roles.length !== uniqueRoleIds.length) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: 'One or more of the provided roles do not exist',
+        message: 'Uno o más de los roles indicados no existen',
       });
     }
 
@@ -36,7 +36,7 @@ export class ResolvePlatformRolesUseCase {
     if (eventRoles.length > 0) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: `Roles ${eventRoles.map((role) => role.name).join(', ')} are event roles and cannot be granted as platform roles`,
+        message: `Los roles ${eventRoles.map((role) => role.name).join(', ')} son roles de evento y no se pueden asignar como roles de plataforma`,
       });
     }
 

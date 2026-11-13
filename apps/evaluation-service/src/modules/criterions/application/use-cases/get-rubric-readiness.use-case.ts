@@ -42,7 +42,7 @@ export class GetRubricReadinessUseCase {
       if (!valid) {
         throw new RpcException({
           code: status.INVALID_ARGUMENT,
-          message: `Course ${courseId} does not belong to event ${eventId}`,
+          message: `La categoría ${courseId} no pertenece al evento ${eventId}`,
         });
       }
     }

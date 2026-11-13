@@ -30,9 +30,9 @@ export class SetProjectTutorsUC {
   ) {}
 
   async execute(input: SetProjectTutorsDTO) {
-    if (!input.projectId || input.projectId <= 0) throw new ValidationError('Invalid projectId');
+    if (!input.projectId || input.projectId <= 0) throw new ValidationError('projectId no es válido');
     const project = await this.repo.findById(input.projectId);
-    if (!project) throw new NotFoundError('Project not found');
+    if (!project) throw new NotFoundError('No se encontró el proyecto');
 
     const resolved = await this.resolve(input);
     await this.store(input.projectId, resolved);
@@ -45,7 +45,7 @@ export class SetProjectTutorsUC {
     const requestedIds = [...new Set(input.tutorUserIds ?? [])];
     const pendings = this.dedupePendings(input.pendingTutors ?? []);
     if (requestedIds.some((id) => !Number.isInteger(id) || id <= 0)) {
-      throw new ValidationError('Invalid tutor user id');
+      throw new ValidationError('El ID de usuario del tutor no es válido');
     }
 
     // Candidates are Professor or Tutor users only; a missing id is unknown, inactive or without that role
@@ -55,7 +55,7 @@ export class SetProjectTutorsUC {
       const valid = new Set(holders.map((holder) => holder.id));
       const invalid = requestedIds.filter((id) => !valid.has(id));
       if (invalid.length) {
-        throw new ValidationError(`Users ${invalid.join(', ')} are not active tutors or professors`);
+        throw new ValidationError(`Los usuarios ${invalid.join(', ')} no son tutores ni profesores activos`);
       }
     }
 
@@ -116,9 +116,9 @@ export class SetProjectTutorsUC {
     const byEmail = new Map<string, PendingProjectTutorInput>();
     for (const pending of pendings) {
       const email = normalizeEmail(pending.email ?? '');
-      if (!isEmail(email)) throw new ValidationError(`Invalid tutor email: ${pending.email}`);
+      if (!isEmail(email)) throw new ValidationError(`El correo del tutor no es válido: ${pending.email}`);
       const firstName = (pending.firstName ?? '').trim();
-      if (!firstName) throw new ValidationError('Tutor first name is required');
+      if (!firstName) throw new ValidationError('El nombre del tutor es obligatorio');
       if (!byEmail.has(email)) {
         byEmail.set(email, { firstName, lastName: pending.lastName?.trim() || null, email });
       }

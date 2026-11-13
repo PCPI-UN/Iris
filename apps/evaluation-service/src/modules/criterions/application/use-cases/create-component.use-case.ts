@@ -26,21 +26,21 @@ export class CreateComponentUseCase {
     if (!name || name.trim().length === 0) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: 'Component name is required and cannot be empty',
+        message: 'El nombre del componente es obligatorio y no puede estar vacío',
       });
     }
 
     if (!eventId) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: 'A component must belong to an event',
+        message: 'Un componente debe pertenecer a un evento',
       });
     }
 
     if (!(weight > 0) || weight > 1) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: 'Weight must be greater than 0 and at most 1',
+        message: 'El peso debe ser mayor que 0 y como máximo 1',
       });
     }
 

@@ -15,5 +15,5 @@ export async function areComponentsLocked(
 }
 
 export function componentsLockedMessage(eventId: number): string {
-  return `Event ${eventId} already has evaluations; its components cannot be modified`;
+  return `El evento ${eventId} ya tiene evaluaciones; sus componentes no se pueden modificar`;
 }

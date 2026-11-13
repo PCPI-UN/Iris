@@ -23,14 +23,14 @@ export class ActivateUserUseCase {
     if (!user) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: 'User not found',
+        message: 'No se encontró el usuario',
       });
     }
 
     if (user.status !== UserStatus.PENDING) {
       throw new RpcException({
         code: status.FAILED_PRECONDITION,
-        message: 'User is not pending activation',
+        message: 'El usuario no está pendiente de activación',
       });
     }
 

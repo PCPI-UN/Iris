@@ -9,7 +9,7 @@ export class GetProjectUC {
 
   async execute(input: GetProjectDTO) {
     const project = await this.repo.findById(input.id);
-    if (!project) throw new NotFoundError('Project not found');
+    if (!project) throw new NotFoundError('No se encontró el proyecto');
     return project;
   }
 }

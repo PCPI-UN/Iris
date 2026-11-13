@@ -344,7 +344,7 @@ export class EventService implements OnModuleInit {
       format !== RankingReportFormat.JSON &&
       format !== RankingReportFormat.EXCEL
     ) {
-      throw new BadRequestException('Invalid format. Use json or excel');
+      throw new BadRequestException('Formato no válido. Usa json o excel');
     }
 
     const [eventResponse, rankingConfigResponse, categoriesResponse] =
@@ -366,13 +366,13 @@ export class EventService implements OnModuleInit {
 
     if (!rankingConfig) {
       throw new BadRequestException(
-        `Ranking configuration not found for event ${String(eventId)}`,
+        `No se encontró la configuración de ranking del evento ${String(eventId)}`,
       );
     }
 
     if (scope === 'public' && !rankingConfig.visiblePublic) {
       throw new ForbiddenException(
-        'Public ranking is not enabled for this event',
+        'El ranking público no está habilitado para este evento',
       );
     }
 
@@ -776,7 +776,7 @@ export class EventService implements OnModuleInit {
         const categoryId = award.categoryId ?? defaultCategoryId;
         if (!categoryId) {
           throw new BadRequestException(
-            'categoryId is required to create an award',
+            'categoryId es obligatorio para crear un premio',
           );
         }
 
@@ -1112,7 +1112,7 @@ export class EventService implements OnModuleInit {
     const category = response.category;
 
     if (!category) {
-      throw new Error(`Category ${id} was not returned by event-service`);
+      throw new Error(`event-service no devolvió la categoría ${id}`);
     }
 
     return {

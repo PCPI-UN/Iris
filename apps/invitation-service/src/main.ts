@@ -4,6 +4,7 @@ import { MicroserviceOptions, Transport, RpcException } from '@nestjs/microservi
 import { join } from 'path';
 import { ValidationPipe } from '@nestjs/common';
 import { ValidationError } from 'class-validator';
+import { validationErrorMessages } from '@app/common/i18n/validation-messages';
 
 async function bootstrap() {
   const app = await NestFactory.createMicroservice<MicroserviceOptions>(
@@ -32,20 +33,11 @@ async function bootstrap() {
       transform: true,
       whitelist: true,
       forbidNonWhitelisted: false, // Allow protobuf internal fields like _firstName, _lastName
-      exceptionFactory: (errors: ValidationError[]) => {
-        const messages = errors.map((error) => {
-          const constraints = error.constraints;
-          if (constraints) {
-            return `${error.property}: ${Object.values(constraints).join(', ')}`;
-          }
-          return `${error.property}: validation failed`;
-        });
-
-        return new RpcException({
+      exceptionFactory: (errors: ValidationError[]) =>
+        new RpcException({
           code: 3, // Equivalent to HTTP 400 Bad Request
-          message: `Validation failed: ${messages.join('; ')}`,
-        });
-      },
+          message: `Validación fallida: ${validationErrorMessages(errors).join('; ')}`,
+        }),
     }));
   await app.listen();
 

@@ -208,7 +208,7 @@ export class EventsController {
             summary: 'limit exceeds the allowed maximum',
             value: {
               statusCode: 400,
-              message: 'Validation failed: limit: limit must not be greater than 50',
+              message: 'Validación fallida: limit no puede ser mayor que 50',
               timestamp: '2026-05-29T00:18:18.737Z',
             },
           },
@@ -386,7 +386,7 @@ export class EventsController {
     status: 200,
     description: 'Returns past public event details',
   })
-  @ApiResponse({ status: 403, description: 'Event is not a past event' })
+  @ApiResponse({ status: 403, description: 'El evento no ha terminado' })
   @ApiResponse({ status: 404, description: 'Event not found' })
   async getPublicPastEvent(@Param('id', ParseIntPipe) id: number) {
     const response = await this.eventsService.get({ id });
@@ -405,7 +405,7 @@ export class EventsController {
     const closedStatusValue = Number(EventStatus.CLOSED);
 
     if (statusValue !== closedStatusValue && statusName !== 'CLOSED') {
-      throw new ForbiddenException('Event is not a past event');
+      throw new ForbiddenException('El evento no ha terminado');
     }
 
     return response;

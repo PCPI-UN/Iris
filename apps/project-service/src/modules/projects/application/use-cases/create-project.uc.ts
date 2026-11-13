@@ -36,16 +36,16 @@ export class CreateProjectUC {
     }
 
     if (!input.name || input.name.trim().length === 0) {
-      throw new ValidationError('Project name is required');
+      throw new ValidationError('El nombre del proyecto es obligatorio');
     }
 
     if (!input.courseId || input.courseId <= 0) {
-      throw new ValidationError('Invalid courseId');
+      throw new ValidationError('courseId no es válido');
     }
     // Ensure no other project with the same name exists for this event and course
     const existing = await this.repo.findProject(input.eventId, input.courseId, input.name.trim());
     if (existing) {
-      throw new ValidationError('A project with the same name already exists for this event and course');
+      throw new ValidationError('Ya existe un proyecto con el mismo nombre en este evento y categoría');
     }
   
     // 3. Validate that the event registration deadline has not passed
@@ -57,12 +57,12 @@ export class CreateProjectUC {
     const deadlineDateOnly = new Date(registrationDeadline.getFullYear(), registrationDeadline.getMonth(), registrationDeadline.getDate());
     
     if (deadlineDateOnly < currentDateOnly) {
-      throw new ValidationError('The event registration deadline has passed');
+      throw new ValidationError('La fecha límite de inscripción del evento ya pasó');
     }
     
     // 4. Verify that the event is publicly joinable
     if (!event.isPubliclyJoinable) {
-      throw new ValidationError('The event is not public joinable');
+      throw new ValidationError('El evento no permite inscripción pública');
     }
 
     const state = input.state ?? 'UNDER_REVIEW';

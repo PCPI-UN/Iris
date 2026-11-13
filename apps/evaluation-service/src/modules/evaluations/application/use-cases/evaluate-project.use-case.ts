@@ -48,7 +48,7 @@ export class EvaluateProjectUseCase {
 
         throw new RpcException({
             code: status.INVALID_ARGUMENT,
-            message: `Unsupported evaluation type: ${evaluationType}`,
+            message: `Tipo de evaluación no soportado: ${evaluationType}`,
         });
     }
 
@@ -68,7 +68,7 @@ export class EvaluateProjectUseCase {
         if (!project) {
             throw new RpcException({
                 code: status.NOT_FOUND,
-                message: 'Project not found',
+                message: 'No se encontró el proyecto',
             });
         }
 
@@ -81,7 +81,7 @@ export class EvaluateProjectUseCase {
             this.logger.error('Juror role not found in the system roles');
             throw new RpcException({
                 code: status.INTERNAL,
-                message: 'An error ocurred while processing the evaluation',
+                message: 'Ocurrió un error al procesar la evaluación',
             });
         }
         const memberRoleId = jurorRole.id;
@@ -92,14 +92,14 @@ export class EvaluateProjectUseCase {
         if (!event) {
             throw new RpcException({
                 code: status.NOT_FOUND,
-                message: 'Event not found',
+                message: 'No se encontró el evento',
             });
         }
 
         if (!event.evaluationsOpened) {
             throw new RpcException({
                 code: status.FAILED_PRECONDITION,
-                message: 'Evaluations are not opened for this event',
+                message: 'Las evaluaciones no están abiertas para este evento',
             });
         }
 
@@ -110,7 +110,7 @@ export class EvaluateProjectUseCase {
         if (now < startDate || now > endDate) {
             throw new RpcException({
                 code: status.FAILED_PRECONDITION,
-                message: 'Evaluations are not allowed at this time',
+                message: 'En este momento no se permiten evaluaciones',
             });
         }
 
@@ -123,7 +123,7 @@ export class EvaluateProjectUseCase {
         if (!isAssigned) {
             throw new RpcException({
                 code: status.FAILED_PRECONDITION,
-                message: 'Juror is not assigned to this project',
+                message: 'El jurado no está asignado a este proyecto',
             });
         }
 
@@ -171,7 +171,7 @@ export class EvaluateProjectUseCase {
         if (alreadyEvaluated) {
             throw new RpcException({
                 code: status.FAILED_PRECONDITION,
-                message: 'Project already evaluated by this juror',
+                message: 'Este jurado ya evaluó el proyecto',
             });
         }
 
@@ -179,7 +179,7 @@ export class EvaluateProjectUseCase {
         if (!scores || scores.length === 0) {
             throw new RpcException({
                 code: status.INVALID_ARGUMENT,
-                message: 'At least one score is required',
+                message: 'Se requiere al menos un puntaje',
             });
         }
 
@@ -192,7 +192,7 @@ export class EvaluateProjectUseCase {
         if (rubric.length === 0) {
             throw new RpcException({
                 code: status.FAILED_PRECONDITION,
-                message: 'No evaluation criteria are configured for this project',
+                message: 'No hay criterios de evaluación configurados para este proyecto',
             });
         }
 
@@ -203,17 +203,17 @@ export class EvaluateProjectUseCase {
         if (!ready) {
             const problems: string[] = [];
             if (!isFullWeight(componentsWeight)) {
-                problems.push(`component weights must add up to 100% (current: ${(componentsWeight * 100).toFixed(2)}%)`);
+                problems.push(`los pesos de los componentes deben sumar 100% (actual: ${(componentsWeight * 100).toFixed(2)}%)`);
             }
             if (missingComponentIds.length > 0) {
-                problems.push(`components without criteria for this category: ${missingComponentIds.join(', ')}`);
+                problems.push(`componentes sin criterios para esta categoría: ${missingComponentIds.join(', ')}`);
             }
             if (criteriaWithoutComponent.length > 0) {
-                problems.push(`criteria without a component of the event: ${criteriaWithoutComponent.join(', ')}`);
+                problems.push(`criterios sin un componente del evento: ${criteriaWithoutComponent.join(', ')}`);
             }
             throw new RpcException({
                 code: status.FAILED_PRECONDITION,
-                message: `The evaluation rubric of this project is not ready: ${problems.join('; ')}`,
+                message: `La rúbrica de evaluación de este proyecto no está lista: ${problems.join('; ')}`,
             });
         }
 
@@ -232,7 +232,7 @@ export class EvaluateProjectUseCase {
             if (scoredCriterionIds.has(scoreItem.criterionId)) {
                 throw new RpcException({
                     code: status.INVALID_ARGUMENT,
-                    message: `Criterion ${scoreItem.criterionId} was scored more than once`,
+                    message: `El criterio ${scoreItem.criterionId} se calificó más de una vez`,
                 });
             }
 
@@ -241,14 +241,14 @@ export class EvaluateProjectUseCase {
             if (!criterion) {
                 throw new RpcException({
                     code: status.INVALID_ARGUMENT,
-                    message: `Criterion ${scoreItem.criterionId} not found in the evaluation rubric of this project`,
+                    message: `El criterio ${scoreItem.criterionId} no está en la rúbrica de evaluación de este proyecto`,
                 });
             }
 
             if (!Number.isInteger(scoreItem.score)) {
                 throw new RpcException({
                     code: status.INVALID_ARGUMENT,
-                    message: `Score for criterion ${scoreItem.criterionId} must be an integer level`,
+                    message: `El puntaje del criterio ${scoreItem.criterionId} debe ser un nivel entero`,
                 });
             }
 
@@ -278,7 +278,7 @@ export class EvaluateProjectUseCase {
         if (missingCriterionIds.length > 0) {
             throw new RpcException({
                 code: status.INVALID_ARGUMENT,
-                message: `All criteria must be scored. Missing criteria: ${missingCriterionIds.join(', ')}`,
+                message: `Se deben calificar todos los criterios. Faltan los criterios: ${missingCriterionIds.join(', ')}`,
             });
         }
 

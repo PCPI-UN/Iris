@@ -16,7 +16,7 @@ export class DeleteComponentUseCase {
     if (!component) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: `Component with ID ${deleteComponentDto.id} not found`,
+        message: `No se encontró el componente con ID ${deleteComponentDto.id}`,
       });
     }
 
@@ -35,7 +35,7 @@ export class DeleteComponentUseCase {
     if (!component) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: `Component with ID ${id} not found`,
+        message: `No se encontró el componente con ID ${id}`,
       });
     }
 
@@ -51,7 +51,7 @@ export class DeleteComponentUseCase {
     if (activeCriteria > 0) {
       throw new RpcException({
         code: status.FAILED_PRECONDITION,
-        message: `Component ${id} still has ${activeCriteria} active criteria; remove or move them first`,
+        message: `El componente ${id} todavía tiene ${activeCriteria} criterios activos; elimínalos o muévelos primero`,
       });
     }
 

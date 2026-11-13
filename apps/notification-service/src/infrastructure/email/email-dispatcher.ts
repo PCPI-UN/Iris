@@ -43,6 +43,6 @@ export class EmailDispatcher implements EmailServicePort {
     }
 
     this.logger.error('All email providers failed', { to, template });
-    throw new Error('Failed to send email');
+    throw new Error('No se pudo enviar el correo');
   }
 }
