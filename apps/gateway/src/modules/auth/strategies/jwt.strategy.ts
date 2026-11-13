@@ -44,6 +44,12 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         throw new UnauthorizedException('User not found');
       }
 
+      // A deactivated account loses its session on the next request, not when the token expires
+      if (!user.active) {
+        this.logger.warn(`Inactive user with ID: ${payload.sub}`);
+        throw new UnauthorizedException('User is inactive');
+      }
+
       const permissionsResponse =
         await this.authService.getUserPermissions(payload.sub);
 
