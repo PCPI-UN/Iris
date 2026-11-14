@@ -26,7 +26,7 @@ describe('ListPublishedWinnersUC', () => {
     new PublishedWinner(1, 100, 95, 10, 'Primer lugar', 1, 7, 'Software', 9),
     new PublishedWinner(2, 101, 90, 11, 'Segundo lugar', 2, 7, 'Software', 9),
     new PublishedWinner(3, 102, 90, 11, 'Segundo lugar', 2, 7, 'Software', 9),
-    new PublishedWinner(4, 103, 88, 12, 'Primer lugar', 1, 8, 'Hardware', 9),
+    new PublishedWinner(4, 103, 88.456, 12, 'Primer lugar', 1, 8, 'Hardware', 9),
     new PublishedWinner(5, 200, 97, 20, 'Primer lugar', 1, 3, 'Software', 4),
   ];
 
@@ -55,8 +55,9 @@ describe('ListPublishedWinnersUC', () => {
       'Primer lugar',
       'Segundo lugar',
     ]);
+    // Rounded to 2 decimals like the ranking report
     expect(hardware.awards[0].winners).toEqual([
-      { winnerId: 4, projectId: 103, grade: 88 },
+      { winnerId: 4, projectId: 103, grade: 88.46 },
     ]);
   });
 

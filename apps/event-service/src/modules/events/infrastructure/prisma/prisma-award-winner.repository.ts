@@ -8,10 +8,12 @@ import {
   PublishedWinnersEventsPage,
 } from '../../domain/entities/published-winner.entity';
 
-// An event enters the public winners view only when its ranking is published and it
-// has at least one winner in an active category.
+// An event enters the public winners view only when the admin published its results
+// (the same flag the student dashboard uses for awards), its ranking is public and it has
+// at least one winner in an active category.
 const PUBLISHED_WINNERS_EVENT_WHERE = {
   active: true,
+  resultsPublished: true,
   rankingEvent: { visiblePublic: true },
   categories: {
     some: {
@@ -112,7 +114,20 @@ export class PrismaAwardWinnerRepository extends AwardWinnerRepository {
       where: {
         award: { category: { active: true, eventId: { in: eventIds } } },
       },
-      include: { award: { include: { category: true } } },
+      select: {
+        id: true,
+        projectId: true,
+        grade: true,
+        awardId: true,
+        award: {
+          select: {
+            title: true,
+            position: true,
+            categoryId: true,
+            category: { select: { name: true, eventId: true } },
+          },
+        },
+      },
       orderBy: [
         { award: { categoryId: 'asc' } },
         { award: { position: 'asc' } },

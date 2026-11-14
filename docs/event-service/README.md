@@ -61,12 +61,19 @@ sequenceDiagram
 
 ## Public winners across events
 
-`ListPublishedWinners(page, limit)` is the permanent winners view across events (ClickUp 86e3wzr5x). It reads `award_winners` with their award, category and event, and applies the same rule as the gateway public ranking report:
+`ListPublishedWinners(page, limit)` is the permanent winners view across events (ClickUp 86e3wzr5x). It reads `award_winners` with their award, category and event.
 
-- An event is included only when it is active, its ranking is public (`ranking_event.visible_public`) and it has at least one winner in an active category. Events without a ranking configuration are left out.
-- Events are ordered by `end_date` descending, then `id` descending, and paginated by event (`limit` defaults to 10, at most 50).
+Visibility rule:
+
+- An event is included only when it is active, the admin published its results (`events.results_published`, the same flag the student dashboard uses before it shows awards) and its ranking is public (`ranking_event.visible_public`). Events without a ranking configuration are left out.
+- The event needs at least one winner in an active category; awards of a deactivated category are not listed.
+- Every assigned award is listed. The top-N cut of the public ranking report (`ranking_event.positions`) does not apply: it limits the ranking by grade, while awards are assigned by the admin to be announced.
+- `grade` is rounded to 2 decimals (`roundGrade`, like the ranking report) and is unset unless the event ranking shows grades (`ranking_event.grade_visible`).
+
+Shape and paging:
+
+- Events are ordered by `end_date` descending, then `id` descending, and paginated by event. `limit` defaults to 10, at most 50 (`libs/common/src/constants/published-winners.ts`, shared with the gateway).
 - Each event lists its categories, each category its awards ordered by `position`, and each award its winners. Co-winners are several winners of the same award; `coWinners` is true when an award has more than one.
-- `grade` is unset unless the event ranking shows grades (`ranking_event.grade_visible`).
 - The response carries project ids only; the gateway adds the project names.
 
 ## Related

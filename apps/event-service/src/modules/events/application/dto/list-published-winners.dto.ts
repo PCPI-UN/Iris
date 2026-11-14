@@ -1,6 +1,5 @@
 import { IsInt, IsOptional, Max, Min } from 'class-validator';
-
-export const MAX_PUBLISHED_WINNERS_LIMIT = 50;
+import { MAX_PUBLISHED_WINNERS_LIMIT } from '@app/common/constants/published-winners';
 
 export class ListPublishedWinnersDTO {
   @IsOptional()

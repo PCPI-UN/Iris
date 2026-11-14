@@ -55,9 +55,9 @@ See [auth-service](../auth-service/) for how tokens are issued and refreshed.
 
 ## Public winners page
 
-`GET /events/public/winners?page=&limit=` is public (no session). It returns the winners and co-winners of every event whose ranking is public, grouped by event, category and award, newest event first, with pagination by event (`limit` at most 50). The selection and the grade rule live in event-service `ListPublishedWinners` (see [event-service](../event-service/README.md#public-winners-across-events)); `grade` is `null` unless the event ranking shows grades.
+`GET /events/public/winners?page=&limit=` is public (no session). It returns the winners and co-winners of every event whose results are published and whose ranking is public, grouped by event, category and award, newest event first, with pagination by event (`limit` at most 50). The visibility rule, the grade rounding and hiding live in event-service `ListPublishedWinners` (see [event-service](../event-service/README.md#public-winners-across-events)); `grade` is `null` unless the event ranking shows grades.
 
-The gateway adds each winner's `projectName`. `project.proto` has no batch lookup by ids, so the gateway calls `GetProject` once per distinct project, in parallel. A page holds at most 50 events with a few awards each, so the number of calls stays small and no new RPC is needed; a batch RPC in project-service is the next step if pages grow. A project that cannot be read (for example, deleted) keeps its winner entry with `projectName: null` instead of failing the page.
+The gateway adds each winner's `projectName` with project-service `GetProjectNamesByIds`, which returns id and name in one query. The gateway sends the distinct project ids of the page in calls of at most 500 ids (`libs/common/src/constants/projects.ts`), so an anonymous request makes a bounded number of gRPC calls. Ids that project-service does not return (deleted projects) are logged as a warning and their winners keep `projectName: null`.
 
 ## File uploads
 

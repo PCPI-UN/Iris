@@ -7,9 +7,10 @@ import {
   PublishedWinner,
 } from '../../domain/entities/published-winner.entity';
 import { ListPublishedWinnersDTO } from '../dto/list-published-winners.dto';
+import { DEFAULT_PUBLISHED_WINNERS_LIMIT } from '@app/common/constants/published-winners';
+import { roundGrade } from '@app/common/utils/grade-rounding';
 
 const DEFAULT_PAGE = 1;
-const DEFAULT_LIMIT = 10;
 
 export interface PublishedWinnersPage {
   events: EventWinners[];
@@ -20,9 +21,10 @@ export interface PublishedWinnersPage {
 
 /**
  * Permanent winners view across events (CU-86e3wzr5x): winners and co-winners of every
- * active event whose ranking is public, grouped by event → category → award, newest
- * event first. Grades stay hidden unless the event ranking shows them, the same rule as
- * the public ranking report.
+ * active event whose results are published and whose ranking is public, grouped by
+ * event → category → award, newest event first. Every assigned award is listed (the
+ * ranking top-N cut does not apply to awards). Grades are rounded like the ranking report
+ * and stay hidden unless the event ranking shows them.
  */
 @Injectable()
 export class ListPublishedWinnersUC {
@@ -30,7 +32,7 @@ export class ListPublishedWinnersUC {
 
   async execute(input: ListPublishedWinnersDTO): Promise<PublishedWinnersPage> {
     const page = input.page || DEFAULT_PAGE;
-    const limit = input.limit || DEFAULT_LIMIT;
+    const limit = input.limit || DEFAULT_PUBLISHED_WINNERS_LIMIT;
 
     const { events, total } = await this.repo.findEventsWithPublishedWinners(
       page,
@@ -100,7 +102,7 @@ export class ListPublishedWinnersUC {
       award.winners.push({
         winnerId: winner.winnerId,
         projectId: winner.projectId,
-        grade: gradeVisible ? winner.grade : null,
+        grade: gradeVisible ? roundGrade(winner.grade) : null,
       });
       award.coWinners = award.winners.length > 1;
     }

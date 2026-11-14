@@ -147,6 +147,7 @@ import {
   ListPublishedWinnersDTO,
   ListPublishedWinnersResult,
 } from './dto/winners/list-published-winners.dto';
+import { DEFAULT_PUBLISHED_WINNERS_LIMIT } from '@app/common/constants/published-winners';
 import { UpdateRankingEventDTO } from './dto/ranking-event/update-ranking-event.dto';
 import {
   EVALUATION_SERVICE_NAME,
@@ -1298,9 +1299,9 @@ export class EventService implements OnModuleInit {
 
   /**
    * Public winners view across events (CU-86e3wzr5x): winners and co-winners of every
-   * event with a published ranking, newest event first, with each project's name.
-   * event-service already leaves out unpublished rankings and hides grades the ranking
-   * does not show.
+   * event with published results and a public ranking, newest event first, with each
+   * project's name. event-service applies the visibility rule, rounds grades and hides
+   * those the ranking does not show.
    */
   async listPublishedWinners(
     dto: ListPublishedWinnersDTO,
@@ -1350,7 +1351,10 @@ export class EventService implements OnModuleInit {
       meta: {
         total: response.meta?.total ?? 0,
         itemsOnCurrentPage: response.meta?.itemsOnCurrentPage ?? events.length,
-        itemsPerPage: response.meta?.itemsPerPage ?? dto.limit ?? 10,
+        itemsPerPage:
+          response.meta?.itemsPerPage ??
+          dto.limit ??
+          DEFAULT_PUBLISHED_WINNERS_LIMIT,
         currentPage: response.meta?.currentPage ?? dto.page ?? 1,
         totalPages: response.meta?.totalPages ?? 0,
       },
