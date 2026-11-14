@@ -1,6 +1,18 @@
 import * as ExcelJS from 'exceljs';
 import { roundGrade } from '@app/common/utils/grade-rounding';
+import { solidFill, thinBorder } from '../../common/excel/excel-styles';
+import { fileNamePart } from '../../common/excel/xlsx-file';
 import type { RankingReportResult } from './events.service';
+
+const COLORS = {
+  header: 'FF5B9BD5',
+  headerFont: 'FFFFFFFF',
+  headerBorder: 'FF9CC2E5',
+  rowBorder: 'FFD9E2F3',
+  stripe: 'FFF7FBFF',
+} as const;
+const HEADER_BORDER = thinBorder(COLORS.headerBorder);
+const ROW_BORDER = thinBorder(COLORS.rowBorder);
 
 /**
  * Builds an XLSX buffer from ranking JSON data.
@@ -45,23 +57,14 @@ export async function generateRankingExcelBuffer(
   const headerRow = worksheet.getRow(1);
   headerRow.height = 20;
   headerRow.eachCell((cell: ExcelJS.Cell) => {
-    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FF5B9BD5' },
-    };
+    cell.font = { bold: true, color: { argb: COLORS.headerFont } };
+    cell.fill = solidFill(COLORS.header);
     cell.alignment = {
       horizontal: 'center',
       vertical: 'middle',
       wrapText: true,
     };
-    cell.border = {
-      top: { style: 'thin', color: { argb: 'FF9CC2E5' } },
-      left: { style: 'thin', color: { argb: 'FF9CC2E5' } },
-      bottom: { style: 'thin', color: { argb: 'FF9CC2E5' } },
-      right: { style: 'thin', color: { argb: 'FF9CC2E5' } },
-    };
+    cell.border = HEADER_BORDER;
   });
 
   for (let rowIndex = 2; rowIndex <= worksheet.rowCount; rowIndex += 1) {
@@ -72,18 +75,9 @@ export async function generateRankingExcelBuffer(
         vertical: 'middle',
         wrapText: true,
       };
-      cell.border = {
-        top: { style: 'thin', color: { argb: 'FFD9E2F3' } },
-        left: { style: 'thin', color: { argb: 'FFD9E2F3' } },
-        bottom: { style: 'thin', color: { argb: 'FFD9E2F3' } },
-        right: { style: 'thin', color: { argb: 'FFD9E2F3' } },
-      };
+      cell.border = ROW_BORDER;
       if (rowIndex % 2 === 0) {
-        cell.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFF7FBFF' },
-        };
+        cell.fill = solidFill(COLORS.stripe);
       }
     });
   }
@@ -109,17 +103,6 @@ export async function generateRankingExcelBuffer(
   return Buffer.from(rawBuffer);
 }
 
-function normalizeFilePart(value: string): string {
-  const normalized = value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
-
-  return normalized || 'general';
-}
-
 export function rankingFileName(
   report: RankingReportResult,
   scope: 'admin' | 'public',
@@ -128,5 +111,5 @@ export function rankingFileName(
     report.items[0]?.category ||
     (report.categoryId ? `categoria_${report.categoryId}` : 'general');
 
-  return `ranking_${normalizeFilePart(categoryName)}_${normalizeFilePart(report.eventName)}_${scope}.xlsx`;
+  return `ranking_${fileNamePart(categoryName)}_${fileNamePart(report.eventName)}_${scope}.xlsx`;
 }
