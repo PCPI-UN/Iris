@@ -66,6 +66,7 @@ import {
   GetRankingReportDto,
   RankingReportFormat,
 } from './dto/ranking-report/get-ranking-report.dto';
+import { ListPublishedWinnersDTO } from './dto/winners/list-published-winners.dto';
 import { RankingReportResult } from './events.service';
 import { XLSX_CONTENT_TYPE, xlsxFile } from '../../common/excel/xlsx-file';
 import {
@@ -136,6 +137,25 @@ export class EventsController {
       statuses: [EventStatus.CLOSED],
       onlyActive: false,
     });
+  }
+
+  /**
+   * PUBLIC ENDPOINT - Winners of every event with a published ranking
+   * No authentication required. Declared before `public/:id` so "winners" is not read as an id.
+   */
+  @Public()
+  @Get('public/winners')
+  @ApiOperation({
+    summary: 'List winners of all events',
+    description:
+      'Winners and co-winners of every event whose ranking is public, grouped by event, category and award, newest event first. Grades are null unless the event ranking shows them. No authentication required.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns the winners per event with pagination',
+  })
+  async listPublishedWinners(@Query() query: ListPublishedWinnersDTO) {
+    return this.eventsService.listPublishedWinners(query);
   }
 
   /**

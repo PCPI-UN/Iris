@@ -22,7 +22,7 @@ Single HTTP entry point of the platform. It authenticates the browser session, c
 | --- | --- | --- |
 | `auth` | Login, Microsoft sign-in, signup, activation, refresh, logout, password flows, current user | `auth` |
 | `users` | Platform user administration and platform roles | `auth` |
-| `events` | Events, courses and categories, awards, inscription details, recaps, members, ranking configuration and rankings | `event`, `auth`, `evaluation`, `invitation` |
+| `events` | Events, courses and categories, awards, inscription details, recaps, members, ranking configuration, rankings and the public winners page | `event`, `auth`, `evaluation`, `invitation`, `project` (through `projects`) |
 | `projects` | Project submission with files, review, participants, juror assignment, documents | `project`, `event`, `evaluation` |
 | `criterions` | Evaluation criteria and components | `evaluation` |
 | `evaluations` | Evaluate a project, project statistics, top projects per course | `evaluation`, `project` |
@@ -52,6 +52,12 @@ Cross-cutting code lives in `src/common`: guards, decorators (`@Public`, `@Requi
 | `permission` | The permissions listed |
 
 See [auth-service](../auth-service/) for how tokens are issued and refreshed.
+
+## Public winners page
+
+`GET /events/public/winners?page=&limit=` is public (no session). It returns the winners and co-winners of every event whose results are published and whose ranking is public, grouped by event, category and award, newest event first, with pagination by event (`limit` at most 50). The visibility rule, the grade rounding and hiding live in event-service `ListPublishedWinners` (see [event-service](../event-service/README.md#public-winners-across-events)); `grade` is `null` unless the event ranking shows grades.
+
+The gateway adds each winner's `projectName` with project-service `GetProjectNamesByIds`, which returns id and name in one query. The gateway sends the distinct project ids of the page in calls of at most 500 ids (`libs/common/src/constants/projects.ts`), so an anonymous request makes a bounded number of gRPC calls. Ids that project-service does not return (deleted projects) are logged as a warning and their winners keep `projectName: null`.
 
 ## File uploads
 

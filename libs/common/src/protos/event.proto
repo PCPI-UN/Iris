@@ -57,6 +57,8 @@ service EventService {
   rpc DeleteAwardWinner (DeleteAwardWinnerRequest) returns (DeleteAwardWinnerResponse) {}
   // Awards won by the given projects in active categories, with the award, category and event they belong to
   rpc ListAwardsByProjects (ListAwardsByProjectsRequest) returns (ListAwardsByProjectsResponse) {}
+  // Winners of every event with a published ranking, newest event first (public winners page)
+  rpc ListPublishedWinners (ListPublishedWinnersRequest) returns (ListPublishedWinnersResponse) {}
   // Categories by id, inactive ones included (active = false)
   rpc ListCategoriesByIds (ListCategoriesByIdsRequest) returns (ListCategoriesByIdsResponse) {}
 
@@ -867,6 +869,47 @@ message ProjectAwardProto {
 
 message ListAwardsByProjectsResponse {
   repeated ProjectAwardProto awards = 1;
+}
+
+message ListPublishedWinnersRequest {
+  optional int32 page = 1;
+  optional int32 limit = 2;
+}
+
+// One winner of an award. Co-winners of the same award are one entry each.
+message PublishedWinnerProto {
+  int32 winnerId = 1;
+  int32 projectId = 2;
+  // unset unless the event ranking shows grades (ranking_event.grade_visible)
+  optional double grade = 3;
+}
+
+message PublishedAwardProto {
+  int32 awardId = 1;
+  string title = 2;
+  int32 position = 3;
+  // true when the award has more than one winner
+  bool coWinners = 4;
+  repeated PublishedWinnerProto winners = 5;
+}
+
+message PublishedCategoryWinnersProto {
+  int32 categoryId = 1;
+  string name = 2;
+  repeated PublishedAwardProto awards = 3;
+}
+
+message PublishedEventWinnersProto {
+  int32 eventId = 1;
+  string name = 2;
+  string startDate = 3;
+  string endDate = 4;
+  repeated PublishedCategoryWinnersProto categories = 5;
+}
+
+message ListPublishedWinnersResponse {
+  repeated PublishedEventWinnersProto events = 1;
+  PaginationMetadata meta = 2;
 }
 
 message ListCategoriesByIdsRequest {

@@ -56,6 +56,14 @@ export class PrismaProjectRepository implements ProjectRepository {
     return (await this.prisma.project.findMany({ where: { id: { in: ids } } })) as unknown as Project[];
   }
 
+  async findNamesByIds(ids: number[]): Promise<{ id: number; name: string }[]> {
+    if (!ids.length) return [];
+    return this.prisma.project.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true },
+    });
+  }
+
   async findProject(eventId: number, courseId: number, name: string): Promise<Project | null> {
     return (await this.prisma.project.findFirst({
       where: { eventId, courseId, name },

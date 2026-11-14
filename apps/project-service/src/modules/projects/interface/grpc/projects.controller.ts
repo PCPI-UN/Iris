@@ -3,6 +3,7 @@ import { GrpcMethod, RpcException } from '@nestjs/microservices';
 import { CreateProjectUC } from '../../application/use-cases/create-project.uc';
 import { ListProjectsByEventUC } from '../../application/use-cases/list-projects-by-event.uc';
 import { GetProjectUC } from '../../application/use-cases/get-project.uc';
+import { GetProjectNamesByIdsUC } from '../../application/use-cases/get-project-names-by-ids.uc';
 import { AddProjectDocumentUC } from '../../application/use-cases/add-document.uc';
 import { ListDocumentsUC } from '../../application/use-cases/list-documents.uc';
 import { DeleteProjectUC } from '../../application/use-cases/delete-project.uc';
@@ -81,6 +82,7 @@ export class ProjectsController {
   constructor(
     private readonly createProject: CreateProjectUC,
     private readonly getProject: GetProjectUC,
+    private readonly getProjectNamesByIdsUC: GetProjectNamesByIdsUC,
     private readonly listByEvent: ListProjectsByEventUC,
     private readonly addDoc: AddProjectDocumentUC,
     private readonly listDocs: ListDocumentsUC,
@@ -146,6 +148,11 @@ export class ProjectsController {
   async getProjectRpc(req: { id: number }) {
     const p = await this.getProject.execute({ id: req.id });
     return { project: toProtoProject(p) };
+  }
+
+  @GrpcMethod('ProjectsService', 'GetProjectNamesByIds')
+  async getProjectNamesByIdsRpc(req: { ids?: number[] }) {
+    return { projects: await this.getProjectNamesByIdsUC.execute(req) };
   }
 
   @GrpcMethod('ProjectsService', 'ListProjectsByEvent')
