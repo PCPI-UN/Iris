@@ -42,7 +42,7 @@ describe('EvaluationsService.getAverageGrades', () => {
     ]);
 
     expect(await service.getAverageGrades([3, 4])).toEqual([
-      { projectId: 3, averageGrade: 85.33 },
+      { projectId: 3, averageGrade: 85.33, evaluationCount: 3 },
     ]);
   });
 
