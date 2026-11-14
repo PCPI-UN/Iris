@@ -6,6 +6,8 @@ service ProjectsService {
   rpc CreateProject (CreateProjectRequest)   returns (ProjectResponse);
   rpc GetProject    (GetProjectRequest)      returns (ProjectResponse);
   rpc GetProjectComplete    (GetProjectRequest)      returns (ProjectCompleteResponse);
+  // id and name of the given projects in one query; ids that do not exist are left out
+  rpc GetProjectNamesByIds (GetProjectNamesByIdsRequest) returns (GetProjectNamesByIdsResponse);
   rpc ListProjectsByEvent (ListProjectsByEventRequest) returns (ListProjectsResponse);
   rpc GetDashboardStats (GetProjectDashboardStatsRequest) returns (GetProjectDashboardStatsResponse);
 
@@ -197,6 +199,15 @@ message ProjectResponse { Project project = 1; }
 message ProjectCompleteResponse { repeated ProjectComplete items = 1; }
 
 message GetProjectRequest { int32 id = 1; }
+
+message GetProjectNamesByIdsRequest { repeated int32 ids = 1; }
+
+message ProjectName {
+  int32 id = 1;
+  string name = 2;
+}
+
+message GetProjectNamesByIdsResponse { repeated ProjectName projects = 1; }
 
 message ListProjectsByEventRequest {
   int32 eventId = 1;

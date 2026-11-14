@@ -22,7 +22,7 @@ The service has a single module, `projects`, following the layering described in
 
 | Area | Responsibility |
 | --- | --- |
-| Projects | Creation, update, listing by event, project detail, dashboard count, student participation statistics |
+| Projects | Creation, update, listing by event, project detail, dashboard count, student participation statistics, names by ids (`GetProjectNamesByIds`: id and name in one query, at most 500 ids, missing ids left out; used by the public winners page) |
 | Review | Approve, reject, request changes, send back to review |
 | Documents | Logo, poster and supporting documents stored as URLs |
 | Participants | Pending participants and confirmed participants |
