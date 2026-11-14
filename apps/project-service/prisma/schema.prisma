@@ -44,9 +44,12 @@ model Project {
   eventNumber     String?      @map("event_number") @db.VarChar(150)
   state           ProjectState @map("state")
   reason          String?      @map("reason") @db.Text
+  // Course section (NRC) of the project; null for existing projects and events that are not course work
+  academicCourseId Int?        @map("academic_course_id")
   createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamp()
   updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamp()
 
+  academicCourse      AcademicCourse? @relation(fields: [academicCourseId], references: [id], onDelete: Restrict)
   documents           ProjectDocument[]
   participants        ProjectParticipant[]
   jurorsAssigned      ProjectAssignment[]
@@ -55,6 +58,7 @@ model Project {
   pendingTutors       PendingProjectTutor[]
 
   @@unique([eventId, name])
+  @@index([academicCourseId])
   @@map("projects")
 }
 
@@ -146,4 +150,45 @@ model PendingProjectTutor {
 
   @@unique([projectId, email])
   @@map("pending_project_tutors")
+}
+
+/**
+ * ** ACADEMIC STRUCTURE ***
+ * READ scope of the academic roles: a Professor reads the projects of their courses,
+ * a DepartmentDirector the projects of the courses of their department.
+ * Loaded by scripts for now.
+ */
+
+// A director is a platform user (auth-service database), so directorUserId has no foreign key
+model Department {
+  id             Int      @id @default(autoincrement())
+  name           String   @unique @db.VarChar(255)
+  directorUserId Int?     @unique @map("director_user_id")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp()
+
+  courses AcademicCourse[]
+
+  @@map("departments")
+}
+
+// Course identified by its NRC within an academic term; the NRC repeats across terms.
+// A professor is a platform user (auth-service database), so professorUserId has no foreign key
+model AcademicCourse {
+  id              Int        @id @default(autoincrement())
+  nrc             String     @db.VarChar(20)
+  term            String     @db.VarChar(20)
+  name            String     @db.VarChar(255)
+  professorUserId Int        @map("professor_user_id")
+  departmentId    Int        @map("department_id")
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamp()
+  department      Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  projects Project[]
+
+  @@unique([term, nrc])
+  @@index([professorUserId])
+  @@index([departmentId])
+  @@map("academic_courses")
 }

@@ -18,6 +18,7 @@ erDiagram
         string event_number "nullable"
         ProjectState state
         text reason "nullable"
+        int academic_course_id FK "nullable"
         timestamp created_at
         timestamp updated_at
     }
@@ -82,15 +83,36 @@ erDiagram
         timestamp updated_at
     }
 
+    departments {
+        int id PK
+        string name UK
+        int director_user_id UK "nullable"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    academic_courses {
+        int id PK
+        string nrc
+        string term
+        string name
+        int professor_user_id
+        int department_id FK
+        timestamp created_at
+        timestamp updated_at
+    }
+
     projects ||--o{ project_documents : "documents"
     projects ||--o{ project_participants : "participants"
     projects ||--o{ project_assignments : "jurors assigned"
     projects ||--o{ pending_project_participants : "pending participants"
     projects ||--o{ project_tutors : "tutors"
     projects ||--o{ pending_project_tutors : "pending tutors"
+    academic_courses |o--o{ projects : "projects of the course section"
+    departments ||--o{ academic_courses : "course sections"
 ```
 
-`projects` has a composite unique constraint on (`event_id`, `name`). `pending_project_participants` and `pending_project_tutors` have a composite unique constraint on (`project_id`, `email`).
+`projects` has a composite unique constraint on (`event_id`, `name`). `pending_project_participants` and `pending_project_tutors` have a composite unique constraint on (`project_id`, `email`). `academic_courses` has a composite unique constraint on (`term`, `nrc`).
 
 ## Enums
 
@@ -116,10 +138,11 @@ erDiagram
 | `event_number` | `VARCHAR(150)` | yes | |
 | `state` | `ProjectState` | no | no default |
 | `reason` | `TEXT` | yes | reason of the last rejection or change request |
+| `academic_course_id` | `INTEGER` | yes | FK → `academic_courses.id`; indexed. Course section (NRC) of the project; null for projects that are not course work |
 | `created_at` | `TIMESTAMP` | no | `now()` |
 | `updated_at` | `TIMESTAMP` | no | maintained by Prisma (`@updatedAt`) |
 
-Relations: 1:N `project_documents`, `project_participants`, `project_assignments`, `pending_project_participants`, `project_tutors`, `pending_project_tutors`.
+Relations: N:1 `academic_courses` (optional); 1:N `project_documents`, `project_participants`, `project_assignments`, `pending_project_participants`, `project_tutors`, `pending_project_tutors`.
 
 ### `project_documents` (`ProjectDocument`)
 
@@ -203,6 +226,37 @@ Tutors typed in at submission who have no account yet; marked `JOINED` when thei
 | `created_at` | `TIMESTAMP` | no | `now()` |
 | `updated_at` | `TIMESTAMP` | no | `@updatedAt` |
 
+### `departments` (`Department`)
+
+Academic departments. A department has at most one director and a user directs at most one department; the director reads the projects of the course sections of the department. Loaded by scripts for now.
+
+| Column | Type | Null | Default / constraint |
+| --- | --- | --- | --- |
+| `id` | `SERIAL` | no | PK |
+| `name` | `VARCHAR(255)` | no | unique |
+| `director_user_id` | `INTEGER` | yes | unique; refers to a user in `auth-service` |
+| `created_at` | `TIMESTAMP` | no | `now()` |
+| `updated_at` | `TIMESTAMP` | no | `@updatedAt` |
+
+Relations: 1:N `academic_courses`.
+
+### `academic_courses` (`AcademicCourse`)
+
+Course sections, identified by their NRC within an academic term (the NRC repeats across terms). Each section has one professor, who reads the projects of the section. Loaded by scripts for now. Not to be confused with `projects.course_id`, which is an event category in `event-service`.
+
+| Column | Type | Null | Default / constraint |
+| --- | --- | --- | --- |
+| `id` | `SERIAL` | no | PK |
+| `nrc` | `VARCHAR(20)` | no | unique together with `term` |
+| `term` | `VARCHAR(20)` | no | unique together with `nrc` |
+| `name` | `VARCHAR(255)` | no | |
+| `professor_user_id` | `INTEGER` | no | indexed; refers to a user in `auth-service` |
+| `department_id` | `INTEGER` | no | FK → `departments.id`; indexed |
+| `created_at` | `TIMESTAMP` | no | `now()` |
+| `updated_at` | `TIMESTAMP` | no | `@updatedAt` |
+
+Relations: N:1 `departments`; 1:N `projects`.
+
 ## Foreign keys
 
 | FK | References | On delete |
@@ -213,8 +267,10 @@ Tutors typed in at submission who have no account yet; marked `JOINED` when thei
 | `pending_project_participants.project_id` | `projects.id` | `RESTRICT` |
 | `project_tutors.project_id` | `projects.id` | `CASCADE` |
 | `pending_project_tutors.project_id` | `projects.id` | `CASCADE` |
+| `projects.academic_course_id` | `academic_courses.id` | `RESTRICT` |
+| `academic_courses.department_id` | `departments.id` | `RESTRICT` |
 
-All foreign keys use `ON UPDATE CASCADE`. References to other services (`event_id`, `course_id`, `user_id`, `member_*`) are logical only; there are no cross-database foreign keys.
+All foreign keys use `ON UPDATE CASCADE`. References to other services (`event_id`, `course_id`, `user_id`, `member_*`, `professor_user_id`, `director_user_id`) are logical only; there are no cross-database foreign keys.
 
 ## Notes
 
@@ -222,4 +278,5 @@ All foreign keys use `ON UPDATE CASCADE`. References to other services (`event_i
 - Deleting a project requires deleting its documents, participants, assignments and pending participants first, because those foreign keys are `RESTRICT`. Tutors and pending tutors are deleted with the project (`CASCADE`).
 - Timestamps are `TIMESTAMP` without time zone.
 - `semester` and `career` were added later with the defaults `'1'` and `'N/A'`, which were also used to fill existing rows.
-- The only indexes are the primary keys and the two unique constraints.
+- A course section with projects, or a department with course sections, cannot be deleted (`RESTRICT`).
+- Besides the primary keys and the unique constraints, there are indexes on `projects.academic_course_id`, `academic_courses.professor_user_id` and `academic_courses.department_id`.

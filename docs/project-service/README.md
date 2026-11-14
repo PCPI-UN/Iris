@@ -15,6 +15,7 @@ Owns the projects submitted to an event: their review lifecycle, their documents
 | Keep pending participants (captured at submission) and confirmed participants (linked to a user) | Manage user accounts or event membership: that belongs to `auth-service` and `event-service` |
 | Assign jurors to projects using the event membership key (user, event, role) | Own the evaluation scale: `evaluation-service` resolves it from the project's `eventId` through `event-service` |
 | Request one invitation per participant when a project is submitted | Send invitations or emails itself: it calls `invitation-service` and `notification-service` |
+| Keep the academic structure (departments and course sections by NRC and term) that scopes what Professors and Department Directors can read; loaded by scripts for now | |
 
 ## Modules
 
