@@ -150,12 +150,15 @@ export class EvaluationsService implements OnModuleInit {
   }
 
   /**
-   * Average grade of each project that has evaluations, in one call. Same value and
-   * rounding as getProjectStats; projects without evaluations are left out.
+   * Average grade and number of evaluations of each project that has evaluations, in
+   * one call. Same value and rounding as getProjectStats; projects without evaluations
+   * are left out.
    */
   async getAverageGrades(
     projectIds: number[],
-  ): Promise<{ projectId: number; averageGrade: number }[]> {
+  ): Promise<
+    { projectId: number; averageGrade: number; evaluationCount: number }[]
+  > {
     if (!projectIds.length) return [];
     const response = await lastValueFrom(
       this.evaluationService.getTopProjectsByCourse({ projectIds }),
@@ -165,6 +168,7 @@ export class EvaluationsService implements OnModuleInit {
       .map((p) => ({
         projectId: p.projectId,
         averageGrade: roundGrade(p.averageGrade),
+        evaluationCount: p.evaluationCount,
       }));
   }
 

@@ -244,7 +244,7 @@ export class EventService implements OnModuleInit {
    * Produces a unified participant list for a project, including both
    * confirmed and pending members.
    */
-  private getProjectParticipantNames(project: ProjectComplete): string[] {
+  getProjectParticipantNames(project: ProjectComplete): string[] {
     const confirmed = (project.participants ?? [])
       .map((participant) => {
         const firstName = participant.firstName?.trim() ?? '';

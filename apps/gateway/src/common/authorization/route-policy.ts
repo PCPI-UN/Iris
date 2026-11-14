@@ -204,6 +204,8 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'GET /projects/by-event/:eventId/with-jurors': { access: 'public' },
   'PATCH /projects/documents/:id': { access: 'pending' },
   'PATCH /projects/reassign-juror': { access: 'pending' },
+  // modules/reports/reports.controller.ts
+  'GET /events/:eventId/reports/evaluation': { permission: ['read:grades'] },
   // modules/tiebreaks/tiebreaks.controller.ts
   'GET /tiebreaks': { permission: ['read:grades'] },
   'POST /tiebreaks': { permission: ['manage:events'] },
