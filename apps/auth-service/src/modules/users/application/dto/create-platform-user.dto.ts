@@ -32,4 +32,8 @@ export class CreatePlatformUserDto {
   @ArrayMinSize(1)
   @IsInt({ each: true })
   roleIds: number[];
+
+  // User performing the operation
+  @IsInt()
+  actorUserId: number;
 }

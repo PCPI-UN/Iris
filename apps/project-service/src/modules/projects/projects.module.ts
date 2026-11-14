@@ -10,6 +10,7 @@ import { ListDocumentsUC } from './application/use-cases/list-documents.uc';
 import { DeleteProjectUC } from './application/use-cases/delete-project.uc';
 import { GetMyProjectByEventUC } from './application/use-cases/get-my-project-by-event.uc';
 import { ListUserParticipationsUC } from './application/use-cases/list-user-participations.uc';
+import { GetStudentParticipationStatsUC } from './application/use-cases/get-student-participation-stats.uc';
 import { UpdateProjectUC } from './application/use-cases/update-project.uc';
 import { ApproveProjectUC } from './application/use-cases/approve-project.uc';
 import { RejectProjectUC } from './application/use-cases/reject-project.uc';
@@ -22,8 +23,13 @@ import { ListProjectJurorsUC } from './application/use-cases/list-project-jurors
 import { GetDashboardStatsUC } from './application/use-cases/get-dashboard-stats.uc';
 import { AddParticipantUC } from './application/use-cases/add-participant.uc';
 import { ListParticipantsUC } from './application/use-cases/list-participants.uc';
+import { AddProjectTutorUC } from './application/use-cases/add-project-tutor.uc';
 import { AddPendingParticipantUC } from './application/use-cases/add-pending-participant.us';
 import { ListPendingParticipantsUC } from './application/use-cases/list-pending-participants.uc';
+import { SetProjectTutorsUC } from './application/use-cases/set-project-tutors.uc';
+import { ListProjectTutorsUC } from './application/use-cases/list-project-tutors.uc';
+import { INVITATION_COMMAND_PORT } from './application/ports/invitation.command-port';
+import { InvitationServiceAdapter } from './infrastructure/grpc-client/invitation-service.adapter';
 import { InvitationClientModule } from './invitation-client.module';
 import { EventServiceModule } from './event-service.module';
 import { EventServiceAdapter } from './infrastructure/grpc-client/event-service.adapter';
@@ -36,6 +42,11 @@ import { NotificateStudentUC } from './application/use-cases/notificate-student.
 import { ListProjectsForReviewUC } from './application/use-cases/list-projects-for-review.uc';
 import { UpdateProjectDocumentUC } from './application/use-cases/update-document.uc';
 import { CheckActiveSubmissionByEmailsUC } from './application/use-cases/check-active-submission-by-emails.uc';
+import { AuthServiceModule } from './auth-service.module';
+import { PreviewJurorImportUC } from './application/use-cases/preview-juror-import.uc';
+import { GetJurorImportTemplateUC } from './application/use-cases/get-juror-import-template.uc';
+import { AUTH_SERVICE_PORT } from './application/ports/auth-service.port';
+import { AuthServiceAdapter } from './infrastructure/grpc-client/auth-service.adapter';
 
 @Module({
   controllers: [ProjectsController],
@@ -43,6 +54,7 @@ import { CheckActiveSubmissionByEmailsUC } from './application/use-cases/check-a
     InvitationClientModule,
     EventServiceModule,
     NotificationServiceModule,
+    AuthServiceModule,
   ],
   providers: [
     PrismaService,
@@ -60,6 +72,7 @@ import { CheckActiveSubmissionByEmailsUC } from './application/use-cases/check-a
     DeleteProjectUC,
     GetMyProjectByEventUC,
     ListUserParticipationsUC,
+    GetStudentParticipationStatsUC,
     UpdateProjectUC,
     ApproveProjectUC,
     RejectProjectUC,
@@ -71,6 +84,11 @@ import { CheckActiveSubmissionByEmailsUC } from './application/use-cases/check-a
     AddParticipantUC,
     ListParticipantsUC,
     AddPendingParticipantUC,
+    AddProjectTutorUC,
+    SetProjectTutorsUC,
+    ListProjectTutorsUC,
+    InvitationServiceAdapter,
+    { provide: INVITATION_COMMAND_PORT, useExisting: InvitationServiceAdapter },
     ListPendingParticipantsUC,
     ListProjectsAssignedToJurorUC,
     ListProjectsForReviewUC,
@@ -80,9 +98,15 @@ import { CheckActiveSubmissionByEmailsUC } from './application/use-cases/check-a
     CheckActiveSubmissionByEmailsUC,
     ChangeToUnderReviewProjectUC,
     ChangeToUnderReviewProjectUC,
+    PreviewJurorImportUC,
+    GetJurorImportTemplateUC,
     {
       provide: NOTIFICATION_SERVICE_PORT,
       useExisting: NotificationServiceAdapter,
+    },
+    {
+      provide: AUTH_SERVICE_PORT,
+      useExisting: AuthServiceAdapter,
     },
   ],
   exports: [ApproveProjectUC, CreateProjectUC, NotificateStudentUC],

@@ -35,13 +35,6 @@ export class CreateEventMemberUseCase {
       });
     }
 
-    if (!event.isPubliclyJoinable) {
-      throw new RpcException({
-        code: 9,
-        message: 'Event is not publicly joinable',
-      });
-    }
-
     // 3. Validate user exists
     try {
       const user = await this.authClient.getUser(input.userId);

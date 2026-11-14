@@ -19,6 +19,8 @@ import { GetUserByEmailUseCase } from './application/use-cases/get-user-by-email
 import { ActivateUserUseCase } from './application/use-cases/activate-user.use-case';
 import { ActivateUserWithMicrosoftUseCase } from './application/use-cases/activate-user-with-microsoft.use-case';
 
+import { SetUserPlatformRolesUseCase } from '@users/application/use-cases/set-user-platform-roles.use-case';
+
 @Module({
   imports: [RolesModule, PrismaModule],
   controllers: [UsersController],
@@ -33,6 +35,7 @@ import { ActivateUserWithMicrosoftUseCase } from './application/use-cases/activa
     UpdateUserUseCase,
     UpdateOwnProfileUseCase,
     DeactivateUserUseCase,
+    SetUserPlatformRolesUseCase,
     {
       provide: UserRepositoryPort,
       useClass: PrismaUserRepository,

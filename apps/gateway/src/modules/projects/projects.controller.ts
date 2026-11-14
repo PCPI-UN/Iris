@@ -6,6 +6,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Put,
   UploadedFile,
   UploadedFiles,
   UseInterceptors,
@@ -13,7 +14,9 @@ import {
   Query,
   HttpException,
   HttpStatus,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import {
   FileFieldsInterceptor,
   FileInterceptor,
@@ -50,6 +53,9 @@ import { RequestChangesProjectDto } from './dto/request-changes-project.dto';
 import { UpdateProjectInfoDto } from './dto/update-project-info.dto';
 import { UpdateProjectCodeDto } from './dto/update-project-code.dto';
 import { ApproveProjectDto } from './dto/approve-project.dto';
+import { ProjectTutorsInputDto } from './dto/project-tutors-input.dto';
+import { TutorCandidatesQueryDto } from './dto/tutor-candidates-query.dto';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 
 @ApiTags('projects')
 @ApiSecurity('JWT-auth')
@@ -78,7 +84,9 @@ export class ProjectsController {
       'Public endpoint that allows anyone to submit a project with participants and document files. ' +
       'Accepts up to 4 files: 1 logo, 1 poster, and 2 supporting documents. ' +
       'Maximum file size: 25MB per file. ' +
-      'Files are uploaded to Azure Blob Storage. No authentication required.',
+      'Files are uploaded to Azure Blob Storage. No authentication required. ' +
+      'The optional `tutors` field takes the project tutors (see the body schema); they get the Tutor role ' +
+      'and their invitations when the project is approved.',
   })
   @ApiBody({
     description: 'Project data with file uploads (max 4 files, 5MB each)',
@@ -410,6 +418,37 @@ export class ProjectsController {
     );
   }
 
+  @Public()
+  @Get('tutor-candidates')
+  @ApiOperation({
+    summary: 'Search users who can be the tutor of a project',
+    description:
+      'Active users with the Tutor or Professor role; every word of `search` must appear in the first ' +
+      'or last name (at least 3 letters). Returns at most 10 results with id and name, no email. ' +
+      'Public, like the submission form that uses it.',
+  })
+  @ApiResponse({ status: 400, description: '`search` has fewer than 3 letters' })
+  async searchTutorCandidates(@Query() query: TutorCandidatesQueryDto) {
+    return this.projectsService.searchTutorCandidates(query.search);
+  }
+
+  @RequirePermission('manage:events')
+  @Put(':id/tutors')
+  @ApiOperation({
+    summary: 'Replace the tutors of a project',
+    description:
+      'Replaces the whole list. Tutors left out are unlinked (they keep their roles). On an approved ' +
+      'project, linked tutors get the Tutor role and new tutors typed in by email are invited; ' +
+      'otherwise that happens when the project is approved. Returns the resulting tutors.',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Project ID', example: 1 })
+  async setProjectTutors(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: ProjectTutorsInputDto,
+  ) {
+    return this.projectsService.setProjectTutors(id, body);
+  }
+
   @Get(':id/for-review')
   @ApiOperation({
     summary: 'Get project details for review',
@@ -597,6 +636,30 @@ export class ProjectsController {
   async listProjectJurors(@Param('id', ParseIntPipe) id: number) {
     const jurors = await this.projectsService.listJurorsByProjectId(id);
     return { jurors };
+  }
+
+  @Public()
+  @Get(':projectId/documents/:documentId/open')
+  @ApiOperation({
+    summary: 'Open a project document',
+    description:
+      'Stable link to a document: redirects (302) to a freshly signed read URL of its file (valid for 1 hour). ' +
+      'Use it wherever a link must keep working after the response that listed it (exported reports, open tabs). ' +
+      'Only files stored in the platform storage are served; anything else answers 404.',
+  })
+  @ApiParam({ name: 'projectId', type: Number, example: 1 })
+  @ApiParam({ name: 'documentId', type: Number, example: 1 })
+  async openDocument(
+    @Param('projectId', ParseIntPipe) projectId: number,
+    @Param('documentId', ParseIntPipe) documentId: number,
+    @Res() res: Response,
+  ) {
+    const url = await this.projectsService.getDocumentOpenUrl(
+      projectId,
+      documentId,
+    );
+    // Each click signs a new URL: never let a cache keep the redirect
+    res.set('Cache-Control', 'no-store').redirect(HttpStatus.FOUND, url);
   }
 
   @Public()

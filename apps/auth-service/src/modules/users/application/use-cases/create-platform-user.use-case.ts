@@ -6,20 +6,26 @@ import { randomBytes } from 'crypto';
 import { PasswordHasherPort } from '@common/ports/password-hasher.port';
 import { RpcException } from '@nestjs/microservices';
 import { status } from '@grpc/grpc-js';
-import { ValidateRolesExistUseCase } from '@roles/application/use-cases/validate-roles-exist.use-case';
+import { ResolvePlatformRolesUseCase } from '@roles/application/use-cases/resolve-platform-roles.use-case';
+import { AccountAdministrationPolicy } from '@roles/application/services/account-administration.policy';
 
 @Injectable()
 export class CreatePlatformUserUseCase {
   constructor(
     private readonly userRepository: UserRepositoryPort,
     private readonly passwordHasher: PasswordHasherPort,
-    private readonly validateRolesExistUseCase: ValidateRolesExistUseCase,
+    private readonly resolvePlatformRoles: ResolvePlatformRolesUseCase,
+    private readonly administrationPolicy: AccountAdministrationPolicy,
   ) {}
 
   async execute(createPlatformUserDto: CreatePlatformUserDto): Promise<User> {
-    const { email, phone, roleIds, ...rest } = createPlatformUserDto;
+    const { email, phone, roleIds, actorUserId, ...rest } = createPlatformUserDto;
 
-    await this.validateRolesExistUseCase.execute(roleIds);
+    const roles = await this.resolvePlatformRoles.execute(roleIds);
+
+    // Only the principal administrator creates administrators (IRIS-V3-ADM-02)
+    const actor = await this.administrationPolicy.loadActor(actorUserId);
+    this.administrationPolicy.assertCanGrant(actor, roles);
 
     const emailExists = await this.userRepository.existsByEmail(email);
     if (emailExists) {
@@ -51,6 +57,6 @@ export class CreatePlatformUserUseCase {
       phone,
     );
 
-    return this.userRepository.createWithRoles(newUser, roleIds);
+    return this.userRepository.createWithRoles(newUser, roles.map((role) => role.id));
   }
 }

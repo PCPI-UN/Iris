@@ -70,6 +70,7 @@ function toDomainEvent(p: any): DomainEvent {
     inscriptionDeadline: p.inscriptionDeadline,
     inscriptionCost: p.inscriptionCost ?? null,
     evaluationsOpened: p.evaluationsOpened,
+    resultsPublished: p.resultsPublished ?? false,
     startDate: p.startDate,
     endDate: p.endDate,
     active: p.active,
@@ -222,6 +223,16 @@ export class PrismaEventRepository extends EventRepository {
     return toDomainEvent(row);
   }
 
+  async findByIds(ids: number[]): Promise<DomainEvent[]> {
+    if (!ids.length) return [];
+
+    const rows = await this.prisma.event.findMany({
+      where: { id: { in: ids } },
+    });
+
+    return rows.map(toDomainEvent);
+  }
+
   async findByAccessCode(accessCode: string): Promise<DomainEvent | null> {
     const row = await this.prisma.event.findUnique({
       where: { accessCode },
@@ -248,6 +259,7 @@ export class PrismaEventRepository extends EventRepository {
       inscriptionDeadline: input.inscriptionDeadline,
       inscriptionCost: input.inscriptionCost,
       evaluationsOpened: input.evaluationsOpened,
+      resultsPublished: input.resultsPublished,
       startDate: input.startDate,
       endDate: input.endDate,
       location: input.location,

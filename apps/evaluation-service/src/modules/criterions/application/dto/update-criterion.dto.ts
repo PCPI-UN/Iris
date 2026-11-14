@@ -6,8 +6,7 @@ import {
   IsNumber,
   IsBoolean,
   IsArray,
-  Min,
-  Max,
+  IsPositive,
 } from 'class-validator';
 
 export class UpdateCriterionDto {
@@ -27,10 +26,10 @@ export class UpdateCriterionDto {
   @IsOptional()
   description?: string;
 
+  // Relative weight inside its component and category
   @IsNumber()
   @IsOptional()
-  @Min(0)
-  @Max(100)
+  @IsPositive()
   weight?: number;
 
   @IsBoolean()

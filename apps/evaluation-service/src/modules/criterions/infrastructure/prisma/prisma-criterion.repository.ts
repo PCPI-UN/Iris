@@ -1,58 +1,109 @@
 import { Injectable } from '@nestjs/common';
+import { RpcException } from '@nestjs/microservices';
+import { status } from '@grpc/grpc-js';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '@common/prisma/prisma.service';
-import { CriterionRepositoryPort, PaginatedCriterions, FindAllFilters } from '@criterions/domain/repositories/criterion.repository.port';
+import { CriterionRepositoryPort, PaginatedCriterions, FindAllFilters, RubricLockMode } from '@criterions/domain/repositories/criterion.repository.port';
 import { Criterion } from '@criterions/domain/entities/criterion.entity';
 import { CriterionCourse } from '@criterions/domain/entities/criterion-courses.entity';
 import { Component } from '@criterions/domain/entities/component.entity';
 
 import { CriterionMapper } from './mappers/criterion.mapper';
 
+// First key of the Postgres advisory locks of the rubric; the second key is the event id
+const RUBRIC_LOCK_NAMESPACE = 86_301;
+// Rubric changes call event-service and project-service inside the lock
+const RUBRIC_LOCK_MAX_WAIT_MS = 5_000;
+const RUBRIC_LOCK_TIMEOUT_MS = 15_000;
+
 @Injectable()
 export class PrismaCriterionRepository implements CriterionRepositoryPort {
   constructor(private readonly prisma: PrismaService) {}
 
-  private async calculateComponentWeight(componentId: number): Promise<number> {
-    const aggregation = await this.prisma.criterion.aggregate({
+  // Criterion weights are relative and never rewritten: the effective weight
+  // is computed when evaluating (see domain/services/rubric.ts).
+  async create(criterion: Criterion): Promise<Criterion> {
+    const persistenceData = CriterionMapper.toPersistence(criterion);
+
+    const { id, ...createData } = persistenceData;
+
+    const newPrismaCriterion = await this.prisma.db.criterion.create({
+      data: createData,
+    });
+
+    return CriterionMapper.toDomain(newPrismaCriterion);
+  }
+
+  async hasEvaluationsForEvent(eventId: number): Promise<boolean> {
+    const count = await this.prisma.db.evaluation.count({
+      where: { memberEventId: eventId },
+    });
+
+    return count > 0;
+  }
+
+  async withRubricLock<T>(eventIds: number[], mode: RubricLockMode, work: () => Promise<T>): Promise<T> {
+    // Sorted so two calls locking the same events cannot wait for each other
+    const lockedEventIds = Array.from(new Set(eventIds))
+      .filter((eventId) => Number.isInteger(eventId) && eventId > 0)
+      .sort((a, b) => a - b);
+
+    try {
+      return await this.prisma.transaction(
+        async (tx) => {
+          for (const eventId of lockedEventIds) {
+            if (mode === 'shared') {
+              await tx.$executeRaw`SELECT pg_advisory_xact_lock_shared(${RUBRIC_LOCK_NAMESPACE}::int, ${eventId}::int)`;
+            } else {
+              await tx.$executeRaw`SELECT pg_advisory_xact_lock(${RUBRIC_LOCK_NAMESPACE}::int, ${eventId}::int)`;
+            }
+          }
+          return work();
+        },
+        { maxWait: RUBRIC_LOCK_MAX_WAIT_MS, timeout: RUBRIC_LOCK_TIMEOUT_MS },
+      );
+    } catch (error) {
+      // P2028: the transaction could not start in time or expired while waiting for the lock
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2028') {
+        throw new RpcException({
+          code: status.ABORTED,
+          message: `The evaluation rubric of event ${lockedEventIds.join(', ')} is busy with another change; try again`,
+        });
+      }
+      throw error;
+    }
+  }
+
+  async findEvaluatedProjectIds(eventId: number): Promise<number[]> {
+    const evaluations = await this.prisma.db.evaluation.findMany({
+      where: { memberEventId: eventId },
+      select: { projectId: true },
+      distinct: ['projectId'],
+    });
+
+    return evaluations.map((evaluation) => evaluation.projectId);
+  }
+
+  async countActiveCriteriaInComponent(componentId: number): Promise<number> {
+    return this.prisma.db.criterion.count({
+      where: { componentId, active: true },
+    });
+  }
+
+  async sumComponentWeightsByEvent(eventId: number, excludeComponentId?: number): Promise<number> {
+    const aggregation = await this.prisma.db.component.aggregate({
       where: {
-        componentId,
-        active: true,
+        eventId,
+        ...(excludeComponentId !== undefined && { id: { not: excludeComponentId } }),
       },
-      _sum: {
-        weight: true,
-      },
+      _sum: { weight: true },
     });
 
     return aggregation._sum.weight ?? 0;
   }
 
-  private async syncComponentWeight(componentId: number): Promise<void> {
-    const weight = await this.calculateComponentWeight(componentId);
-    await this.prisma.component.update({
-      where: { id: componentId },
-      data: {
-        weight,
-      },
-    });
-  }
-
-  async create(criterion: Criterion): Promise<Criterion> {
-    const persistenceData = CriterionMapper.toPersistence(criterion);
-    
-    const { id, ...createData } = persistenceData;
-    
-    const newPrismaCriterion = await this.prisma.criterion.create({
-      data: createData,
-    });
-
-    if (newPrismaCriterion.componentId) {
-      await this.syncComponentWeight(newPrismaCriterion.componentId);
-    }
-    
-    return CriterionMapper.toDomain(newPrismaCriterion);
-  }
-
   async findById(id: number): Promise<Criterion | null> {
-    const prismaCriterion = await this.prisma.criterion.findUnique({
+    const prismaCriterion = await this.prisma.db.criterion.findUnique({
       where: { id, active: true },
     });
     
@@ -77,12 +128,12 @@ export class PrismaCriterionRepository implements CriterionRepositoryPort {
     }
 
     const [results, total] = await Promise.all([
-      this.prisma.criterion.findMany({
+      this.prisma.db.criterion.findMany({
         where: whereClause,
         skip: (page - 1) * limit,
         take: limit,
       }),
-      this.prisma.criterion.count({
+      this.prisma.db.criterion.count({
         where: whereClause,
       }),
     ]);
@@ -95,46 +146,31 @@ export class PrismaCriterionRepository implements CriterionRepositoryPort {
   async update(criterion: Criterion): Promise<Criterion> {
     const persistenceData = CriterionMapper.toPersistence(criterion);
 
-    const previousCriterion = await this.prisma.criterion.findUnique({
-      where: { id: criterion.id },
-      select: {
-        componentId: true,
-      },
-    });
-    
-    const updatedPrismaCriterion = await this.prisma.criterion.update({
+    const updatedPrismaCriterion = await this.prisma.db.criterion.update({
       where: { id: criterion.id },
       data: persistenceData,
     });
 
-    const affectedComponentIds = new Set<number>([
-      previousCriterion?.componentId,
-      updatedPrismaCriterion.componentId,
-    ].filter((componentId): componentId is number => typeof componentId === 'number'));
-
-    await Promise.all(
-      Array.from(affectedComponentIds).map((componentId) => this.syncComponentWeight(componentId)),
-    );
-    
     return CriterionMapper.toDomain(updatedPrismaCriterion);
   }
 
   async delete(id: number): Promise<void> {
-    const existingCriterion = await this.prisma.criterion.findUnique({
-      where: { id },
-      select: {
-        componentId: true,
-      },
-    });
-
-    await this.prisma.criterion.update({
+    await this.prisma.db.criterion.update({
       where: { id },
       data: { active: false },
     });
+  }
 
-    if (existingCriterion?.componentId) {
-      await this.syncComponentWeight(existingCriterion.componentId);
-    }
+  async findActiveByEventWithCourses(eventId: number): Promise<Array<{ criterion: Criterion; courseIds: number[] }>> {
+    const prismaCriterions = await this.prisma.db.criterion.findMany({
+      where: { eventId, active: true },
+      include: { criterionsCourses: { select: { courseId: true } } },
+    });
+
+    return prismaCriterions.map(({ criterionsCourses, ...criterion }) => ({
+      criterion: CriterionMapper.toDomain(criterion),
+      courseIds: criterionsCourses.map((cc) => cc.courseId),
+    }));
   }
 
   async associateCourses(criterionId: number, courseIds: number[]): Promise<void> {
@@ -143,20 +179,20 @@ export class PrismaCriterionRepository implements CriterionRepositoryPort {
       courseId,
     }));
 
-    await this.prisma.criterionCourse.createMany({
+    await this.prisma.db.criterionCourse.createMany({
       data: associations,
       skipDuplicates: true,
     });
   }
 
   async removeAllCourseAssociations(criterionId: number): Promise<void> {
-    await this.prisma.criterionCourse.deleteMany({
+    await this.prisma.db.criterionCourse.deleteMany({
       where: { criterionId },
     });
   }
 
   async getCriterionCourses(criterionId: number): Promise<CriterionCourse[]> {
-    const prismaCriterionCourses = await this.prisma.criterionCourse.findMany({
+    const prismaCriterionCourses = await this.prisma.db.criterionCourse.findMany({
       where: { criterionId },
     });
 
@@ -164,7 +200,7 @@ export class PrismaCriterionRepository implements CriterionRepositoryPort {
   }
 
   async findByCourseId(courseId: number): Promise<Criterion[]> {
-    const prismaCriterions = await this.prisma.criterion.findMany({
+    const prismaCriterions = await this.prisma.db.criterion.findMany({
       where: {
         active: true,
         criterionsCourses: {
@@ -191,7 +227,7 @@ export class PrismaCriterionRepository implements CriterionRepositoryPort {
   }
 
   async findByCourseIds(courseIds: number[]): Promise<Criterion[]> {
-    const prismaCriterions = await this.prisma.criterion.findMany({
+    const prismaCriterions = await this.prisma.db.criterion.findMany({
       where: {
         active: true,
         criterionsCourses: {
@@ -220,12 +256,12 @@ export class PrismaCriterionRepository implements CriterionRepositoryPort {
   }
 
   // Component methods
-  async createComponent(name: string, weight: number, eventId?: number | null): Promise<Component> {
-    const prismaComponent = await this.prisma.component.create({
+  async createComponent(name: string, weight: number, eventId: number): Promise<Component> {
+    const prismaComponent = await this.prisma.db.component.create({
       data: {
         name,
         weight,
-        eventId: eventId ?? null,
+        eventId,
       },
     });
 
@@ -233,7 +269,7 @@ export class PrismaCriterionRepository implements CriterionRepositoryPort {
   }
 
   async findComponentById(id: number): Promise<Component | null> {
-    const prismaComponent = await this.prisma.component.findUnique({
+    const prismaComponent = await this.prisma.db.component.findUnique({
       where: { id },
     });
 
@@ -242,31 +278,43 @@ export class PrismaCriterionRepository implements CriterionRepositoryPort {
   }
 
   async findAllComponents(): Promise<Component[]> {
-    const prismaComponents = await this.prisma.component.findMany();
+    const prismaComponents = await this.prisma.db.component.findMany();
     return prismaComponents.map(
       (c) => new Component(c.id, c.name, c.weight, c.eventId)
     );
   }
 
+  async findComponentsByEvent(eventId: number): Promise<Component[]> {
+    const prismaComponents = await this.prisma.db.component.findMany({
+      where: { eventId },
+      orderBy: { id: 'asc' },
+    });
+    return prismaComponents.map(
+      (c) => new Component(c.id, c.name, c.weight, c.eventId)
+    );
+  }
+
+  // The event of a component never changes
   async updateComponent(component: Component): Promise<Component> {
-    const weight = await this.calculateComponentWeight(component.id);
-
-    const updateData: any = { name: component.name, weight };
-    if (component.eventId !== undefined) {
-      updateData.eventId = component.eventId;
-    }
-
-    const prismaComponent = await this.prisma.component.update({
+    const prismaComponent = await this.prisma.db.component.update({
       where: { id: component.id },
-      data: updateData,
+      data: { name: component.name, weight: component.weight },
     });
 
     return new Component(prismaComponent.id, prismaComponent.name, prismaComponent.weight, prismaComponent.eventId);
   }
 
   async deleteComponent(id: number): Promise<void> {
-    await this.prisma.component.delete({
-      where: { id },
+    // Soft-deleted criteria keep their component reference; detach them so the FK does not block the delete.
+    // Both writes run in one transaction (the rubric lock's one when there is one).
+    await this.prisma.transaction(async (tx) => {
+      await tx.criterion.updateMany({
+        where: { componentId: id, active: false },
+        data: { componentId: null },
+      });
+      await tx.component.delete({
+        where: { id },
+      });
     });
   }
 }

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { join } from 'path';
@@ -9,12 +10,15 @@ import {
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
 import { AzureBlobUploadService } from './azure-blob-upload.service';
+import { SignBlobUrlsInterceptor } from './sign-blob-urls.interceptor';
 import { FetchProjectJurorsUseCase } from './use-cases/fetch-project-jurors.use-case';
 import { FetchUserProfilesUseCase } from './use-cases/fetch-user-profiles.use-case';
 import { EnrichProjectsWithJurorsUseCase } from './use-cases/enrich-projects-with-jurors.use-case';
 import { ValidateJurorHasNotEvaluatedUseCase } from './use-cases/validate-juror-has-not-evaluated.use-case';
 import { RemoveJurorFromProjectUseCase } from './use-cases/remove-juror-from-project.use-case';
 import { UpdateProjectCodeUseCase } from './use-cases/update-project-code.use-case';
+import { JurorImportsController } from './juror-imports/juror-imports.controller';
+import { JurorImportsService } from './juror-imports/juror-imports.service';
 
 import {
   EVENT_SERVICE_NAME,
@@ -106,7 +110,7 @@ import { AuthModule } from '../auth/auth.module';
       },
     ]),
   ],
-  controllers: [ProjectsController],
+  controllers: [ProjectsController, JurorImportsController],
   providers: [
     ProjectsService,
     AzureBlobUploadService,
@@ -116,6 +120,8 @@ import { AuthModule } from '../auth/auth.module';
     ValidateJurorHasNotEvaluatedUseCase,
     RemoveJurorFromProjectUseCase,
     UpdateProjectCodeUseCase,
+    JurorImportsService,
+    { provide: APP_INTERCEPTOR, useClass: SignBlobUrlsInterceptor },
   ],
   exports: [ProjectsService],
 })

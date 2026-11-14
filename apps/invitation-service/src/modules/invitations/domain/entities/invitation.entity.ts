@@ -9,7 +9,11 @@ export enum InvitationTargetType {
   EVENT = 'EVENT',
   PLATFORM = 'PLATFORM',
   PROJECT = 'PROJECT',
+  PROJECT_TUTOR = 'PROJECT_TUTOR',
 }
+
+/** Platform role id of `Tutor`, granted when a project tutor accepts the invitation. */
+export const TUTOR_ROLE_ID = 10;
 
 export class Invitation {
   constructor(

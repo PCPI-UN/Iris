@@ -3,12 +3,16 @@ import { UserRepositoryPort } from '@users/domain/repositories/user.repository.p
 import { DeactivateUserDto } from '../dto/deactivate-user.dto';
 import { RpcException } from '@nestjs/microservices';
 import { status } from '@grpc/grpc-js';
+import { AccountAdministrationPolicy } from '@roles/application/services/account-administration.policy';
 
 @Injectable()
 export class DeactivateUserUseCase {
-  constructor(private readonly userRepository: UserRepositoryPort) {}
-  // TODO: Add checks to prevent deactivating last admin
-  async execute({ id }: DeactivateUserDto): Promise<{ success: boolean }> {
+  constructor(
+    private readonly userRepository: UserRepositoryPort,
+    private readonly administrationPolicy: AccountAdministrationPolicy,
+  ) {}
+
+  async execute({ id, actorUserId }: DeactivateUserDto): Promise<{ success: boolean }> {
     const userExists = await this.userRepository.findById(id);
     if (!userExists) {
       throw new RpcException({
@@ -17,7 +21,15 @@ export class DeactivateUserUseCase {
       });
     }
 
+    // IRIS-V3-ADM-02: only the principal administrator deactivates administrators,
+    // nobody deactivates their own account and the last Admin is never deactivated
+    const actor = await this.administrationPolicy.loadActor(actorUserId);
+    this.administrationPolicy.assertNotSelf(actor, id, 'deactivate');
+    const targetRoles = await this.administrationPolicy.assertCanManageAccount(actor, id);
+    await this.administrationPolicy.assertKeepsAnAdmin(id, targetRoles);
+
     await this.userRepository.deactivate(id);
+
     return { success: true };
   }
 }

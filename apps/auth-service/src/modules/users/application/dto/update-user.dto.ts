@@ -22,4 +22,9 @@ export class UpdateUserDto {
   @IsPhoneNumber('CO')
   @IsOptional()
   phone?: string;
+
+  // User performing the operation; absent for internal calls (e.g. accepting an invitation)
+  @IsInt()
+  @IsOptional()
+  actorUserId?: number;
 }

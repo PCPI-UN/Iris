@@ -27,6 +27,42 @@ spec:
       labels:
         app: event-service
     spec:
+      automountServiceAccountToken: false
+      initContainers:
+        - name: event-migration
+          image: pcpi/event-service:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - "prisma migrate deploy --schema=./apps/event-service/prisma/schema.prisma"
+          env:
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: NODE_ENV
+            - name: EVENT_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: EVENT_DB_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://event_user:$(EVENT_DB_PASSWORD)@event-db:5432/event_service"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
       containers:
         - name: event-service
           image: pcpi/event-service:latest
@@ -34,11 +70,11 @@ spec:
           ports:
             - containerPort: 50053
           env:
-            - name: DATABASE_URL
+            - name: NODE_ENV
               valueFrom:
                 configMapKeyRef:
                   name: pcpi-config
-                  key: EVENT_DATABASE_URL
+                  key: NODE_ENV
             - name: GRPC_HOST
               valueFrom:
                 configMapKeyRef:
@@ -49,11 +85,42 @@ spec:
                 configMapKeyRef:
                   name: pcpi-config
                   key: EVENT_GRPC_PORT
-            - name: NODE_ENV
+            - name: AUTH_SERVICE_URL
               valueFrom:
                 configMapKeyRef:
                   name: pcpi-config
-                  key: NODE_ENV
+                  key: AUTH_SERVICE_URL
+            - name: PROJECT_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: PROJECT_SERVICE_URL
+            - name: EVENT_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: EVENT_DB_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://event_user:$(EVENT_DB_PASSWORD)@event-db:5432/event_service"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          startupProbe:
+            tcpSocket:
+              port: 50053
+            failureThreshold: 30
+            periodSeconds: 5
           readinessProbe:
             tcpSocket:
               port: 50053

@@ -1,6 +1,6 @@
 # Auth Service — Database Schema
 
-Source of truth: `apps/auth-service/prisma/schema.prisma` (PostgreSQL, one database per service). Physical names use `snake_case` via `@map`/`@@map`; the application layer uses `camelCase`. The two migrations (`add_permissions_and_roles`, `adding_oid_to_users`) were checked against the schema and match it.
+Source of truth: `apps/auth-service/prisma/schema.prisma` (PostgreSQL, one database per service). Physical names use `snake_case` via `@map`/`@@map`; the application layer uses `camelCase`. The migrations `add_permissions_and_roles` and `adding_oid_to_users` create the tables and match the schema; `role_catalogue_and_academic_profiles` only inserts data: the role and permission catalogue (see [README.md](./README.md#roles-and-permissions)).
 
 ## ER diagram
 
@@ -128,7 +128,7 @@ One table for all token kinds: one-time tokens (`ACCOUNT_SETUP`, `RESET_PASSWORD
 | `id` | `SERIAL` | no | PK |
 | `name` | `VARCHAR(50)` | no | not unique |
 | `description` | `TEXT` | no | |
-| `scope` | `VARCHAR(20)` | no | free text; the seed uses `PLATFORM` and `EVENT` |
+| `scope` | `VARCHAR(20)` | no | free text; the catalogue uses `PLATFORM` and `EVENT` |
 | `created_at` | `TIMESTAMP` | no | `now()` |
 | `updated_at` | `TIMESTAMP` | no | `@updatedAt` |
 
@@ -166,4 +166,5 @@ All foreign keys use `ON UPDATE CASCADE`.
 - `password` and `oid` are both optional. Local accounts have a password; Microsoft accounts have `oid` and no password.
 - `users.active` and `users.status` are independent: `active` enables or disables the account, `status` records whether it was ever confirmed.
 - `users.phone` has no unique constraint or index; uniqueness is only checked in application code. The column is `VARCHAR(10)`, so longer values (for example `+573001234567`) are rejected by the database.
-- Authorization reads only `platform_staff` rows with `active = true`.
+- Authorization reads only `platform_staff` rows with `active = true`. Removing a role sets `active = false` and granting it again reactivates the same row.
+- Role ids 1–10 are fixed by the catalogue migration; new roles continue after them.

@@ -13,6 +13,7 @@ export interface RenderedEmail {
 
 const TEMPLATE_FILES: Partial<Record<EmailTemplate, string>> = {
   [EmailTemplate.PROJECT_SUBMITTED]: 'project_submitted',
+  [EmailTemplate.PROJECT_TUTOR_INVITATION]: 'project_tutor_invitation',
   [EmailTemplate.PROJECT_APPROVED]: 'project_approved',
   [EmailTemplate.PROJECT_REJECTED]: 'project_rejected',
   [EmailTemplate.REQUEST_CHANGES]: 'requested_changes',
@@ -62,12 +63,18 @@ export class EmailTemplateRenderer {
 
 const ENTITIES: Record<string, string> = {
   '&nbsp;': ' ',
-  '&amp;': '&',
   '&lt;': '<',
   '&gt;': '>',
   '&quot;': '"',
   '&#39;': "'",
+  // Escapes written by handlebars in {{ }} values, e.g. the "=" of "?token=" in a link
+  '&#x27;': "'",
+  '&#x60;': '`',
+  '&#x3D;': '=',
 };
+
+/** Built from the keys of ENTITIES, so a new entity is decoded without touching the regex. */
+const ENTITY_PATTERN = new RegExp(Object.keys(ENTITIES).join('|'), 'g');
 
 /** Plain-text alternative for clients that do not render HTML. */
 export function htmlToText(html: string): string {
@@ -77,7 +84,8 @@ export function htmlToText(html: string): string {
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/(p|div|h[1-6]|li|tr|table)>/gi, '\n')
     .replace(/<[^>]+>/g, '')
-    .replace(/&(nbsp|amp|lt|gt|quot|#39);/g, (entity) => ENTITIES[entity])
+    .replace(ENTITY_PATTERN, (entity) => ENTITIES[entity])
+    .replace(/&amp;/g, '&')
     .replace(/[ \t]+/g, ' ')
     .replace(/ *\n */g, '\n')
     .replace(/\n{3,}/g, '\n\n')

@@ -11,6 +11,8 @@ export interface FindAllFilters {
     eventId?: number;
     courseId?: number;
 }
+export type RubricLockMode = 'shared' | 'exclusive';
+
 export abstract class CriterionRepositoryPort {
   abstract create(criterion: Criterion): Promise<Criterion>;
   abstract findById(id: number): Promise<Criterion | null>;
@@ -19,6 +21,7 @@ export abstract class CriterionRepositoryPort {
   abstract delete(id: number): Promise<void>;
   abstract findByCourseId(courseId: number): Promise<Criterion[]>;
   abstract findByCourseIds(courseIds: number[]): Promise<Criterion[]>;
+  abstract findActiveByEventWithCourses(eventId: number): Promise<Array<{ criterion: Criterion; courseIds: number[] }>>;
   
   // Métodos para manejar la relación con cursos
   abstract associateCourses(criterionId: number, courseIds: number[]): Promise<void>;
@@ -26,9 +29,23 @@ export abstract class CriterionRepositoryPort {
   abstract getCriterionCourses(criterionId: number): Promise<CriterionCourse[]>;
 
   // Componentes
-  abstract createComponent(name: string, weight: number, eventId?: number | null): Promise<Component>;
+  abstract createComponent(name: string, weight: number, eventId: number): Promise<Component>;
   abstract findComponentById(id: number): Promise<Component | null>;
   abstract findAllComponents(): Promise<Component[]>;
+  abstract findComponentsByEvent(eventId: number): Promise<Component[]>;
   abstract updateComponent(component: Component): Promise<Component>;
   abstract deleteComponent(id: number): Promise<void>;
+  abstract countActiveCriteriaInComponent(componentId: number): Promise<number>;
+  abstract sumComponentWeightsByEvent(eventId: number, excludeComponentId?: number): Promise<number>;
+
+  // An event rubric cannot change once the event has evaluations
+  abstract hasEvaluationsForEvent(eventId: number): Promise<boolean>;
+  abstract findEvaluatedProjectIds(eventId: number): Promise<number[]>;
+
+  /**
+   * Runs `work` in one transaction holding the rubric lock of the given events, so a rubric
+   * change and an evaluation of the same event never interleave. Evaluations take the lock
+   * shared (they do not wait for each other); rubric changes take it exclusive.
+   */
+  abstract withRubricLock<T>(eventIds: number[], mode: RubricLockMode, work: () => Promise<T>): Promise<T>;
 }

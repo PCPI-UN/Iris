@@ -1,4 +1,17 @@
-import { TypedDocument ,ProjectState, ProjectDocument, Project, JurorKey, Status } from '../../domain/entities/project.entity';
+import { TypedDocument ,ProjectState, ProjectDocument, Project, JurorKey, Status, ProjectTutorView } from '../../domain/entities/project.entity';
+import {
+  JurorImportOutcome as ProtoJurorImportOutcome,
+  JurorImportUserStatus as ProtoJurorImportUserStatus,
+  PreviewJurorImportResponse,
+  GetJurorImportTemplateResponse,
+} from '@app/common/generated/project';
+import {
+  JurorImportOutcome,
+  JurorImportPreview,
+  JurorImportUserStatus,
+} from '../../application/use-cases/preview-juror-import.uc';
+import { JurorImportTemplate } from '../../application/use-cases/get-juror-import-template.uc';
+import { StudentDashboardData } from '../../application/use-cases/get-student-participation-stats.uc';
 
 // Mapear enum de dominio a enum del proto (numérico)
 const stateToProto = (s: ProjectState): number => {
@@ -131,9 +144,121 @@ export const toProtoPendingParticipant = (p: any) => ({
   createdAt: p.createdAt?.toISOString?.() ?? p.created_at,
   updatedAt: p.updatedAt?.toISOString?.() ?? p.updated_at,
 });
+export const toProtoTutor = (t: ProjectTutorView) => ({
+  userId: t.userId,
+  firstName: t.firstName,
+  lastName: t.lastName ?? undefined,
+  pending: t.pending,
+  email: t.email,
+});
+
 export const toProtoProjectComplete = (p: any) => ({
   ...toProtoProject(p),
   participants: (p.participants ?? []).map(toProtoParticipant),
   documents: (p.documents ?? []).map(toProtoDocument),
   pendingParticipants: (p.pendingParticipants ?? []).map(toProtoPendingParticipant),
+  tutors: (p.tutors ?? []).map(toProtoTutor),
+});
+
+const jurorImportOutcomeToProto: Record<
+  JurorImportOutcome,
+  ProtoJurorImportOutcome
+> = {
+  ASSIGN: ProtoJurorImportOutcome.ASSIGN,
+  SKIP: ProtoJurorImportOutcome.SKIP,
+  ERROR: ProtoJurorImportOutcome.ERROR,
+};
+
+const jurorImportUserStatusToProto: Record<
+  JurorImportUserStatus,
+  ProtoJurorImportUserStatus
+> = {
+  NEW_USER: ProtoJurorImportUserStatus.NEW_USER,
+  EVENT_JUROR: ProtoJurorImportUserStatus.EVENT_JUROR,
+  INVITE_TO_EVENT: ProtoJurorImportUserStatus.INVITE_TO_EVENT,
+};
+
+export const toPreviewJurorImportResponse = (
+  preview: JurorImportPreview,
+): PreviewJurorImportResponse => ({
+  rows: preview.rows.map((row) => ({
+    rowNumber: row.rowNumber,
+    outcome: jurorImportOutcomeToProto[row.outcome],
+    userStatus: row.userStatus
+      ? jurorImportUserStatusToProto[row.userStatus]
+      : ProtoJurorImportUserStatus.JUROR_IMPORT_USER_STATUS_UNSPECIFIED,
+    message: row.message,
+    email: row.email,
+    projectId: row.projectId,
+    projectName: row.projectName,
+    userId: row.userId,
+    jurorSlot: row.jurorSlot,
+  })),
+  totals: preview.totals,
+  eventWarnings: preview.eventWarnings,
+  canConfirm: preview.canConfirm,
+});
+
+export const toGetJurorImportTemplateResponse = (
+  template: JurorImportTemplate,
+): GetJurorImportTemplateResponse => ({
+  eventName: template.eventName,
+  projects: template.projects,
+});
+
+/** Maps the student dashboard statistics to GetStudentParticipationStatsResponse */
+export const toProtoStudentParticipationStats = (stats: StudentDashboardData) => ({
+  totalEvents: stats.totalEvents,
+  finishedEvents: stats.finishedEvents,
+  ongoingEvents: stats.ongoingEvents,
+  totalProjects: stats.totalProjects,
+  totalAwards: stats.totalAwards,
+  bySemester: stats.bySemester.map((s) => ({
+    semester: s.semester,
+    events: s.events,
+    projects: s.projects,
+    awards: s.awards,
+  })),
+  participations: stats.participations.map((p) => ({
+    projectId: p.projectId,
+    projectName: p.projectName,
+    eventId: p.eventId,
+    eventName: p.eventName,
+    eventStartDate: p.eventStartDate,
+    eventEndDate: p.eventEndDate,
+    semester: p.semester,
+    finished: p.finished,
+    projectCode: p.projectCode,
+    courseName: p.courseName,
+    resultsPublished: p.resultsPublished,
+    awards: p.awards.map((a) => ({
+      awardId: a.awardId,
+      title: a.title,
+      position: a.position,
+      categoryName: a.categoryName,
+    })),
+  })),
+  academic: {
+    studentCode: stats.academic.studentCode ?? undefined,
+    career: stats.academic.career ?? undefined,
+    semester: stats.academic.semester ?? undefined,
+  },
+  currentProject: stats.currentProject
+    ? {
+        projectId: stats.currentProject.projectId,
+        eventId: stats.currentProject.eventId,
+        eventName: stats.currentProject.eventName,
+        eventStartDate: stats.currentProject.eventStartDate,
+        semester: stats.currentProject.semester,
+        projectCode: stats.currentProject.projectCode,
+        name: stats.currentProject.name,
+        description: stats.currentProject.description,
+        courseName: stats.currentProject.courseName,
+        state: stats.currentProject.state,
+        canEdit: stats.currentProject.canEdit,
+        participantsCount: stats.currentProject.participantsCount,
+        documentsCount: stats.currentProject.documentsCount,
+        resultsPublished: stats.currentProject.resultsPublished,
+      }
+    : undefined,
 });

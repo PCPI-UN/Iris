@@ -9,7 +9,7 @@ import {
   Query,
   ParseIntPipe,
   ForbiddenException,
-  Res,
+  StreamableFile,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -25,7 +25,6 @@ import { RequirePermission } from '../../common/decorators/require-permission.de
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { InvalidateCache } from '../../common/cache/invalidate-cache.decorator';
 import { EventService } from './events.service';
-import { AppUser } from '../auth/types/app-user.type';
 import { EventStatus } from '@app/common/generated/event';
 
 // Event DTOs
@@ -67,35 +66,18 @@ import {
   GetRankingReportDto,
   RankingReportFormat,
 } from './dto/ranking-report/get-ranking-report.dto';
-import { Response } from 'express';
 import { RankingReportResult } from './events.service';
+import { XLSX_CONTENT_TYPE, xlsxFile } from '../../common/excel/xlsx-file';
+import {
+  generateRankingExcelBuffer,
+  rankingFileName,
+} from './ranking-report.workbook';
 
 @ApiTags('events')
 @ApiSecurity('JWT-auth')
 @Controller('events')
 export class EventsController {
   constructor(private readonly eventsService: EventService) {}
-
-  private normalizeFilePart(value: string): string {
-    const normalized = value
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_+|_+$/g, '');
-
-    return normalized || 'general';
-  }
-
-  private buildRankingFileName(
-    report: RankingReportResult,
-    scope: 'admin' | 'public',
-  ): string {
-    const categoryName =
-      report.items[0]?.category || (report.categoryId ? `categoria_${report.categoryId}` : 'general');
-
-    return `ranking_${this.normalizeFilePart(categoryName)}_${this.normalizeFilePart(report.eventName)}_${scope}.xlsx`;
-  }
 
   // =====================
   // EVENT LISTING ENDPOINTS
@@ -160,12 +142,12 @@ export class EventsController {
    * ADMIN ENDPOINT - List all events with filtering
    * Requires manage:events permission (Admin/EventManager only)
    */
-  @RequirePermission('manage:events')
+  @RequirePermission('read:events')
   @Get()
   @ApiOperation({
     summary: 'List all events (admin)',
     description:
-      'Get a paginated list of all events in the system with optional filters. Requires manage:events permission.',
+      'Get a paginated list of all events in the system with optional filters. Requires read:events permission.',
   })
   @ApiResponse({
     status: 200,
@@ -173,7 +155,7 @@ export class EventsController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - Missing manage:events permission',
+    description: 'Forbidden - Missing read:events permission',
   })
   async listEvents(@Query() query: ListEventsDTO) {
     return this.eventsService.listEvents(query);
@@ -224,7 +206,7 @@ export class EventsController {
     return this.eventsService.listMyEvents(userId, query);
   }
 
-  @RequirePermission('manage:events')
+  @RequirePermission('read:events')
   @Get('dropdown')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List events for dropdown' })
@@ -241,19 +223,11 @@ export class EventsController {
     status: 401,
     description: 'Unauthorized - Authentication required',
   })
-  @ApiResponse({ status: 403, description: 'Forbidden - Admin role required' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Missing read:events permission' })
   async listEventsDropdown(
     @Query() query: ListEventsDropdownDTO,
-    @GetUser() user: AppUser,
   ) {
-    const isAdmin = user.platformRoles?.some((role) => role.name === 'Admin');
-
-    if (!isAdmin) {
-      throw new ForbiddenException(
-        'Only Admin users can access events dropdown',
-      );
-    }
-
+    // Access is decided by read:events (Admin, FacultyAdmin, EventManager, Dean), not by role name
     const response = await this.eventsService.listEvents(query);
 
     return {
@@ -484,7 +458,6 @@ export class EventsController {
   // EVENT MEMBERS ENDPOINTS
   // =====================
 
-  @Public()
   @RequirePermission('create:event-members')
   @Post('members')
   @ApiOperation({ summary: 'Create a new event member' })
@@ -501,7 +474,6 @@ export class EventsController {
     return this.eventsService.createMember(createEventMemberDTO);
   }
 
-  @Public()
   @RequirePermission('delete:event-members')
   @Delete('members/delete')
   @ApiOperation({ summary: 'Delete event member' })
@@ -519,7 +491,6 @@ export class EventsController {
     return this.eventsService.deleteMember(deleteEventMemberDTO);
   }
 
-  @Public()
   @RequirePermission('read:event-members')
   @Get('members/:eventId')
   @ApiOperation({ summary: 'Get event members by event ID' })
@@ -824,7 +795,7 @@ export class EventsController {
     return this.eventsService.getRankingEventByEventId(eventId);
   }
 
-  @RequirePermission('manage:events')
+  @RequirePermission('read:events')
   @Get('ranking-config/:id')
   @ApiOperation({ summary: 'Get ranking configuration by ID' })
   @ApiParam({ name: 'id', description: 'Ranking config ID', type: Number })
@@ -857,7 +828,7 @@ export class EventsController {
     return this.eventsService.deleteRankingEvent(id);
   }
 
-  @RequirePermission('manage:events')
+  @RequirePermission('read:grades')
   @Get(':eventId/rankings')
   @ApiOperation({
     summary: 'Get full ranking report (admin)',
@@ -930,7 +901,7 @@ export class EventsController {
           },
         },
       },
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+      [XLSX_CONTENT_TYPE]: {
         schema: {
           type: 'string',
           format: 'binary',
@@ -958,31 +929,17 @@ export class EventsController {
   async getAdminRankingReport(
     @Param('eventId', ParseIntPipe) eventId: number,
     @Query() query: GetRankingReportDto,
-    @Res() response: Response,
-  ) {
+  ): Promise<RankingReportResult | StreamableFile> {
     const report = await this.eventsService.generateRankingReport(
       eventId,
       query,
       'admin',
     );
-
-    if (query.format === RankingReportFormat.EXCEL) {
-      const buffer = await this.eventsService.generateRankingExcelBuffer(report);
-      const fileName = this.buildRankingFileName(report, 'admin');
-
-      response.setHeader(
-        'Content-Type',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      );
-      response.setHeader(
-        'Content-Disposition',
-        `attachment; filename="${fileName}"`,
-      );
-      response.send(buffer);
-      return;
-    }
-
-    response.json(report);
+    if (query.format !== RankingReportFormat.EXCEL) return report;
+    return xlsxFile(
+      await generateRankingExcelBuffer(report),
+      rankingFileName(report, 'admin'),
+    );
   }
 
   @Public()
@@ -1090,7 +1047,7 @@ export class EventsController {
           },
         },
       },
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+      [XLSX_CONTENT_TYPE]: {
         schema: {
           type: 'string',
           format: 'binary',
@@ -1120,31 +1077,17 @@ export class EventsController {
   async getPublicRankingReport(
     @Param('eventId', ParseIntPipe) eventId: number,
     @Query() query: GetRankingReportDto,
-    @Res() response: Response,
-  ) {
+  ): Promise<RankingReportResult | StreamableFile> {
     const report = await this.eventsService.generateRankingReport(
       eventId,
       query,
       'public',
     );
-
-    if (query.format === RankingReportFormat.EXCEL) {
-      const buffer = await this.eventsService.generateRankingExcelBuffer(report);
-      const fileName = this.buildRankingFileName(report, 'public');
-
-      response.setHeader(
-        'Content-Type',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      );
-      response.setHeader(
-        'Content-Disposition',
-        `attachment; filename="${fileName}"`,
-      );
-      response.send(buffer);
-      return;
-    }
-
-    response.json(report);
+    if (query.format !== RankingReportFormat.EXCEL) return report;
+    return xlsxFile(
+      await generateRankingExcelBuffer(report),
+      rankingFileName(report, 'public'),
+    );
   }
 
   @Get(':id/my-project')

@@ -10,8 +10,7 @@ spec:
     - port: 3000
       targetPort: 3000
       protocol: TCP
-      nodePort: 30000
-  type: NodePort
+  type: ClusterIP
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -28,6 +27,7 @@ spec:
       labels:
         app: gateway
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: gateway
           image: pcpi/gateway:latest
@@ -65,15 +65,126 @@ spec:
                 configMapKeyRef:
                   name: pcpi-config
                   key: PROJECT_SERVICE_URL
+            - name: NOTIFICATION_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: NOTIFICATION_SERVICE_URL
+            - name: FRONTEND_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: FRONTEND_URL
+            - name: JWT_ACCESS_TOKEN_EXPIRATION
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: JWT_ACCESS_TOKEN_EXPIRATION
+            - name: JWT_REFRESH_TOKEN_EXPIRATION
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: JWT_REFRESH_TOKEN_EXPIRATION
+            - name: ALLOWED_ORIGINS
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: ALLOWED_ORIGINS
+            - name: ALLOW_INSECURE_COOKIES
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: ALLOW_INSECURE_COOKIES
+            - name: COOKIE_DOMAIN
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: COOKIE_DOMAIN
+            - name: REDIRECT_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: REDIRECT_URI
+            - name: JWT_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: JWT_PUBLIC_KEY
+            - name: JWT_REFRESH_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: JWT_REFRESH_PUBLIC_KEY
+            - name: AZURE_BLOB_SAS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: AZURE_BLOB_SAS_URL
+            - name: AZURE_ACCOUNT_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: AZURE_ACCOUNT_NAME
+                  optional: true
+            - name: AZURE_ACCOUNT_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: AZURE_ACCOUNT_KEY
+                  optional: true
+            - name: AZURE_CONTAINER
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: AZURE_CONTAINER
+                  optional: true
+            - name: AZURE_TENANT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: AZURE_TENANT_ID
+                  optional: true
+            - name: AZURE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: AZURE_CLIENT_ID
+                  optional: true
+            - name: AZURE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: pcpi-secrets
+                  key: AZURE_CLIENT_SECRET
+                  optional: true
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 768Mi
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            failureThreshold: 30
+            periodSeconds: 5
           readinessProbe:
             httpGet:
-              path: /
+              path: /health
               port: 3000
             initialDelaySeconds: 10
             periodSeconds: 5
           livenessProbe:
             httpGet:
-              path: /
+              path: /health
               port: 3000
             initialDelaySeconds: 15
             periodSeconds: 10

@@ -8,8 +8,10 @@ import {
   ProjectEvaluationStatus,
   PaginationMetadata,
   GetTopProjectsByCourseResponse,
-  TopProjectProto
+  TopProjectProto,
+  GetProjectResultResponse,
 } from '@app/common/generated/evaluation';
+import { ProjectResultWithScale } from '../use-cases/get-project-result.use-case';
 import { Evaluation } from '@evaluations/domain/entities/evaluation.entity';
 import { EvaluationDetail } from '@evaluations/domain/entities/evaluation-detail.entity';
 import { ProjectStats, CategoryStats, ProjectEvaluationStatus as DomainProjectEvaluationStatus, TopProject } from '@evaluations/domain/repositories/evaluation.repository.port';
@@ -90,11 +92,31 @@ export class EvaluationMapper {
     evaluationId: number;
     criterionId: number;
     score: number;
+    weight?: number;
   }): EvaluationDetailResponse {
     return {
       evaluationId: detail.evaluationId,
       criterionId: detail.criterionId,
       score: detail.score,
+      ...(detail.weight !== undefined && { weight: detail.weight }),
+    };
+  }
+
+  static toGetProjectResultResponse(
+    result: ProjectResultWithScale,
+  ): GetProjectResultResponse {
+    return {
+      evaluated: result.evaluated,
+      finalScore: result.finalScore,
+      maxScore: result.maxScore,
+      criteria: result.criteria.map((c) => ({
+        criterionId: c.criterionId,
+        criterion: c.criterion,
+        component: c.component,
+        weight: c.weight,
+        score: c.score,
+      })),
+      consolidatedFeedback: result.consolidatedFeedback,
     };
   }
 

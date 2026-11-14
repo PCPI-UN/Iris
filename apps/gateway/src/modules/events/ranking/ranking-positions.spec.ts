@@ -1,8 +1,8 @@
 import {
   assignRankingPositions,
   filterVisiblePositions,
-  roundRankingGrade,
 } from './ranking-positions';
+import { roundGrade } from '@app/common/utils/grade-rounding';
 
 describe('ranking positions (co-winners)', () => {
   const row = (projectId: number, averageGrade: number) => ({
@@ -76,11 +76,11 @@ describe('ranking positions (co-winners)', () => {
     ]);
   });
 
-  it('rounds the grade to 2 decimals', () => {
-    expect(roundRankingGrade(85.334)).toBe(85.33);
-    expect(roundRankingGrade(85.335)).toBe(85.34);
-    expect(roundRankingGrade(0.057 * 90 + 0.057 * 90 + 0.057 * 25)).toBe(11.69);
-    expect(roundRankingGrade(0.057 * 25 + 0.057 * 90 + 0.057 * 90)).toBe(11.69);
+  it('rounds the grade to 2 decimals with the rule of evaluation-service', () => {
+    expect(roundGrade(85.334)).toBe(85.33);
+    expect(roundGrade(85.335)).toBe(85.34);
+    expect(roundGrade(0.057 * 90 + 0.057 * 90 + 0.057 * 25)).toBe(11.69);
+    expect(roundGrade(0.057 * 25 + 0.057 * 90 + 0.057 * 90)).toBe(11.69);
   });
 
   describe('public cut', () => {

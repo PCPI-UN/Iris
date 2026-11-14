@@ -181,7 +181,7 @@ export class InvitationsController {
     );
   }
   @Get('events/:eventId')
-  @RequirePermission('manage:events')
+  @RequirePermission('read:invitations')
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get invitations for an event',
@@ -224,7 +224,7 @@ export class InvitationsController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - User does not have manage:events permission',
+    description: 'Forbidden - User does not have read:invitations permission',
   })
   @ApiResponse({
     status: 404,

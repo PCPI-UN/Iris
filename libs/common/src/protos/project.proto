@@ -24,6 +24,11 @@ service ProjectsService {
   rpc AddPendingParticipant (AddPendingParticipantRequest) returns (AddPendingParticipantResponse);
   rpc ListPendingParticipants (ListPendingParticipantsRequest) returns (ListPendingParticipantsResponse);
 
+  // Links a platform user as tutor of the project and marks the pending tutor with that email as joined
+  rpc AddProjectTutor (AddProjectTutorRequest) returns (AddProjectTutorResponse);
+  // Replaces the tutors of a project (linked and pending); on an approved project, gives the Tutor role and invites the new pending ones
+  rpc SetProjectTutors (SetProjectTutorsRequest) returns (SetProjectTutorsResponse);
+
   rpc UpdateProject (UpdateProjectRequest) returns (ProjectResponse);      
   rpc ApproveProject (ApproveProjectRequest) returns (ProjectResponse);
   rpc RejectProject (RejectProjectRequest) returns (ProjectResponse);
@@ -36,10 +41,17 @@ service ProjectsService {
   rpc ListAssignedProjects(ListAssignedProjectsRequest) returns (ListAssignedProjectsResponse);
   rpc GetMyProjectByEvent (GetMyProjectByEventRequest) returns (GetMyProjectByEventResponse);
   rpc ListUserParticipations (ListUserParticipationsRequest) returns (ListUserParticipationsResponse);
+  // Data of the student dashboard: participation statistics, history, current project and academic data
+  rpc GetStudentParticipationStats (GetStudentParticipationStatsRequest) returns (GetStudentParticipationStatsResponse);
 
   rpc ListProjectsForReview(ListProjectsForReviewRequest) returns (ListProjectsForReviewResponse);
   rpc DeleteProject (DeleteProjectRequest) returns (DeleteProjectResponse);
-  
+
+  // Juror import from the PF spreadsheet: validates every row, writes nothing
+  rpc PreviewJurorImport (PreviewJurorImportRequest) returns (PreviewJurorImportResponse);
+  // Data to build the downloadable template: departments and approved projects of the event
+  rpc GetJurorImportTemplate (GetJurorImportTemplateRequest) returns (GetJurorImportTemplateResponse);
+
 }
 
 enum ProjectState {
@@ -99,6 +111,23 @@ message ProjectComplete {
   repeated ProjectDocument documents = 12;
   repeated PendingProjectParticipant pendingParticipants = 13;
   optional string projectCode = 14;
+  repeated ProjectTutor tutors = 15;
+}
+
+// A tutor of a project: linked to a user account, or pending (typed in by the student, no account yet)
+message ProjectTutor {
+  optional int32 userId = 1;
+  string firstName = 2;
+  optional string lastName = 3;
+  bool pending = 4;
+  // Only filled for pending tutors; linked tutors expose no email
+  optional string email = 5;
+}
+
+message PendingTutorInput {
+  string firstName = 1;
+  optional string lastName = 2;
+  string email = 3;
 }
 
 message ProjectDocument {
@@ -299,6 +328,20 @@ message AddPendingParticipantResponse {
   PendingProjectParticipant participant = 1;
 }
 
+message AddProjectTutorRequest {
+  int32 projectId = 1;
+  int32 userId = 2;
+  string email = 3;
+}
+message AddProjectTutorResponse { bool success = 1; }
+
+message SetProjectTutorsRequest {
+  int32 projectId = 1;
+  repeated int32 tutorUserIds = 2;
+  repeated PendingTutorInput pendingTutors = 3;
+}
+message SetProjectTutorsResponse { repeated ProjectTutor tutors = 1; }
+
 message ListPendingParticipantsRequest {  int32 projectId = 1; }
 message ListPendingParticipantsResponse {  repeated PendingProjectParticipant items = 1;}
 
@@ -313,12 +356,16 @@ message CreateProjectWithParticipantsRequest {
   repeated ProjectDocumentInput documents = 8;
   string eventType = 9;
   optional string projectCode = 10;
+  // Existing Tutor/Professor users and tutors typed in by email
+  repeated int32 tutorUserIds = 11;
+  repeated PendingTutorInput pendingTutors = 12;
 }
 
 message CreateProjectWithParticipantsResponse {
   Project project = 1;
   repeated PendingProjectParticipant participants = 2;
   repeated ProjectDocument documents = 3;
+  repeated ProjectTutor tutors = 4;
 }
 
 message ListAssignedProjectsRequest {
@@ -398,4 +445,165 @@ message ListUserParticipationsResponse {
   repeated UserParticipation participations = 1;
   AcademicInfo academic = 2;
   int32 total = 3;
+}
+
+/************** Juror import **************/
+enum JurorImportOutcome {
+  JUROR_IMPORT_OUTCOME_UNSPECIFIED = 0;
+  ASSIGN = 1;  // will be assigned on confirm
+  SKIP = 2;    // already assigned, nothing to do
+  ERROR = 3;   // blocks the confirmation
+}
+
+enum JurorImportUserStatus {
+  JUROR_IMPORT_USER_STATUS_UNSPECIFIED = 0;  // the email could not be resolved
+  NEW_USER = 1;         // no account: one is created and invited on confirm
+  EVENT_JUROR = 2;      // already a juror of the event
+  INVITE_TO_EVENT = 3;  // has an account but is not in the event: invited on confirm
+}
+
+// One juror of one project row of the "Asignación jurados" sheet, as read by the gateway.
+// A sheet row holds up to N jurors; each one with any data is sent as its own JurorImportRow.
+message JurorImportRow {
+  int32 rowNumber = 1;    // spreadsheet row (the first data row is 5)
+  string department = 2;
+  string projectCode = 3;
+  string firstName = 4;   // "Nombre(s) jurado N"
+  string email = 5;       // as written; project-service normalizes it
+  int32 jurorSlot = 6;    // N of "Nombre(s) jurado N", starting at 1
+  string lastName = 7;    // "Apellido(s) jurado N"; optional
+}
+
+message PreviewJurorImportRequest {
+  int32 eventId = 1;
+  repeated JurorImportRow rows = 2;
+}
+
+message JurorImportRowResult {
+  int32 rowNumber = 1;
+  JurorImportOutcome outcome = 2;
+  JurorImportUserStatus userStatus = 3;
+  string message = 4;     // in Spanish, for the person who uploaded the file
+  string email = 5;       // normalized
+  optional int32 projectId = 6;
+  optional string projectName = 7;
+  optional int32 userId = 8;
+  int32 jurorSlot = 9;    // same as the row it answers
+}
+
+message JurorImportTotals {
+  int32 rows = 1;
+  int32 toAssign = 2;
+  int32 skipped = 3;
+  int32 errors = 4;
+  int32 jurors = 5;          // distinct jurors in rows to assign
+  int32 newUsers = 6;
+  int32 invitesToEvent = 7;
+}
+
+message PreviewJurorImportResponse {
+  repeated JurorImportRowResult rows = 1;
+  JurorImportTotals totals = 2;
+  repeated string eventWarnings = 3;  // event-level problems; any of them blocks the confirmation
+  bool canConfirm = 4;                // no row errors and no event warnings
+}
+
+message GetJurorImportTemplateRequest {
+  int32 eventId = 1;
+}
+
+message JurorImportTemplateProject {
+  int32 projectId = 1;
+  string department = 2;   // category name; empty if the project has no category of the event
+  string projectCode = 3;  // empty if the project has no number yet
+  string name = 4;
+  repeated string members = 5;  // full names of the participants, confirmed first and then pending
+  repeated string tutors = 6;  // full names of the tutors, linked first and then pending
+  repeated string tutorEmails = 7;  // emails of those same tutors, in the same order
+}
+
+message GetJurorImportTemplateResponse {
+  string eventName = 1;
+  reserved 2;  // departments
+  repeated JurorImportTemplateProject projects = 3;  // approved projects, by department and number
+}
+
+// ===== STUDENT DASHBOARD =====
+// Statistics and history only count approved projects of events that were not deleted.
+// Awards only count once the admin publishes the event results.
+// currentProject is the project of an event that has not ended; rejected projects only when there is no other.
+
+message GetStudentParticipationStatsRequest {
+  int32 userId = 1;
+  // Used to match the participant data captured at submission (academic data)
+  string email = 2;
+}
+
+message StudentAward {
+  int32 awardId = 1;
+  string title = 2;
+  int32 position = 3;
+  string categoryName = 4;
+}
+
+message StudentParticipation {
+  int32 projectId = 1;
+  string projectName = 2;
+  int32 eventId = 3;
+  string eventName = 4;
+  string eventStartDate = 5;
+  string eventEndDate = 6;
+  // Derived from the event start date (Bogota time): AAAA-10 (January to June) or AAAA-30 (July to December)
+  string semester = 7;
+  // true when the event already ended (historical); false while it is upcoming or in progress
+  bool finished = 8;
+  repeated StudentAward awards = 9;
+  string projectCode = 10;
+  // Category of the project in the event (course)
+  string courseName = 11;
+  // true when the admin published the event results (scores can be shown)
+  bool resultsPublished = 12;
+}
+
+message StudentCurrentProject {
+  int32 projectId = 1;
+  int32 eventId = 2;
+  string eventName = 3;
+  string eventStartDate = 4;
+  string semester = 5;
+  string projectCode = 6;
+  string name = 7;
+  string description = 8;
+  string courseName = 9;
+  // UNDER_REVIEW, APPROVED, REJECTED or REQUEST_CHANGES
+  string state = 10;
+  // true only while the event is not over and changes were requested
+  bool canEdit = 11;
+  int32 participantsCount = 12;
+  int32 documentsCount = 13;
+  // true when the admin published the event results (scores can be shown)
+  bool resultsPublished = 14;
+}
+
+message SemesterParticipation {
+  string semester = 1;
+  int32 events = 2;
+  int32 projects = 3;
+  int32 awards = 4;
+}
+
+message GetStudentParticipationStatsResponse {
+  int32 totalEvents = 1;
+  int32 finishedEvents = 2;
+  int32 ongoingEvents = 3;
+  int32 totalProjects = 4;
+  int32 totalAwards = 5;
+  // Oldest semester first, so it can be drawn as the evolution over time
+  repeated SemesterParticipation bySemester = 6;
+  // Most recent event first
+  repeated StudentParticipation participations = 7;
+  // Not set when the student has no project in an event that has not ended
+  StudentCurrentProject currentProject = 8;
+  // Derived from all the user's participations, as in ListUserParticipations
+  AcademicInfo academic = 9;
 }

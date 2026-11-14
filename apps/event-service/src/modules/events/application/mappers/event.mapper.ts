@@ -5,6 +5,7 @@ import {
   DeleteEventResponse,
   ListMyEventsResponse,
   ListEventsResponse,
+  ListEventsByIdsResponse,
   EventProto,
   EventWithRole,
   PaginationMetadata,
@@ -33,6 +34,7 @@ export class EventMapper {
         ? e.inscriptionDeadline.toISOString()
         : '',
       evaluationsOpened: e.evaluationsOpened ?? false,
+      resultsPublished: e.resultsPublished ?? false,
       startDate: e.startDate ? e.startDate.toISOString() : '',
       endDate: e.endDate ? e.endDate.toISOString() : '',
       active: e.active ?? true,
@@ -79,6 +81,12 @@ export class EventMapper {
   static toGetEventResponse(event: Event): GetEventResponse {
     return {
       event: this.toEventProto(event),
+    };
+  }
+
+  static toListEventsByIdsResponse(events: Event[]): ListEventsByIdsResponse {
+    return {
+      events: events.map((event) => this.toEventProto(event)),
     };
   }
 

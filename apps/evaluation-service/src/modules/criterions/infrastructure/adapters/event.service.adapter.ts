@@ -33,21 +33,34 @@ export class EventServiceAdapter implements EventServicePort, OnModuleInit {
         return response.event;
     }
 
+    async listCourseIdsByEvent(eventId: number): Promise<number[]> {
+        const courseIds: number[] = [];
+        let page = 1;
+        let totalPages = 1;
+
+        do {
+            const response = await lastValueFrom(
+                this.eventService.listCoursesByEvent({
+                    eventId,
+                    onlyActive: true,
+                    page,
+                    limit: 100,
+                    q: '',
+                })
+            );
+            courseIds.push(...response.courses.map((c) => c.id));
+            totalPages = response.meta?.totalPages ?? 1;
+            page++;
+        } while (page <= totalPages);
+
+        return courseIds;
+    }
+
     async validateCoursesBelongToEvent(
         courseIds: number[],
         eventId: number,
     ): Promise<{ valid: boolean; invalidCourses: number[] }> {
-        const response = await lastValueFrom(
-            this.eventService.listCoursesByEvent({
-                eventId,
-                onlyActive: true,
-                page: 1,
-                limit: 100,
-                q: '',
-            })
-        );
-
-        const eventCourseIds = new Set(response.courses.map((c) => c.id));
+        const eventCourseIds = new Set(await this.listCourseIdsByEvent(eventId));
         const invalidCourses = courseIds.filter((id) => !eventCourseIds.has(id));
 
         return {

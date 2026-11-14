@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, IsUrl } from 'class-validator';
+import { IsEnum, IsOptional } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { TypedDocument } from './project-document-input.dto';
 
@@ -8,16 +8,12 @@ export enum DocumentStatusFilter {
   INACTIVE = 'INACTIVE',
 }
 
+/**
+ * A document's file can only be replaced by uploading a new one: a URL sent by
+ * the client is not accepted, so a document never points to another file of the
+ * storage or to an external site.
+ */
 export class UpdateProjectDocumentDto {
-  @ApiPropertyOptional({
-    description: 'New URL for the document',
-  })
-  @IsOptional()
-  @IsString()
-  @IsUrl()
-  @Transform(({ value }: { value: any }) => value === '' ? undefined : value)
-  url?: string;
-
   @ApiPropertyOptional({
     description: 'New document type',
     enum: TypedDocument,

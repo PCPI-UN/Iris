@@ -55,7 +55,7 @@ COPY --from=builder /app/apps/auth-service/prisma/migrations ./apps/auth-service
 
 RUN npm install -g prisma@6.16.2 && \
   prisma generate --schema=./apps/auth-service/prisma/schema.prisma && \
-  npm uninstall -g pnpm prisma && \
+  npm uninstall -g pnpm && \
   npm cache clean --force && \
   rm -rf /root/.npm && \
   addgroup -g 1001 -S nodejs && \

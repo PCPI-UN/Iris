@@ -28,6 +28,7 @@ import {
   ListAssignedProjectsRequest,
   ListAssignedProjectsResponse,
   GetMyProjectByEventRequest,
+  GetStudentParticipationStatsResponse,
   GetMyProjectByEventResponse,
   ListUserParticipationsResponse,
   AddPendingParticipantRequest,
@@ -44,6 +45,9 @@ import {
   TypedDocument,
   ProjectDocumentInputDto,
 } from './dto/project-document-input.dto';
+import { ProjectTutorsInputDto } from './dto/project-tutors-input.dto';
+import { parseProjectTutors } from './parse-project-tutors';
+import { toProjectTutorsResponse } from './project-tutors-response';
 import { AzureBlobUploadService } from './azure-blob-upload.service';
 import { PendingParticipantInputDto } from './dto/pending-participant-input.dto';
 import {
@@ -80,6 +84,9 @@ import {
 } from './types/project-enrichment.types';
 import { RemoveJurorFromProjectDto } from './dto/remove-juror-from-project.dto';
 import { JurorRemovalResult } from './types/juror-removal.types';
+
+/** Platform roles a project tutor can be picked from: Professor (9) and Tutor (10). */
+const TUTOR_CANDIDATE_ROLE_IDS = [9, 10];
 
 export type {
   JurorProfile,
@@ -150,6 +157,8 @@ export class ProjectsService implements OnModuleInit {
         );
       }
     }
+
+    const tutors = parseProjectTutors(body.tutors);
 
     let documentMetadata: ProjectDocumentInputDto[] = [];
     if (body.documents) {
@@ -242,6 +251,8 @@ export class ProjectsService implements OnModuleInit {
           name: body.name,
           description: body.description,
           projectCode: body.projectCode,
+          tutorUserIds: tutors.userIds,
+          pendingTutors: tutors.pending,
           participants: participants.map((p) => ({
             firstName: p.firstName,
             lastName: p.lastName,
@@ -294,7 +305,7 @@ export class ProjectsService implements OnModuleInit {
         firstValueFrom(
           this.projectsService.addProjectDocumentFromUrl({
             projectId: createdProject.id,
-            url: uploadResult.url,
+            url: uploadResult.blobName,
             type: this.mapDocumentTypeToProto(documentMetadata[index].type),
           }),
         ),
@@ -326,6 +337,8 @@ export class ProjectsService implements OnModuleInit {
         name: dto.name,
         description: dto.description,
         projectCode: dto.projectCode,
+        tutorUserIds: [],
+        pendingTutors: [],
         participants:
           dto.participants?.map((p) => ({
             firstName: p.firstName,
@@ -337,7 +350,7 @@ export class ProjectsService implements OnModuleInit {
           })) ?? [],
         documents:
           dto.documents?.map((d) => ({
-            url: d.url,
+            url: this.azureBlobUploadService.toStoredUrl(d.url),
             type: this.mapDocumentTypeToProto(d.type),
           })) ?? [],
       }),
@@ -361,6 +374,34 @@ export class ProjectsService implements OnModuleInit {
     return firstValueFrom(
       this.projectsService.addPendingParticipant(request),
     );
+  }
+
+  /**
+   * Active users with the Tutor or Professor role whose name matches `search`.
+   * Id and name only: the email of other users is not exposed.
+   */
+  async searchTutorCandidates(search: string) {
+    const { users } = await this.authService.findUsersByRoles({
+      roleIds: TUTOR_CANDIDATE_ROLE_IDS,
+      search: search.trim(),
+      userIds: [],
+    });
+    return users.map((user) => ({
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+    }));
+  }
+
+  async setProjectTutors(projectId: number, dto: ProjectTutorsInputDto) {
+    const res = await firstValueFrom(
+      this.projectsService.setProjectTutors({
+        projectId,
+        tutorUserIds: dto.userIds,
+        pendingTutors: dto.pending,
+      }),
+    );
+    return { ...res, tutors: toProjectTutorsResponse(res.tutors) };
   }
 
   async assignJurorToProjects(dto: AssignJurorToProjectsDto) {
@@ -515,12 +556,18 @@ export class ProjectsService implements OnModuleInit {
   async getProjectForReview(id: number): Promise<ProjectForReviewResponseDto> {
     const project = await this.getProjectById(id);
 
-    const { participants, pendingParticipants, documents, ...projectInfo } =
-      project;
+    const {
+      participants,
+      pendingParticipants,
+      documents,
+      tutors,
+      ...projectInfo
+    } = project;
 
     return {
       confirmedParticipants: participants,
       pendingParticipants,
+      tutors,
       project: projectInfo,
       documents,
     };
@@ -539,7 +586,7 @@ export class ProjectsService implements OnModuleInit {
       throw new NotFoundException('Project not found');
     }
 
-    return project;
+    return { ...project, tutors: toProjectTutorsResponse(project.tutors) };
   }
 
   private mapDocumentStatusToProto(
@@ -555,6 +602,29 @@ export class ProjectsService implements OnModuleInit {
     }
   }
 
+  /**
+   * Freshly signed URL of a project document's file, for the stable
+   * `/projects/:projectId/documents/:documentId/open` link.
+   */
+  async getDocumentOpenUrl(
+    projectId: number,
+    documentId: number,
+  ): Promise<string> {
+    const { items } = await lastValueFrom(
+      this.projectsService.listProjectDocuments({ projectId }),
+    );
+    const document = items?.find((item) => item.id === documentId);
+    if (!document) {
+      throw new NotFoundException('Project document not found');
+    }
+
+    const url = this.azureBlobUploadService.openUrl(document.url);
+    if (!url) {
+      throw new NotFoundException('Project document has no stored file');
+    }
+    return url;
+  }
+
   async updateProjectDocument(
     id: number,
     dto: UpdateProjectDocumentDto,
@@ -564,9 +634,7 @@ export class ProjectsService implements OnModuleInit {
 
     if (file) {
       const uploadResult = await this.azureBlobUploadService.uploadFile(file);
-      request.url = uploadResult.url;
-    } else if (dto.url && dto.url.trim() !== '') {
-      request.url = dto.url.trim();
+      request.url = uploadResult.blobName;
     }
     if (dto.type !== undefined) {
       request.type = this.mapDocumentTypeToProto(dto.type);
@@ -893,7 +961,7 @@ export class ProjectsService implements OnModuleInit {
         firstValueFrom(
           this.projectsService.addProjectDocumentFromUrl({
             projectId,
-            url: uploadResult.url,
+            url: uploadResult.blobName,
             type: this.mapDocumentTypeToProto(documentMetadata[index].type),
           }),
         ),
@@ -926,7 +994,18 @@ export class ProjectsService implements OnModuleInit {
       userId,
       eventId,
     };
-    return lastValueFrom(this.projectsService.getMyProjectByEvent(request));
+    const res = await lastValueFrom(
+      this.projectsService.getMyProjectByEvent(request),
+    );
+    return res.project
+      ? {
+          ...res,
+          project: {
+            ...res.project,
+            tutors: toProjectTutorsResponse(res.project.tutors),
+          },
+        }
+      : res;
   }
 
   async listUserParticipations(
@@ -936,6 +1015,16 @@ export class ProjectsService implements OnModuleInit {
   ): Promise<ListUserParticipationsResponse> {
     return lastValueFrom(
       this.projectsService.listUserParticipations({ userId, email, limit }),
+    );
+  }
+
+  /** Data of the student dashboard; userId and email must come from the session */
+  async getStudentParticipationStats(
+    userId: number,
+    email: string,
+  ): Promise<GetStudentParticipationStatsResponse> {
+    return lastValueFrom(
+      this.projectsService.getStudentParticipationStats({ userId, email }),
     );
   }
 }

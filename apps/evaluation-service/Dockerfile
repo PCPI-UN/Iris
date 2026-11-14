@@ -49,7 +49,7 @@ COPY --from=builder /app/apps/evaluation-service/prisma ./apps/evaluation-servic
 
 RUN npm install -g prisma@6.16.2 && \
   prisma generate --schema=./apps/evaluation-service/prisma/schema.prisma && \
-  npm uninstall -g pnpm prisma && \
+  npm uninstall -g pnpm && \
   npm cache clean --force && \
   rm -rf /root/.npm && \
   addgroup -g 1001 -S nodejs && \
