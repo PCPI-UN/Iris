@@ -7,7 +7,7 @@ export const XLSX_CONTENT_TYPE =
 export function fileNamePart(value: string): string {
   const normalized = value
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '') // combining accents left by NFD
+    .replace(/[\u0300-\u036f]/g, '') // combining accents left by NFD
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '');
