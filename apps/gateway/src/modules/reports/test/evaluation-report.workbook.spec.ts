@@ -6,10 +6,10 @@ import {
   NOT_EVALUATED,
   SUMMARY_SHEET,
   buildEvaluationReportBuffer,
+  evaluationReportFileName,
   scoreBand,
 } from '../evaluation-report.workbook';
 import { EvaluationReport } from '../evaluation-report.types';
-import { evaluationReportFileName } from '../reports.controller';
 
 /**
  * CU-86e3vmz0b: the Excel follows the approved format (Reporte_Evaluacion_Feria_Proyectos.xlsx).

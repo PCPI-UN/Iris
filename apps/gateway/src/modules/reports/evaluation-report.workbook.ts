@@ -1,4 +1,6 @@
 import * as ExcelJS from 'exceljs';
+import { solidFill, thinBorder } from '../../common/excel/excel-styles';
+import { fileNamePart } from '../../common/excel/xlsx-file';
 import {
   EvaluationReport,
   EvaluationReportProject,
@@ -81,18 +83,7 @@ const DETAIL_WIDTHS = [9, 34, 34, 20, 12, 46, 12, 12, 14, 11, 46];
 const SCORE_FORMAT = '0.00';
 const WEIGHT_FORMAT = '0.000';
 
-const thinBorder: Partial<ExcelJS.Borders> = {
-  top: { style: 'thin', color: { argb: COLORS.border } },
-  left: { style: 'thin', color: { argb: COLORS.border } },
-  bottom: { style: 'thin', color: { argb: COLORS.border } },
-  right: { style: 'thin', color: { argb: COLORS.border } },
-};
-
-const fill = (argb: string): ExcelJS.Fill => ({
-  type: 'pattern',
-  pattern: 'solid',
-  fgColor: { argb },
-});
+const border = thinBorder(COLORS.border);
 
 const center: Partial<ExcelJS.Alignment> = {
   horizontal: 'center',
@@ -146,7 +137,7 @@ function addTitle(
     bold: true,
     color: { argb: COLORS.white },
   };
-  titleCell.fill = fill(COLORS.band);
+  titleCell.fill = solidFill(COLORS.band);
   titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
   sheet.getRow(1).height = 28;
 
@@ -158,7 +149,7 @@ function addTitle(
     italic: true,
     color: { argb: COLORS.subtitle },
   };
-  subtitleCell.fill = fill(COLORS.band);
+  subtitleCell.fill = solidFill(COLORS.band);
   subtitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
   sheet.getRow(2).height = 18;
 }
@@ -178,9 +169,9 @@ function addHeader(
       bold: true,
       color: { argb: COLORS.white },
     };
-    cell.fill = fill(COLORS.band);
+    cell.fill = solidFill(COLORS.band);
     cell.alignment = center;
-    cell.border = thinBorder;
+    cell.border = border;
   });
   row.height = height;
 }
@@ -212,7 +203,7 @@ function styleScore(
   cell.font = { name: 'Calibri', size: 10, bold: true };
   if (project.finalScore === null) return;
   cell.numFmt = SCORE_FORMAT;
-  cell.fill = fill(COLORS[scoreBand(project.finalScore, maxScore)]);
+  cell.fill = solidFill(COLORS[scoreBand(project.finalScore, maxScore)]);
 }
 
 function formatDate(date: Date): string {
@@ -258,9 +249,9 @@ function addSummarySheet(
     const striped = index % 2 === 1;
     row.eachCell({ includeEmpty: true }, (cell, column) => {
       cell.font = { name: 'Calibri', size: 10 };
-      cell.border = thinBorder;
+      cell.border = border;
       cell.alignment = [3, 4, 8].includes(column) ? topLeft : center;
-      if (striped) cell.fill = fill(COLORS.stripe);
+      if (striped) cell.fill = solidFill(COLORS.stripe);
     });
     styleScore(row.getCell(5), project, report.maxScore);
   });
@@ -337,7 +328,7 @@ function addProjectBlock(
     for (let c = 1; c <= DETAIL_HEADERS.length; c += 1) {
       const cell = row.getCell(c);
       cell.font = { name: 'Calibri', size: 10 };
-      cell.border = thinBorder;
+      cell.border = border;
       cell.alignment = [2, 3, 6, 11].includes(c) ? topLeft : center;
     }
   }
@@ -376,8 +367,8 @@ function addProjectBlock(
     weight.value = component.weight;
     weight.numFmt = WEIGHT_FORMAT;
     for (let cr = r; cr <= componentLast; cr += 1) {
-      sheet.getCell(cr, 4).fill = fill(COLORS.component);
-      sheet.getCell(cr, 5).fill = fill(COLORS.component);
+      sheet.getCell(cr, 4).fill = solidFill(COLORS.component);
+      sheet.getCell(cr, 5).fill = solidFill(COLORS.component);
     }
 
     for (const criterion of component.criteria) {
@@ -393,4 +384,8 @@ function addProjectBlock(
   }
 
   return lastRow + 1;
+}
+
+export function evaluationReportFileName(report: EvaluationReport): string {
+  return `reporte_evaluacion_${fileNamePart(report.categoryName)}_${fileNamePart(report.eventName)}.xlsx`;
 }
