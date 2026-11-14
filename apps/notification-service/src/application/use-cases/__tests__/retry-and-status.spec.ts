@@ -21,7 +21,7 @@ describe('RetryDueEmailsUseCase', () => {
       { execute } as unknown as AttemptEmailDelivery,
     );
 
-    const attempted = await useCase.execute(20, now);
+    const attempted = await useCase.execute(20, () => now);
 
     expect(findDue).toHaveBeenCalledWith(now, 20);
     expect(claim).toHaveBeenCalledWith(
@@ -31,6 +31,36 @@ describe('RetryDueEmailsUseCase', () => {
     expect(execute).toHaveBeenCalledTimes(1);
     expect(execute).toHaveBeenCalledWith(due[0]);
     expect(attempted).toBe(1);
+  });
+
+  it('starts the lease of each row when that row is claimed', async () => {
+    const due = [buildDelivery({ id: 'a' }), buildDelivery({ id: 'b' })];
+    const claim = jest.fn().mockResolvedValue(true);
+    const clock = jest
+      .fn()
+      .mockReturnValueOnce(now) // findDue
+      .mockReturnValueOnce(now) // claim of a
+      .mockReturnValueOnce(new Date('2026-11-08T10:04:00Z')); // claim of b, after a slow send
+    const useCase = new RetryDueEmailsUseCase(
+      {
+        findDue: jest.fn().mockResolvedValue(due),
+        claim,
+      } as unknown as EmailDeliveryRepositoryPort,
+      { execute: jest.fn() } as unknown as AttemptEmailDelivery,
+    );
+
+    await useCase.execute(20, clock);
+
+    expect(claim).toHaveBeenNthCalledWith(
+      1,
+      due[0],
+      new Date('2026-11-08T10:05:00Z'),
+    );
+    expect(claim).toHaveBeenNthCalledWith(
+      2,
+      due[1],
+      new Date('2026-11-08T10:09:00Z'),
+    );
   });
 });
 

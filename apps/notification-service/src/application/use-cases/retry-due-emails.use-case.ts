@@ -16,13 +16,20 @@ export class RetryDueEmailsUseCase {
     private readonly attempt: AttemptEmailDelivery,
   ) {}
 
-  /** Returns how many deliveries were attempted. */
-  async execute(batchSize: number, now = new Date()): Promise<number> {
-    const due = await this.repository.findDue(now, batchSize);
+  /**
+   * Returns how many deliveries were attempted. The lease of each row starts
+   * when that row is claimed, not when the batch started, so a slow batch
+   * never claims its last rows with a lease that is already over.
+   */
+  async execute(
+    batchSize: number,
+    now: () => Date = () => new Date(),
+  ): Promise<number> {
+    const due = await this.repository.findDue(now(), batchSize);
     let attempted = 0;
 
     for (const delivery of due) {
-      const leaseUntil = new Date(now.getTime() + ATTEMPT_LEASE_MS);
+      const leaseUntil = new Date(now().getTime() + ATTEMPT_LEASE_MS);
       if (!(await this.repository.claim(delivery, leaseUntil))) continue;
 
       await this.attempt.execute(delivery);

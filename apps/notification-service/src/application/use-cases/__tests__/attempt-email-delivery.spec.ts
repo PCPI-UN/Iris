@@ -1,5 +1,8 @@
 import { EmailTemplate } from '@app/common/generated/notification';
-import { AttemptEmailDelivery } from '../attempt-email-delivery';
+import {
+  AttemptEmailDelivery,
+  SENT_WRITE_RETRY_DELAYS_MS,
+} from '../attempt-email-delivery';
 import { EmailDelivery } from '../../../domain/email-delivery';
 import { buildDelivery } from './delivery.fixture';
 import { EmailDeliveryRepositoryPort } from '../../ports/email-delivery.repository.port';
@@ -95,5 +98,49 @@ describe('AttemptEmailDelivery', () => {
       'd-1',
       expect.objectContaining({ lastError: 'ENOENT', provider: null }),
     );
+  });
+
+  describe('when saving SENT fails after the email went out', () => {
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => jest.useRealTimers());
+
+    const run = async (attempt: AttemptEmailDelivery) => {
+      const result = attempt.execute(buildDelivery(), () => now);
+      for (const delay of SENT_WRITE_RETRY_DELAYS_MS) {
+        await jest.advanceTimersByTimeAsync(delay);
+      }
+      return result;
+    };
+
+    it('tries the write again and never sends twice', async () => {
+      const sendEmail = jest.fn().mockResolvedValue({ provider: 'acs' });
+      const { attempt, update } = build(sendEmail);
+      update.mockRejectedValueOnce(new Error('connection terminated'));
+
+      const result = await run(attempt);
+
+      expect(sendEmail).toHaveBeenCalledTimes(1);
+      expect(update).toHaveBeenCalledTimes(2);
+      expect(update).toHaveBeenLastCalledWith(
+        'd-1',
+        expect.objectContaining({ status: 'SENT' }),
+      );
+      expect(result.status).toBe('SENT');
+    });
+
+    it('only logs when the write keeps failing, without scheduling a retry', async () => {
+      const sendEmail = jest.fn().mockResolvedValue({ provider: 'acs' });
+      const { attempt, update } = build(sendEmail);
+      update.mockRejectedValue(new Error('connection terminated'));
+
+      const result = await run(attempt);
+
+      expect(sendEmail).toHaveBeenCalledTimes(1);
+      expect(update).toHaveBeenCalledTimes(SENT_WRITE_RETRY_DELAYS_MS.length + 1);
+      for (const [, data] of update.mock.calls) {
+        expect(data).toMatchObject({ status: 'SENT', nextAttemptAt: null });
+      }
+      expect(result).toMatchObject({ status: 'SENT', provider: 'acs' });
+    });
   });
 });

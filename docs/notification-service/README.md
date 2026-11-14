@@ -52,6 +52,9 @@ Every provider implements `EmailProvider` (`application/ports/email-provider.por
 - **Idempotency**: a request may carry an `idempotencyKey`. A second request with the same key returns the first delivery and sends nothing. `invitation-service` uses `invitation:<invitationId>:<expiresAt>`, so a resend (new expiry) sends a new email while a repeated call does not. Requests without a key always send.
 - `GetEmailStatus` returns deliveries by id and/or idempotency key.
 - Delivery is at least once: if the service stops in the middle of an attempt, the row is retried when its lease (`next_attempt_at`) expires, and the email may arrive twice.
+- Sending and saving are separate steps. Once a provider accepts the email, a failure to save `SENT` is tried again twice (after 200 ms and 1 s) and then only logged; it never schedules a retry. If the database stays down, the row is still `PENDING` with its lease, so the worker may send it once more when the lease expires.
+- Each row's lease (`ATTEMPT_LEASE_MS`, 5 minutes) starts when the worker claims that row, not when the batch started.
+- Requests are validated by the same `ValidationPipe` as the other services; for example an `idempotencyKey` over 255 characters answers `INVALID_ARGUMENT`.
 
 ## Dependencies
 
