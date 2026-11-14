@@ -68,33 +68,16 @@ import {
 } from './dto/ranking-report/get-ranking-report.dto';
 import { Response } from 'express';
 import { RankingReportResult } from './events.service';
+import {
+  generateRankingExcelBuffer,
+  rankingFileName,
+} from './ranking-report.workbook';
 
 @ApiTags('events')
 @ApiSecurity('JWT-auth')
 @Controller('events')
 export class EventsController {
   constructor(private readonly eventsService: EventService) {}
-
-  private normalizeFilePart(value: string): string {
-    const normalized = value
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_+|_+$/g, '');
-
-    return normalized || 'general';
-  }
-
-  private buildRankingFileName(
-    report: RankingReportResult,
-    scope: 'admin' | 'public',
-  ): string {
-    const categoryName =
-      report.items[0]?.category || (report.categoryId ? `categoria_${report.categoryId}` : 'general');
-
-    return `ranking_${this.normalizeFilePart(categoryName)}_${this.normalizeFilePart(report.eventName)}_${scope}.xlsx`;
-  }
 
   // =====================
   // EVENT LISTING ENDPOINTS
@@ -955,8 +938,8 @@ export class EventsController {
     );
 
     if (query.format === RankingReportFormat.EXCEL) {
-      const buffer = await this.eventsService.generateRankingExcelBuffer(report);
-      const fileName = this.buildRankingFileName(report, 'admin');
+      const buffer = await generateRankingExcelBuffer(report);
+      const fileName = rankingFileName(report, 'admin');
 
       response.setHeader(
         'Content-Type',
@@ -1117,8 +1100,8 @@ export class EventsController {
     );
 
     if (query.format === RankingReportFormat.EXCEL) {
-      const buffer = await this.eventsService.generateRankingExcelBuffer(report);
-      const fileName = this.buildRankingFileName(report, 'public');
+      const buffer = await generateRankingExcelBuffer(report);
+      const fileName = rankingFileName(report, 'public');
 
       response.setHeader(
         'Content-Type',
