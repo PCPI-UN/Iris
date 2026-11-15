@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import {
   EvaluationReportService,
   groupByComponent,
@@ -6,7 +6,8 @@ import {
 } from '../evaluation-report.service';
 
 /**
- * CU-86e3vmz0b (report data) and CU-86e3vmz0h (co-winners in the report).
+ * CU-86e3vmz0b (report data), CU-86e3vmz0h (co-winners in the report) and
+ * CU-86e3vmz0c (download per user type).
  */
 describe('EvaluationReportService', () => {
   const criteria = [
@@ -94,11 +95,24 @@ describe('EvaluationReportService', () => {
         ),
       ),
     };
+    const projectsService = {
+      // Project 3 is tutored by the caller in category 7; project 9 is of another category
+      listAllProjectsInScope: jest.fn(() =>
+        Promise.resolve([
+          { id: 3, courseId: 7 },
+          { id: 9, courseId: 8 },
+        ]),
+      ),
+      getMyProjectByEvent: jest.fn(() =>
+        Promise.resolve({ project: { id: 1, courseId: 7 } }),
+      ),
+    };
     const service = new EvaluationReportService(
       eventsService as any,
       evaluationsService as any,
+      projectsService as any,
     );
-    return { service, eventsService, evaluationsService };
+    return { service, eventsService, evaluationsService, projectsService };
   };
 
   it('orders by position, co-winners share it and unevaluated projects go last', async () => {
@@ -191,6 +205,149 @@ describe('EvaluationReportService', () => {
 
     expect(report.projects).toEqual([]);
     expect(report.maxScore).toBe(0);
+  });
+
+  it('lists only the given projects but keeps their real positions', async () => {
+    const { service, evaluationsService } = build();
+
+    const report = await service.build(10, 7, { projectIds: [1, 4] });
+
+    expect(
+      report.projects.map((p) => [p.projectId, p.position, p.rowNumber]),
+    ).toEqual([
+      [1, 2, 1],
+      [4, null, 2],
+    ]);
+    // Averages of the whole category for the positions, results only of the rows shown
+    expect(evaluationsService.getAverageGrades).toHaveBeenCalledWith([
+      4, 3, 2, 1,
+    ]);
+    expect(evaluationsService.getProjectResult).toHaveBeenCalledTimes(2);
+  });
+
+  /** CU-86e3vmz0c: who downloads which rows */
+  describe('who downloads the report', () => {
+    const user = (permissions: string[], roles: string[] = []): any => ({
+      id: 50,
+      platformRoles: roles.map((name) => ({ name })),
+      platformPermissions: permissions,
+    });
+    const published = { id: 10, name: 'Feria', resultsPublished: true };
+
+    it('gives the whole category to read:grades before publication', async () => {
+      const { service, projectsService } = build();
+
+      const report = await service.buildForUser(
+        user(['read:grades', 'read:academic_projects']),
+        10,
+        7,
+      );
+
+      expect(report.projects.map((p) => p.projectId)).toEqual([2, 3, 1, 4]);
+      expect(report.showJurorCount).toBe(true);
+      expect(projectsService.listAllProjectsInScope).not.toHaveBeenCalled();
+    });
+
+    it('gives the whole category to Admin without listing permissions', async () => {
+      const { service } = build();
+
+      const report = await service.buildForUser(user([], ['Admin']), 10, 7);
+
+      expect(report.projects).toHaveLength(4);
+    });
+
+    it('limits an academic role to the projects of its scope in the category', async () => {
+      const { service, projectsService } = build({ event: published });
+
+      const report = await service.buildForUser(
+        user(['read:academic_projects']),
+        10,
+        7,
+      );
+
+      expect(projectsService.listAllProjectsInScope).toHaveBeenCalledWith({
+        userId: 50,
+        eventId: 10,
+      });
+      // Project 3 keeps its real position: co-winner of the first place
+      expect(
+        report.projects.map((p) => [p.projectId, p.position, p.jurorCount]),
+      ).toEqual([[3, 1, 4]]);
+    });
+
+    it('refuses an academic role before the results are published', async () => {
+      const { service, projectsService } = build({
+        event: { id: 10, name: 'Feria', resultsPublished: false },
+      });
+
+      await expect(
+        service.buildForUser(user(['read:academic_projects']), 10, 7),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(projectsService.listAllProjectsInScope).not.toHaveBeenCalled();
+    });
+
+    it('answers 404 when the academic role has no projects in the category', async () => {
+      const { service, evaluationsService } = build({ event: published });
+
+      await expect(
+        service.buildForUser(user(['read:academic_projects']), 10, 99),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(evaluationsService.getAverageGrades).not.toHaveBeenCalled();
+    });
+
+    it('answers 404 when the projects of the scope in the category are not approved', async () => {
+      // Project 9 is in scope in category 8 but is not among the approved projects
+      const { service } = build({ event: published });
+
+      await expect(
+        service.buildForUser(user(['read:academic_projects']), 10, 8),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('refuses a user without read:grades nor read:academic_projects', async () => {
+      const { service, eventsService } = build({ event: published });
+
+      await expect(
+        service.buildForUser(user(['view:own_data']), 10, 7),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(eventsService.getEventById).not.toHaveBeenCalled();
+    });
+
+    it('gives the student only their project, without the number of jurors', async () => {
+      const { service, projectsService } = build({ event: published });
+
+      const report = await service.buildForStudent(50, 10);
+
+      expect(projectsService.getMyProjectByEvent).toHaveBeenCalledWith(50, 10);
+      expect(report.showJurorCount).toBe(false);
+      expect(report.projects).toHaveLength(1);
+      expect(report.projects[0]).toMatchObject({
+        projectId: 1,
+        position: 2,
+        jurorCount: null,
+        rowNumber: 1,
+      });
+    });
+
+    it('refuses the student report before the results are published', async () => {
+      const { service, evaluationsService } = build();
+
+      await expect(service.buildForStudent(50, 10)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(evaluationsService.getProjectResult).not.toHaveBeenCalled();
+    });
+
+    it('answers 404 when the student project is not approved', async () => {
+      const { service, projectsService } = build({ event: published });
+      projectsService.getMyProjectByEvent.mockResolvedValueOnce({
+        project: { id: 77, courseId: 7 },
+      });
+
+      await expect(service.buildForStudent(50, 10)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
   });
 
   describe('groupByComponent', () => {

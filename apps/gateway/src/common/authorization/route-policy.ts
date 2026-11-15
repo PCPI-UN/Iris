@@ -211,7 +211,14 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'PATCH /projects/documents/:id': { access: 'pending' },
   'PATCH /projects/reassign-juror': { access: 'pending' },
   // modules/reports/reports.controller.ts
-  'GET /events/:eventId/reports/evaluation': { permission: ['read:grades'] },
+  'GET /events/:eventId/my-project/report': {
+    access: 'session',
+    why: "report of the caller's own project, only once the admin publishes the results",
+  },
+  'GET /events/:eventId/reports/evaluation': {
+    access: 'session',
+    why: 'the service checks read:grades (whole category) or read:academic_projects (only the projects in scope, once published); anyone else gets 403',
+  },
   // modules/terms/terms.controller.ts
   'GET /terms': { permission: ['read:events'] },
   'POST /terms': { permission: ['manage:events'] },

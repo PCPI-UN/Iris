@@ -11,7 +11,8 @@ import {
  * (Reporte_Evaluacion_Feria_Proyectos.xlsx):
  *
  * - "Resumen por Proyecto": one row per project with its final grade, position, number
- *   of jurors and the jurors' comments joined with " | ".
+ *   of jurors and the jurors' comments joined with " | ". The student's report leaves the
+ *   "N° de Jurados" column out of both sheets (not hidden: it is not written).
  * - "Detalle por Criterio": one row per criterion with its component, weights and the
  *   jurors' average; the project cells are merged over its rows and the component cells
  *   over its criteria.
@@ -53,32 +54,98 @@ export function scoreBand(score: number, maxScore: number): ScoreBand {
   return 'low';
 }
 
-const SUMMARY_HEADERS = [
-  'Código',
-  'ID Proyecto',
-  'Nombre del Proyecto',
-  'Integrantes del Equipo',
-  'Puntaje Final',
-  'Posición',
-  'N° de Jurados',
-  'Comentarios Consolidados',
-];
-const SUMMARY_WIDTHS = [10, 12, 42, 42, 13, 11, 13, 60];
+interface ColumnDef<K extends string> {
+  key: K;
+  header: string;
+  width: number;
+  /** Long texts go top-left; everything else is centered */
+  text?: boolean;
+}
 
-const DETAIL_HEADERS = [
-  'Código',
-  'Nombre del Proyecto',
-  'Integrantes del Equipo',
-  'Componente',
-  'Peso del Componente',
-  'Criterio',
-  'Peso del Criterio',
-  'Nota del Criterio',
-  'Puntaje Final del Proyecto',
-  'N° de Jurados',
-  'Comentarios Consolidados',
+interface Columns<K extends string> {
+  list: ColumnDef<K>[];
+  /** 1-based column of a key; 0 when the column is not in the report */
+  at: (key: K) => number;
+}
+
+type SummaryKey =
+  | 'code'
+  | 'id'
+  | 'name'
+  | 'members'
+  | 'score'
+  | 'position'
+  | 'jurors'
+  | 'comments';
+
+const SUMMARY_COLUMNS: ColumnDef<SummaryKey>[] = [
+  { key: 'code', header: 'Código', width: 10 },
+  { key: 'id', header: 'ID Proyecto', width: 12 },
+  { key: 'name', header: 'Nombre del Proyecto', width: 42, text: true },
+  { key: 'members', header: 'Integrantes del Equipo', width: 42, text: true },
+  { key: 'score', header: 'Puntaje Final', width: 13 },
+  { key: 'position', header: 'Posición', width: 11 },
+  { key: 'jurors', header: 'N° de Jurados', width: 13 },
+  {
+    key: 'comments',
+    header: 'Comentarios Consolidados',
+    width: 60,
+    text: true,
+  },
 ];
-const DETAIL_WIDTHS = [9, 34, 34, 20, 12, 46, 12, 12, 14, 11, 46];
+
+type DetailKey =
+  | 'code'
+  | 'name'
+  | 'members'
+  | 'component'
+  | 'componentWeight'
+  | 'criterion'
+  | 'criterionWeight'
+  | 'criterionScore'
+  | 'score'
+  | 'jurors'
+  | 'comments';
+
+const DETAIL_COLUMNS: ColumnDef<DetailKey>[] = [
+  { key: 'code', header: 'Código', width: 9 },
+  { key: 'name', header: 'Nombre del Proyecto', width: 34, text: true },
+  { key: 'members', header: 'Integrantes del Equipo', width: 34, text: true },
+  { key: 'component', header: 'Componente', width: 20 },
+  { key: 'componentWeight', header: 'Peso del Componente', width: 12 },
+  { key: 'criterion', header: 'Criterio', width: 46, text: true },
+  { key: 'criterionWeight', header: 'Peso del Criterio', width: 12 },
+  { key: 'criterionScore', header: 'Nota del Criterio', width: 12 },
+  { key: 'score', header: 'Puntaje Final del Proyecto', width: 14 },
+  { key: 'jurors', header: 'N° de Jurados', width: 11 },
+  {
+    key: 'comments',
+    header: 'Comentarios Consolidados',
+    width: 46,
+    text: true,
+  },
+];
+
+/** The columns of the report: without "N° de Jurados" in the student's report */
+function columnsFor<K extends string>(
+  columns: ColumnDef<K>[],
+  report: EvaluationReport,
+): Columns<K> {
+  const list = report.showJurorCount
+    ? columns
+    : columns.filter((column) => column.key !== 'jurors');
+  const at = (key: K) => list.findIndex((column) => column.key === key) + 1;
+  return { list, at };
+}
+
+function setWidths<K extends string>(
+  sheet: ExcelJS.Worksheet,
+  columns: ColumnDef<K>[],
+): void {
+  columns.forEach((column, index) => {
+    sheet.getColumn(index + 1).width = column.width;
+  });
+}
 
 const SCORE_FORMAT = '0.00';
 const WEIGHT_FORMAT = '0.000';
@@ -221,51 +288,56 @@ function addSummarySheet(
   const sheet = workbook.addWorksheet(SUMMARY_SHEET, {
     views: [{ state: 'frozen', ySplit: HEADER_ROW, topLeftCell: 'A5' }],
   });
-  SUMMARY_WIDTHS.forEach((width, index) => {
-    sheet.getColumn(index + 1).width = width;
-  });
+  const columns = columnsFor(SUMMARY_COLUMNS, report);
+  setWidths(sheet, columns.list);
 
   addTitle(
     sheet,
-    SUMMARY_HEADERS.length,
+    columns.list.length,
     `REPORTE DE EVALUACIÓN — ${report.eventName.toUpperCase()}`,
     `${report.categoryName} — Resumen consolidado por proyecto`,
   );
-  addHeader(sheet, SUMMARY_HEADERS, 26);
+  addHeader(
+    sheet,
+    columns.list.map((column) => column.header),
+    26,
+  );
 
   report.projects.forEach((project, index) => {
     const row = sheet.getRow(HEADER_ROW + 1 + index);
-    row.values = [
-      project.rowNumber,
-      project.projectId,
-      project.projectName,
-      project.participantNames.join(', '),
-      project.finalScore ?? NOT_EVALUATED,
-      project.position ?? '—',
-      project.jurorCount,
-      commentsText(project),
-    ];
+    const values: Record<SummaryKey, ExcelJS.CellValue> = {
+      code: project.rowNumber,
+      id: project.projectId,
+      name: project.projectName,
+      members: project.participantNames.join(', '),
+      score: project.finalScore ?? NOT_EVALUATED,
+      position: project.position ?? '—',
+      jurors: project.jurorCount,
+      comments: commentsText(project),
+    };
 
     const striped = index % 2 === 1;
-    row.eachCell({ includeEmpty: true }, (cell, column) => {
+    columns.list.forEach((column, columnIndex) => {
+      const cell = row.getCell(columnIndex + 1);
+      cell.value = values[column.key];
       cell.font = { name: 'Calibri', size: 10 };
       cell.border = border;
-      cell.alignment = [3, 4, 8].includes(column) ? topLeft : center;
+      cell.alignment = column.text ? topLeft : center;
       if (striped) cell.fill = solidFill(COLORS.stripe);
     });
-    styleScore(row.getCell(5), project, report.maxScore);
+    styleScore(row.getCell(columns.at('score')), project, report.maxScore);
   });
 
   const lastRow = HEADER_ROW + report.projects.length;
   sheet.autoFilter = {
     from: { row: HEADER_ROW, column: 1 },
-    to: { row: Math.max(lastRow, HEADER_ROW), column: SUMMARY_HEADERS.length },
+    to: { row: Math.max(lastRow, HEADER_ROW), column: columns.list.length },
   };
 
   addNote(
     sheet,
     lastRow + 2,
-    SUMMARY_HEADERS.length,
+    columns.list.length,
     'Nota: Puntaje Final = promedio del puntaje otorgado por cada jurado al proyecto. ' +
       'Posición según el ranking de IRIS en la categoría: los proyectos con el mismo ' +
       'promedio comparten la posición (coganadores). Los proyectos sin evaluaciones van ' +
@@ -282,27 +354,30 @@ function addDetailSheet(
       { state: 'frozen', xSplit: 3, ySplit: HEADER_ROW, topLeftCell: 'D5' },
     ],
   });
-  DETAIL_WIDTHS.forEach((width, index) => {
-    sheet.getColumn(index + 1).width = width;
-  });
+  const columns = columnsFor(DETAIL_COLUMNS, report);
+  setWidths(sheet, columns.list);
 
   addTitle(
     sheet,
-    DETAIL_HEADERS.length,
+    columns.list.length,
     'DETALLE DE CALIFICACIÓN POR COMPONENTE Y CRITERIO',
     `${report.categoryName} — Notas promedio por criterio (promedio entre jurados evaluadores)`,
   );
-  addHeader(sheet, DETAIL_HEADERS, 30);
+  addHeader(
+    sheet,
+    columns.list.map((column) => column.header),
+    30,
+  );
 
   let rowNumber = HEADER_ROW + 1;
   for (const project of report.projects) {
-    rowNumber = addProjectBlock(sheet, report, project, rowNumber);
+    rowNumber = addProjectBlock(sheet, report, columns, project, rowNumber);
   }
 
   addNote(
     sheet,
     rowNumber + 1,
-    DETAIL_HEADERS.length,
+    columns.list.length,
     "Nota: 'Nota del Criterio' es el promedio de las notas otorgadas por los jurados a ese " +
       "criterio. 'Peso del Criterio' es el peso efectivo que tuvo el criterio en la nota " +
       '(fracción de 1) y el peso del componente es la suma de los pesos de sus criterios.',
@@ -313,9 +388,11 @@ function addDetailSheet(
 function addProjectBlock(
   sheet: ExcelJS.Worksheet,
   report: EvaluationReport,
+  columns: Columns<DetailKey>,
   project: EvaluationReportProject,
   firstRow: number,
 ): number {
+  const { at } = columns;
   const criteriaCount = project.components.reduce(
     (sum, component) => sum + component.criteria.length,
     0,
@@ -325,58 +402,66 @@ function addProjectBlock(
   // Every cell of the block gets the base style, so merged cells keep their borders
   for (let r = firstRow; r <= lastRow; r += 1) {
     const row = sheet.getRow(r);
-    for (let c = 1; c <= DETAIL_HEADERS.length; c += 1) {
-      const cell = row.getCell(c);
+    columns.list.forEach((column, columnIndex) => {
+      const cell = row.getCell(columnIndex + 1);
       cell.font = { name: 'Calibri', size: 10 };
       cell.border = border;
-      cell.alignment = [2, 3, 6, 11].includes(c) ? topLeft : center;
-    }
+      cell.alignment = column.text ? topLeft : center;
+    });
   }
 
   // Project cells, merged over all its rows
-  const projectValues: Array<[number, ExcelJS.CellValue]> = [
-    [1, project.rowNumber],
-    [2, project.projectName],
-    [3, project.participantNames.join(', ')],
-    [9, project.finalScore ?? NOT_EVALUATED],
-    [10, project.jurorCount],
-    [11, commentsText(project)],
+  const projectValues: Array<[DetailKey, ExcelJS.CellValue]> = [
+    ['code', project.rowNumber],
+    ['name', project.projectName],
+    ['members', project.participantNames.join(', ')],
+    ['score', project.finalScore ?? NOT_EVALUATED],
+    ['jurors', project.jurorCount],
+    ['comments', commentsText(project)],
   ];
-  for (const [column, value] of projectValues) {
+  for (const [key, value] of projectValues) {
+    const column = at(key);
+    if (!column) continue; // "N° de Jurados" is not in the student's report
     if (lastRow > firstRow) sheet.mergeCells(firstRow, column, lastRow, column);
     sheet.getCell(firstRow, column).value = value;
   }
-  sheet.getCell(firstRow, 1).font = { name: 'Calibri', size: 10, bold: true };
-  styleScore(sheet.getCell(firstRow, 9), project, report.maxScore);
+  sheet.getCell(firstRow, at('code')).font = {
+    name: 'Calibri',
+    size: 10,
+    bold: true,
+  };
+  styleScore(sheet.getCell(firstRow, at('score')), project, report.maxScore);
 
   if (!criteriaCount) {
-    sheet.getCell(firstRow, 6).value = NO_EVALUATIONS;
+    sheet.getCell(firstRow, at('criterion')).value = NO_EVALUATIONS;
     return lastRow + 1;
   }
 
   let r = firstRow;
   for (const component of project.components) {
     const componentLast = r + component.criteria.length - 1;
+    const nameColumn = at('component');
+    const weightColumn = at('componentWeight');
     if (componentLast > r) {
-      sheet.mergeCells(r, 4, componentLast, 4);
-      sheet.mergeCells(r, 5, componentLast, 5);
+      sheet.mergeCells(r, nameColumn, componentLast, nameColumn);
+      sheet.mergeCells(r, weightColumn, componentLast, weightColumn);
     }
-    const name = sheet.getCell(r, 4);
+    const name = sheet.getCell(r, nameColumn);
     name.value = component.component;
-    const weight = sheet.getCell(r, 5);
+    const weight = sheet.getCell(r, weightColumn);
     weight.value = component.weight;
     weight.numFmt = WEIGHT_FORMAT;
     for (let cr = r; cr <= componentLast; cr += 1) {
-      sheet.getCell(cr, 4).fill = solidFill(COLORS.component);
-      sheet.getCell(cr, 5).fill = solidFill(COLORS.component);
+      sheet.getCell(cr, nameColumn).fill = solidFill(COLORS.component);
+      sheet.getCell(cr, weightColumn).fill = solidFill(COLORS.component);
     }
 
     for (const criterion of component.criteria) {
-      sheet.getCell(r, 6).value = criterion.criterion;
-      const criterionWeight = sheet.getCell(r, 7);
+      sheet.getCell(r, at('criterion')).value = criterion.criterion;
+      const criterionWeight = sheet.getCell(r, at('criterionWeight'));
       criterionWeight.value = criterion.weight;
       criterionWeight.numFmt = WEIGHT_FORMAT;
-      const score = sheet.getCell(r, 8);
+      const score = sheet.getCell(r, at('criterionScore'));
       score.value = criterion.score;
       score.numFmt = SCORE_FORMAT;
       r += 1;
