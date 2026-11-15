@@ -28,6 +28,10 @@ import { AddPendingParticipantUC } from './application/use-cases/add-pending-par
 import { ListPendingParticipantsUC } from './application/use-cases/list-pending-participants.uc';
 import { SetProjectTutorsUC } from './application/use-cases/set-project-tutors.uc';
 import { ListProjectTutorsUC } from './application/use-cases/list-project-tutors.uc';
+import { ResolveProjectReadScopeUC } from './application/use-cases/resolve-project-read-scope.uc';
+import { ListProjectsInScopeUC } from './application/use-cases/list-projects-in-scope.uc';
+import { GetProjectInScopeUC } from './application/use-cases/get-project-in-scope.uc';
+import { ListEventIdsInScopeUC } from './application/use-cases/list-event-ids-in-scope.uc';
 import { INVITATION_COMMAND_PORT } from './application/ports/invitation.command-port';
 import { InvitationServiceAdapter } from './infrastructure/grpc-client/invitation-service.adapter';
 import { InvitationClientModule } from './invitation-client.module';
@@ -87,6 +91,10 @@ import { AuthServiceAdapter } from './infrastructure/grpc-client/auth-service.ad
     AddProjectTutorUC,
     SetProjectTutorsUC,
     ListProjectTutorsUC,
+    ResolveProjectReadScopeUC,
+    ListProjectsInScopeUC,
+    GetProjectInScopeUC,
+    ListEventIdsInScopeUC,
     InvitationServiceAdapter,
     { provide: INVITATION_COMMAND_PORT, useExisting: InvitationServiceAdapter },
     ListPendingParticipantsUC,

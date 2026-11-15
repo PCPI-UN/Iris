@@ -1,4 +1,4 @@
-import { TypedDocument ,ProjectState, ProjectDocument, Project, JurorKey, Status, ProjectTutorView } from '../../domain/entities/project.entity';
+import { TypedDocument ,ProjectState, ProjectDocument, Project, JurorKey, Status, ProjectTutorView, AcademicCourseView } from '../../domain/entities/project.entity';
 import {
   JurorImportOutcome as ProtoJurorImportOutcome,
   JurorImportUserStatus as ProtoJurorImportUserStatus,
@@ -158,6 +158,22 @@ export const toProtoProjectComplete = (p: any) => ({
   documents: (p.documents ?? []).map(toProtoDocument),
   pendingParticipants: (p.pendingParticipants ?? []).map(toProtoPendingParticipant),
   tutors: (p.tutors ?? []).map(toProtoTutor),
+});
+
+export const toProtoAcademicCourse = (c: AcademicCourseView) => ({
+  id: c.id,
+  nrc: c.nrc,
+  term: c.term,
+  name: c.name,
+  professorUserId: c.professorUserId,
+  departmentId: c.departmentId,
+  departmentName: c.departmentName,
+});
+
+/** Project of the academic read endpoints: the complete project plus its course section. */
+export const toProtoProjectInScope = (p: any) => ({
+  ...toProtoProjectComplete(p),
+  academicCourse: p.academicCourse ? toProtoAcademicCourse(p.academicCourse) : undefined,
 });
 
 const jurorImportOutcomeToProto: Record<

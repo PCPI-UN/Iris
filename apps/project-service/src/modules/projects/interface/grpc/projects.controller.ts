@@ -21,6 +21,7 @@ import {
   toPreviewJurorImportResponse,
   toGetJurorImportTemplateResponse,
   toProtoStudentParticipationStats,
+  toProtoProjectInScope,
 } from './mappers';
 import { UpdateProjectUC } from '../../application/use-cases/update-project.uc';
 import { ApproveProjectUC } from '../../application/use-cases/approve-project.uc';
@@ -42,6 +43,10 @@ import { NotificateStudentUC } from '../../application/use-cases/notificate-stud
 import { RejectProjectUC } from '../../application/use-cases/reject-project.uc';
 import { ListProjectsForReviewUC } from '../../application/use-cases/list-projects-for-review.uc';
 import { ListProjectsByFilterDTO } from '../../application/dto/list-projects.dto';
+import { ListProjectsInScopeUC } from '../../application/use-cases/list-projects-in-scope.uc';
+import { GetProjectInScopeUC } from '../../application/use-cases/get-project-in-scope.uc';
+import { ListEventIdsInScopeUC } from '../../application/use-cases/list-event-ids-in-scope.uc';
+import { GetProjectInScopeDTO, ListEventIdsInScopeDTO } from '../../application/dto/projects-in-scope.dto';
 import { UpdateProjectDocumentUC } from '../../application/use-cases/update-document.uc';
 import { RequestChangesProjectUC } from '../../application/use-cases/request-changes-project.uc';
 import { GetMyProjectByEventUC } from '../../application/use-cases/get-my-project-by-event.uc';
@@ -112,6 +117,9 @@ export class ProjectsController {
     private readonly previewJurorImportUC: PreviewJurorImportUC,
     private readonly getJurorImportTemplateUC: GetJurorImportTemplateUC,
     private readonly getStudentParticipationStatsUC: GetStudentParticipationStatsUC,
+    private readonly listProjectsInScopeUC: ListProjectsInScopeUC,
+    private readonly getProjectInScopeUC: GetProjectInScopeUC,
+    private readonly listEventIdsInScopeUC: ListEventIdsInScopeUC,
     @Inject(INVITATION_SERVICE_NAME) private readonly client: ClientGrpc,
   ) {}
 
@@ -611,5 +619,49 @@ export class ProjectsController {
       email: req.email,
     });
     return toProtoStudentParticipationStats(stats);
+  }
+
+  @GrpcMethod('ProjectsService', 'ListProjectsInScope')
+  async listProjectsInScopeRpc(req: {
+    userId: number;
+    eventId?: number;
+    state?: number;
+    academicCourseId?: number;
+    q?: string;
+    currentPage?: number;
+    itemsPerPage?: number;
+  }) {
+    const res = await this.listProjectsInScopeUC.execute({
+      userId: req.userId,
+      eventId: req.eventId,
+      state: req.state ? protoToState(req.state) : undefined,
+      academicCourseId: req.academicCourseId,
+      q: req.q,
+      currentPage: req.currentPage,
+      itemsPerPage: req.itemsPerPage,
+    });
+    const tutorsByProject = await this.listProjectTutorsUC.execute(res.items.map((p) => p.id));
+    return {
+      items: res.items.map((p) =>
+        toProtoProjectInScope({ ...p, tutors: tutorsByProject.get(p.id) ?? [] }),
+      ),
+      total: res.total,
+      currentPage: res.currentPage,
+      itemsOnCurrentPage: res.itemsOnCurrentPage,
+      itemsPerPage: res.itemsPerPage,
+      totalPages: res.totalPages,
+    };
+  }
+
+  @GrpcMethod('ProjectsService', 'GetProjectInScope')
+  async getProjectInScopeRpc(req: GetProjectInScopeDTO) {
+    const project = await this.getProjectInScopeUC.execute(req);
+    const tutorsByProject = await this.listProjectTutorsUC.execute([project.id]);
+    return toProtoProjectInScope({ ...project, tutors: tutorsByProject.get(project.id) ?? [] });
+  }
+
+  @GrpcMethod('ProjectsService', 'ListEventIdsInScope')
+  async listEventIdsInScopeRpc(req: ListEventIdsInScopeDTO) {
+    return { eventIds: await this.listEventIdsInScopeUC.execute(req) };
   }
 }

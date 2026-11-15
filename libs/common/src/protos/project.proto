@@ -52,6 +52,13 @@ service ProjectsService {
   // Data to build the downloadable template: departments and approved projects of the event
   rpc GetJurorImportTemplate (GetJurorImportTemplateRequest) returns (GetJurorImportTemplateResponse);
 
+  // Academic read endpoints: only the projects the user may read (tutored, of their course
+  // sections or department, or every project for Admin, FacultyAdmin and Dean)
+  rpc ListProjectsInScope (ListProjectsInScopeRequest) returns (ListProjectsResponse);
+  // NOT_FOUND when the project does not exist or is outside the user's scope
+  rpc GetProjectInScope (GetProjectInScopeRequest) returns (ProjectComplete);
+  rpc ListEventIdsInScope (ListEventIdsInScopeRequest) returns (ListEventIdsInScopeResponse);
+
 }
 
 enum ProjectState {
@@ -112,6 +119,19 @@ message ProjectComplete {
   repeated PendingProjectParticipant pendingParticipants = 13;
   optional string projectCode = 14;
   repeated ProjectTutor tutors = 15;
+  // Only filled by the academic read endpoints
+  optional AcademicCourse academicCourse = 16;
+}
+
+// Course section (NRC within an academic term) of a project, with its department
+message AcademicCourse {
+  int32 id = 1;
+  string nrc = 2;
+  string term = 3;
+  string name = 4;
+  int32 professorUserId = 5;
+  int32 departmentId = 6;
+  string departmentName = 7;
 }
 
 // A tutor of a project: linked to a user account, or pending (typed in by the student, no account yet)
@@ -607,3 +627,22 @@ message GetStudentParticipationStatsResponse {
   // Derived from all the user's participations, as in ListUserParticipations
   AcademicInfo academic = 9;
 }
+
+/************** Academic read endpoints **************/
+message ListProjectsInScopeRequest {
+  int32 userId = 1;
+  optional int32 eventId = 2;
+  optional ProjectState state = 3;
+  optional int32 academicCourseId = 4;
+  optional string q = 5;
+  optional int32 currentPage = 6;   // default 1
+  optional int32 itemsPerPage = 7;  // default 10, at most 100
+}
+
+message GetProjectInScopeRequest {
+  int32 userId = 1;
+  int32 projectId = 2;
+}
+
+message ListEventIdsInScopeRequest { int32 userId = 1; }
+message ListEventIdsInScopeResponse { repeated int32 eventIds = 1; }

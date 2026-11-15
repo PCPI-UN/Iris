@@ -2,8 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../common/prisma/prisma.service';
 import { normalizeEmail } from '@app/common/utils/email.util';
 import { ProjectRepository } from '../../domain/repositories/project.repository';
+import { ProjectReadScope } from '../../domain/read-scope';
 import { PendingProjectParticipant, PendingProjectTutor, PendingProjectTutorInput, Project, TypedDocument } from '../../domain/entities/project.entity';
-import { ProjectDocument, ProjectState, JurorKey, ProjectParticipant, UserParticipation, ProjectWithJurorIds, JUROR_ROLE_ID } from '../../domain/entities/project.entity';
+import { ProjectDocument, ProjectState, JurorKey, ProjectParticipant, UserParticipation, ProjectWithJurorIds, JUROR_ROLE_ID, ProjectInScope } from '../../domain/entities/project.entity';
 
 
 type CreateProjectInput = {
@@ -26,6 +27,48 @@ type AddPendingParticipantInput = {
   career: string;
   status: 'PENDING' | 'INVITED' | 'JOINED';
 };
+
+/** Relations loaded for the academic read endpoints. */
+const IN_SCOPE_INCLUDE = {
+  participants: true,
+  pendingParticipants: true,
+  documents: true,
+  academicCourse: { include: { department: { select: { name: true } } } },
+} as const;
+
+/**
+ * Prisma filter of the projects inside a read scope; undefined means every project.
+ * The relations a role grants are OR-ed, so a user with several roles reads the union.
+ */
+export function scopeWhere(scope: ProjectReadScope): Record<string, unknown> | undefined {
+  if (scope.all) return undefined;
+  const or: Record<string, unknown>[] = [];
+  if (scope.asTutor) or.push({ tutors: { some: { userId: scope.userId } } });
+  if (scope.asProfessor) or.push({ academicCourse: { is: { professorUserId: scope.userId } } });
+  if (scope.asDirector) {
+    or.push({ academicCourse: { is: { department: { is: { directorUserId: scope.userId } } } } });
+  }
+  // A scope with no relation reads nothing; resolveReadScope never builds one, but stay closed
+  return { OR: or.length ? or : [{ id: -1 }] };
+}
+
+function toProjectInScope(row: any): ProjectInScope {
+  const { academicCourse, ...project } = row;
+  return {
+    ...project,
+    academicCourse: academicCourse
+      ? {
+          id: academicCourse.id,
+          nrc: academicCourse.nrc,
+          term: academicCourse.term,
+          name: academicCourse.name,
+          professorUserId: academicCourse.professorUserId,
+          departmentId: academicCourse.departmentId,
+          departmentName: academicCourse.department.name,
+        }
+      : null,
+  };
+}
 
 type ListOpts = { courseId?: number; q?: string; currentPage?: number; itemsPerPage?: number; state?: ProjectState };
 
@@ -547,5 +590,50 @@ export class PrismaProjectRepository implements ProjectRepository {
       orderBy: { createdAt: 'desc' },
     });
     return rows as unknown as Project[];
+  }
+
+  async listInScope(
+    scope: ProjectReadScope,
+    opts: { eventId?: number; state?: ProjectState; academicCourseId?: number; q?: string; currentPage: number; itemsPerPage: number },
+  ): Promise<{ items: ProjectInScope[]; total: number }> {
+    const filters: Record<string, unknown>[] = [];
+    const inScope = scopeWhere(scope);
+    if (inScope) filters.push(inScope);
+    if (opts.eventId) filters.push({ eventId: opts.eventId });
+    if (opts.state) filters.push({ state: opts.state });
+    if (opts.academicCourseId) filters.push({ academicCourseId: opts.academicCourseId });
+    if (opts.q) filters.push({ name: { contains: opts.q, mode: 'insensitive' } });
+    const where = { AND: filters };
+
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.project.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (opts.currentPage - 1) * opts.itemsPerPage,
+        take: opts.itemsPerPage,
+        include: IN_SCOPE_INCLUDE,
+      }),
+      this.prisma.project.count({ where }),
+    ]);
+    return { items: rows.map(toProjectInScope), total };
+  }
+
+  async findInScope(scope: ProjectReadScope, projectId: number): Promise<ProjectInScope | null> {
+    const inScope = scopeWhere(scope);
+    const row = await this.prisma.project.findFirst({
+      where: { AND: [{ id: projectId }, ...(inScope ? [inScope] : [])] },
+      include: IN_SCOPE_INCLUDE,
+    });
+    return row ? toProjectInScope(row) : null;
+  }
+
+  async listEventIdsInScope(scope: ProjectReadScope): Promise<number[]> {
+    const rows = await this.prisma.project.findMany({
+      where: scopeWhere(scope),
+      distinct: ['eventId'],
+      select: { eventId: true },
+      orderBy: { eventId: 'asc' },
+    });
+    return rows.map((row) => row.eventId);
   }
 }

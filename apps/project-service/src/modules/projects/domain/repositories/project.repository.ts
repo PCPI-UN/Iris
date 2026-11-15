@@ -1,4 +1,5 @@
-import {TypedDocument, JurorKey, Project, UserParticipation, ProjectDocument, ProjectState, ProjectParticipant, StudentStatus, PendingProjectParticipant, PendingProjectTutor, PendingProjectTutorInput, Status, ProjectWithJurorIds } from '../entities/project.entity';
+import { ProjectReadScope } from '../read-scope';
+import {TypedDocument, JurorKey, Project, UserParticipation, ProjectDocument, ProjectState, ProjectParticipant, StudentStatus, PendingProjectParticipant, PendingProjectTutor, PendingProjectTutorInput, Status, ProjectWithJurorIds, ProjectInScope } from '../entities/project.entity';
 
 export interface ProjectRepository {
   create(input: {
@@ -100,4 +101,14 @@ export interface ProjectRepository {
   listParticipationsByUser(userId: number, email: string): Promise<UserParticipation[]>;
   /** Projects where the user is a confirmed participant, filtered by state. */
   listProjectsByParticipant(userId: number, states: ProjectState[]): Promise<Project[]>;
+
+  /** Projects inside the read scope, newest first; the filters are combined with AND. */
+  listInScope(
+    scope: ProjectReadScope,
+    opts: { eventId?: number; state?: ProjectState; academicCourseId?: number; q?: string; currentPage: number; itemsPerPage: number },
+  ): Promise<{ items: ProjectInScope[]; total: number }>;
+  /** The project if it exists and is inside the read scope, otherwise null. */
+  findInScope(scope: ProjectReadScope, projectId: number): Promise<ProjectInScope | null>;
+  /** Distinct ids of the events with at least one project inside the read scope. */
+  listEventIdsInScope(scope: ProjectReadScope): Promise<number[]>;
 }

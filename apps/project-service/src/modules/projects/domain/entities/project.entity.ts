@@ -101,3 +101,25 @@ export interface PendingProjectTutorInput {
   lastName?: string | null;
   email: string;
 }
+
+/** Course section (NRC within a term) a project belongs to, with its department. */
+export interface AcademicCourseView {
+  id: number;
+  nrc: string;
+  term: string;
+  name: string;
+  professorUserId: number;
+  departmentId: number;
+  departmentName: string;
+}
+
+/** A project as returned by the academic read endpoints. */
+export interface ProjectInScope extends Project {
+  createdAt: Date;
+  updatedAt: Date;
+  academicCourseId: number | null;
+  academicCourse: AcademicCourseView | null;
+  participants: ProjectParticipant[];
+  pendingParticipants: PendingProjectParticipant[];
+  documents: ProjectDocument[];
+}
