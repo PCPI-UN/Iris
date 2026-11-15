@@ -265,6 +265,15 @@ export class EventService implements OnModuleInit {
     return [...confirmed, ...pending];
   }
 
+  /** Events by id as event-service returns them, soft deleted ones included */
+  async listEventsByIds(ids: number[]): Promise<EventProto[]> {
+    if (!ids.length) return [];
+    const response = await firstValueFrom(
+      this.eventService.listEventsByIds({ ids }),
+    );
+    return response.events ?? [];
+  }
+
   /** The event as event-service returns it, without the catalog enrichment of `get` */
   async getEventById(id: number): Promise<EventProto | undefined> {
     const response = await firstValueFrom(this.eventService.getEvent({ id }));

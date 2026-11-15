@@ -29,6 +29,7 @@ Single HTTP entry point of the platform. It authenticates the browser session, c
 | `tiebreaks` | Manual tiebreak order | `evaluation` |
 | `invitations` | Invitations, juror invitations, acceptance | `invitation`, `auth`, `event`, `project` |
 | `dashboard` | Admin summary figures; student dashboard (`GET /students/me/dashboard`) and results of the student's project (`GET /events/:eventId/my-project/results`), own data only | `event`, `project`, `evaluation` (through the other modules) |
+| `academic` | Read-only views of the academic roles (`/academic/*`): projects, their events, registrations and grades (JSON or Excel) of the caller's scope. `project-service` decides the scope; grades of unpublished events are only sent to callers with `read:grades` | `project`, `event`, `evaluation` (through the other modules) |
 
 Cross-cutting code lives in `src/common`: guards, decorators (`@Public`, `@RequirePermission`, `@GetUser`), the gRPC-to-HTTP exception filter and the cache.
 
@@ -37,7 +38,7 @@ Cross-cutting code lives in `src/common`: guards, decorators (`@Public`, `@Requi
 - **Session**: the access and refresh tokens are httpOnly cookies set by `/auth/*`. The token carries the user id (`sub`) and email; the gateway verifies it with the public key and asks `auth-service` for the user, their platform roles and their permissions on every authenticated request.
 - **Endpoint access**: every endpoint requires a session unless it is marked `@Public()`. An endpoint can also declare permissions with `@RequirePermission('action:resource')`; the user must hold all of them. Users with the platform role `Admin` pass every permission check.
 - **Inside the services**: services trust the user id the gateway sends. Event-level rules (for example "the juror is assigned to this project") are checked by the service that owns that data.
-- **Read and write permissions**: reading and changing use different permissions, so read-only roles (the dean) can read without managing: `read:events` for events, rubrics and configuration, `read:grades` for rankings, top projects and tiebreaks, `read:invitations` for invitation lists, and `manage:events` to change them. Roles and their permissions are described in [auth-service](../auth-service/README.md#roles-and-permissions).
+- **Read and write permissions**: reading and changing use different permissions, so read-only roles (the dean) can read without managing: `read:events` for events, rubrics and configuration, `read:grades` for rankings, top projects and tiebreaks, `read:invitations` for invitation lists, `read:academic_projects` for the academic views of `/academic/*`, and `manage:events` to change them. Roles and their permissions are described in [auth-service](../auth-service/README.md#roles-and-permissions).
 - **User administration**: `POST /users`, `PATCH /users/:id`, `DELETE /users/:id` and `PUT /users/:id/roles` send the id of the user making the request to `auth-service`, which enforces the administrator rules (a faculty administrator cannot create, edit, deactivate or grant administrators; nobody changes their own roles). `GET /users/roles` lists the roles with their ids.
 
 ### Route access policy
