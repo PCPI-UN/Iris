@@ -119,7 +119,10 @@ export interface ProjectInScope extends Project {
   updatedAt: Date;
   academicCourseId: number | null;
   academicCourse: AcademicCourseView | null;
-  participants: ProjectParticipant[];
+  /** Confirmed participants, with the name and email of their account when it still exists. */
+  participants: (ProjectParticipant & { firstName?: string; lastName?: string | null; email?: string })[];
   pendingParticipants: PendingProjectParticipant[];
   documents: ProjectDocument[];
+  /** Jurors assigned to evaluate the project. */
+  assignedJurorCount: number;
 }

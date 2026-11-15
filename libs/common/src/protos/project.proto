@@ -121,6 +121,8 @@ message ProjectComplete {
   repeated ProjectTutor tutors = 15;
   // Only filled by the academic read endpoints
   optional AcademicCourse academicCourse = 16;
+  // Jurors assigned to evaluate the project; only filled by the academic read endpoints
+  optional int32 assignedJurorCount = 17;
 }
 
 // Course section (NRC within an academic term) of a project, with its department

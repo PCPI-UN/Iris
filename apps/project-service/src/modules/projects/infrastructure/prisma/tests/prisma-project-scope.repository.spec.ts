@@ -33,6 +33,7 @@ describe('PrismaProjectRepository (read scope)', () => {
     eventId: 4,
     name: 'EcoVision',
     academicCourseId: 2,
+    _count: { jurorsAssigned: 3 },
     academicCourse: {
       id: 2, nrc: '1234', term: '202610', name: 'Proyecto Final', professorUserId: 9, departmentId: 1,
       department: { name: 'Sistemas' },
@@ -74,6 +75,9 @@ describe('PrismaProjectRepository (read scope)', () => {
       id: 2, nrc: '1234', term: '202610', name: 'Proyecto Final', professorUserId: 9, departmentId: 1, departmentName: 'Sistemas',
     });
     expect(result.items[1].academicCourse).toBeNull();
+    expect(result.items[0].assignedJurorCount).toBe(3);
+    expect(result.items[0]).not.toHaveProperty('_count');
+    expect(result.items[1].assignedJurorCount).toBe(3);
   });
 
   it('listInScope with a read-all scope and no filters has an empty AND', async () => {

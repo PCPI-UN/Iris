@@ -174,6 +174,7 @@ export const toProtoAcademicCourse = (c: AcademicCourseView) => ({
 export const toProtoProjectInScope = (p: any) => ({
   ...toProtoProjectComplete(p),
   academicCourse: p.academicCourse ? toProtoAcademicCourse(p.academicCourse) : undefined,
+  assignedJurorCount: p.assignedJurorCount ?? 0,
 });
 
 const jurorImportOutcomeToProto: Record<

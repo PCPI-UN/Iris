@@ -34,6 +34,7 @@ const IN_SCOPE_INCLUDE = {
   pendingParticipants: true,
   documents: true,
   academicCourse: { include: { department: { select: { name: true } } } },
+  _count: { select: { jurorsAssigned: true } },
 } as const;
 
 /**
@@ -53,9 +54,10 @@ export function scopeWhere(scope: ProjectReadScope): Record<string, unknown> | u
 }
 
 function toProjectInScope(row: any): ProjectInScope {
-  const { academicCourse, ...project } = row;
+  const { academicCourse, _count, ...project } = row;
   return {
     ...project,
+    assignedJurorCount: _count?.jurorsAssigned ?? 0,
     academicCourse: academicCourse
       ? {
           id: academicCourse.id,
