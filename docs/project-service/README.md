@@ -80,6 +80,35 @@ sequenceDiagram
 - **Academic data**: derived from all the user's participations, as in `ListUserParticipations` (the request carries the session email), so the dashboard needs a single call.
 - **Response**: totals (events, finished and ongoing events, projects, awards), `bySemester` from the oldest semester, `participations` from the most recent event, `currentProject` when there is one, and `academic`. Each participation and the current project say whether the event results are published (`event.results_published`), so the gateway only adds scores to those.
 
+## Academic read scope
+
+`ListProjectsInScope`, `GetProjectInScope` and `ListEventIdsInScope` serve the read-only `/academic/*` endpoints of the gateway. The service asks `auth-service` for the caller's active roles and reads:
+
+| Role | Projects |
+| --- | --- |
+| `Admin`, `FacultyAdmin`, `Dean` | All |
+| `Tutor` | The ones in `project_tutors` with the user |
+| `Professor` | The ones of the course sections (`academic_courses`) the user teaches |
+| `DepartmentDirector` | The ones of the course sections of the department the user directs |
+
+A user with several roles reads the union. A project outside the scope answers `NOT_FOUND`, like a missing one. A project without a course section is only visible to its tutors and to the roles that read everything.
+
+### Loading departments and course sections
+
+There is no screen for this yet. `scripts/academic-structure/load-academic-structure.ts` loads departments (with their director), course sections by term and NRC (with their professor and department) and the course section of each project from a JSON file; `scripts/academic-structure/example.json` shows the format. Users are given by email.
+
+```
+# bash
+AUTH_DATABASE_URL=<auth db url> PROJECT_DATABASE_URL=<project db url> pnpm exec ts-node scripts/academic-structure/load-academic-structure.ts <file.json> --dry-run
+# PowerShell
+$env:AUTH_DATABASE_URL="<auth db url>"; $env:PROJECT_DATABASE_URL="<project db url>"
+pnpm exec ts-node scripts/academic-structure/load-academic-structure.ts <file.json> --dry-run
+```
+
+- It checks the whole file first (unknown emails, projects or departments, repeated rows, a user directing two departments); with any error nothing is written. Users without the matching role (`Professor`, `DepartmentDirector`) only raise a warning, because they will not see anything until the role is granted.
+- Without `--dry-run` it writes everything in one transaction. Departments are matched by name and course sections by (term, NRC); existing ones take the values of the file. Nothing is deleted, and running the same file again changes nothing.
+- It only reads `auth-service`; roles are granted from the user administration (`PUT /users/:id/roles`).
+
 ## Related
 
 - [schema.md](./schema.md): database schema and ER diagram.
