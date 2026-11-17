@@ -56,15 +56,22 @@ export class AttemptEmailDelivery {
       : this.send(delivery, now);
   }
 
+  /**
+   * One attempt through the provider chain. With `rest`, the same attempt
+   * goes on after a provider that reported it did not send the email.
+   */
   private async send(
     delivery: EmailDelivery,
     now: () => Date,
+    rest?: { after: string; error: string },
   ): Promise<EmailDelivery> {
-    const attempts = delivery.attempts + 1;
-    const fallbackIfInDoubt = isInDoubt(delivery);
+    const attempts = rest ? delivery.attempts : delivery.attempts + 1;
+    // On the last attempt a possible duplicate is better than no email
+    const fallbackIfInDoubt =
+      isInDoubt(delivery) || attempts >= this.policy.maxAttempts;
 
-    let ref = delivery.providerRef ?? undefined;
-    if (!ref && this.emailService.usesRef()) {
+    let ref = rest ? undefined : (delivery.providerRef ?? undefined);
+    if (!rest && !ref && this.emailService.usesRef()) {
       ref = randomUUID();
       try {
         // Saved before sending: if the service stops once the provider has the
@@ -93,40 +100,49 @@ export class AttemptEmailDelivery {
         params: delivery.params ?? {},
         ref,
         fallbackIfInDoubt,
+        after: rest?.after,
       });
     } catch (error: unknown) {
       // Only a provider that gave no answer may hold the email with `ref`
       const keepRef = error instanceof EmailSendError && error.inDoubt;
       return this.recordFailure(delivery, {
         attempts,
-        error,
+        error: rest
+          ? [rest.error, errorMessage(error)].filter(Boolean).join('; ')
+          : error,
+        // With no provider left after `rest.after`, the one that failed it stays
         provider:
-          error instanceof EmailSendError ? error.provider : delivery.provider,
+          (error instanceof EmailSendError && error.provider) ||
+          delivery.provider,
         providerRef: keepRef ? (ref ?? null) : null,
         now,
       });
     }
 
     // The provider has the email: from here a failure is only logged, never
-    // retried by sending again.
+    // retried by sending again. After a provider failed it, its id and
+    // acceptance no longer apply, and its error stays as the reason.
+    const previous = rest
+      ? { providerRef: null, acceptedAt: null, lastError: rest.error }
+      : { lastError: null };
     if (result.outcome === 'accepted') {
       const acceptedAt = now();
       return this.recordTaken(delivery, {
         status: 'PENDING',
+        ...previous,
         provider: result.provider,
         acceptedAt,
         attempts,
-        lastError: null,
         nextAttemptAt: new Date(
           acceptedAt.getTime() + this.policy.confirmDelayMs,
         ),
       });
     }
     return this.recordTaken(delivery, {
+      ...previous,
       status: 'SENT',
       provider: result.provider,
       attempts,
-      lastError: null,
       nextAttemptAt: null,
       sentAt: now(),
       params: null,
@@ -162,13 +178,11 @@ export class AttemptEmailDelivery {
     }
 
     if (outcome.status === 'failed') {
-      // The attempt that sent it was already counted
-      return this.recordFailure(delivery, {
-        attempts: delivery.attempts,
+      // The provider did not send it, so the rest of the chain cannot send it
+      // twice. Same attempt: it was counted when the email was accepted.
+      return this.send(delivery, now, {
+        after: provider,
         error: `${provider}: ${outcome.error}`,
-        provider,
-        providerRef: null,
-        now,
       });
     }
 

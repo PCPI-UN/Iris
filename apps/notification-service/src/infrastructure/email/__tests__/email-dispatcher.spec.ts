@@ -116,6 +116,29 @@ describe('EmailDispatcher', () => {
     expect((error.cause as Error).cause).toBe(sdkError);
   });
 
+  it('starts after the provider that reported it did not send the email', async () => {
+    const primary = jest.fn();
+    const fallback = jest.fn().mockResolvedValue('sent');
+    const { dispatcher } = build(
+      provider('acs', primary),
+      provider('emailjs', fallback),
+    );
+
+    await expect(
+      dispatcher.sendEmail({ ...request, after: 'acs' }),
+    ).resolves.toEqual({ provider: 'emailjs', outcome: 'sent' });
+    expect(primary).not.toHaveBeenCalled();
+  });
+
+  it('uses the whole chain when that provider is no longer configured', async () => {
+    const primary = jest.fn().mockResolvedValue('sent');
+    const { dispatcher } = build(provider('emailjs', primary));
+
+    await expect(
+      dispatcher.sendEmail({ ...request, after: 'acs' }),
+    ).resolves.toEqual({ provider: 'emailjs', outcome: 'sent' });
+  });
+
   it('fails when the only provider fails', async () => {
     const { dispatcher } = build(
       provider(

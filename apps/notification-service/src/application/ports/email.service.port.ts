@@ -13,6 +13,11 @@ export interface SendEmailParams {
    * arriving twice; otherwise it waits for the next attempt.
    */
   fallbackIfInDoubt?: boolean;
+  /**
+   * Start the chain after this provider: it reported that it did not send
+   * the email, so the next providers cannot send it twice.
+   */
+  after?: string;
 }
 
 /** Which provider took the email and whether it is already delivered. */

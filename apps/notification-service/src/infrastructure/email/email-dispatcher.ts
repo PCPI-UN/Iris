@@ -36,13 +36,20 @@ export class EmailDispatcher implements EmailServicePort {
     params,
     ref,
     fallbackIfInDoubt = false,
+    after,
   }: SendEmailParams): Promise<SendEmailResult> {
     const rendered = await this.renderer.render(template, params);
     const failures: ProviderFailure[] = [];
     let lastError: unknown;
     let inDoubt = false;
+    // If that provider is no longer configured, the whole chain is used
+    const start =
+      after === undefined
+        ? 0
+        : this.providers.findIndex((p) => p.name === after) + 1;
+    const chain = this.providers.slice(start);
 
-    for (const [index, provider] of this.providers.entries()) {
+    for (const [index, provider] of chain.entries()) {
       try {
         const outcome = await provider.send(
           { to, ...rendered },
@@ -66,7 +73,7 @@ export class EmailDispatcher implements EmailServicePort {
           }
         }
 
-        const next = this.providers[index + 1];
+        const next = chain[index + 1];
         this.logger.warn(
           `Email provider ${provider.name} failed` +
             (next ? `, trying ${next.name}` : ''),

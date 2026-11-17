@@ -60,13 +60,13 @@ Every provider implements `EmailProvider` (`application/ports/email-provider.por
 | Sent (EmailJS `200`, or ACS already reports `Succeeded`) | `SENT` |
 | Accepted (ACS `202`) | `PENDING` with `accepted_at`; its final status is read later |
 | Rejected: an error before the provider took the email (`4xx`, connection refused) | The next provider in the chain is tried; if every one rejects, `PENDING` with the next retry, or `FAILED` |
-| No answer: ACS timeout, `5xx` or connection lost after the request left | `PENDING` with the next retry and the same `provider_ref`; the fallback is not used in this attempt |
+| No answer: ACS timeout, `5xx` or connection lost after the request left | `PENDING` with the next retry and the same `provider_ref`; the fallback is not used in this attempt, unless it is the last one |
 
 ### No duplicates with ACS
 
 - Before the first ACS send the row saves a new `provider_ref` (a UUID), sent to Azure as the `Operation-Id` header. If it cannot be saved, nothing is sent and the worker takes the row when its lease expires.
 - Azure answers a repeated id with `400 OperationIdAlreadyExists` and does not send again. So when an attempt got no answer, the next one reuses the same id: if Azure already had the email, the adapter reads its status instead of sending it twice. A new id is created only after ACS rejected the email or reported it `Failed`.
-- If ACS gives no answer twice in a row, the second time the email goes to the fallback provider. It arrives twice only if the first send reached Azure and Azure then stopped answering.
+- If ACS gives no answer twice in a row, or on the last attempt, the email goes to the fallback provider in that attempt. It arrives twice only if the earlier send reached Azure and Azure then stopped answering; on the last attempt a possible duplicate is preferred to no email.
 - Azure keeps an operation id for at least several hours (about 7 h when measured), far beyond the default retry delays. A row that waits longer than that before its next attempt (a much larger `EMAIL_RETRY_BASE_DELAY_MS`, or the service down for hours while a send was in doubt) could reuse an id Azure no longer knows, and that send would go out again.
 
 ### Confirming an accepted email
@@ -74,7 +74,7 @@ Every provider implements `EmailProvider` (`application/ports/email-provider.por
 An accepted email is never sent again nor handed to another provider. Every `EMAIL_CONFIRM_DELAY_MS` the worker reads its status from the provider that accepted it:
 
 - `Succeeded`: `SENT`.
-- `Failed` or `Canceled`: `PENDING` with the next retry and a new id. It counts as the attempt that sent it.
+- `Failed` or `Canceled`: Azure did not send it, so the same attempt goes on with the next provider in the chain (it cannot arrive twice). If that one sends it, `SENT` with the ACS error kept in `last_error`; if not, `PENDING` with the next retry and a new id, or `FAILED` when no attempts are left. It is not counted again.
 - Still running, or the read fails: read again later.
 - No final status after `EMAIL_CONFIRM_TIMEOUT_MS` since it was accepted: `SENT`, with the reason in `last_error`.
 

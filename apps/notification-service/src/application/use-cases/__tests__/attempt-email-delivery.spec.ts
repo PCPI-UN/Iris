@@ -198,6 +198,20 @@ describe('AttemptEmailDelivery', () => {
       );
     });
 
+    it('allows the fallback on the last attempt', async () => {
+      const sendEmail = sent('emailjs');
+      const { attempt } = build(sendEmail, { usesRef: true });
+
+      await attempt.execute(
+        buildDelivery({ providerRef: 'ref-1', attempts: 2 }),
+        () => now,
+      );
+
+      expect(sendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ ref: 'ref-1', fallbackIfInDoubt: true }),
+      );
+    });
+
     it('records an accepted email as PENDING to confirm later', async () => {
       const sendEmail = jest
         .fn()
@@ -275,23 +289,72 @@ describe('AttemptEmailDelivery', () => {
       });
     });
 
-    it('schedules a new attempt with a new id when the provider failed it', async () => {
-      const confirm = jest
+    const failed = () =>
+      jest
         .fn()
         .mockResolvedValue({ status: 'failed', error: 'ACS send Failed: x' });
-      const { attempt, update } = build(jest.fn(), { confirm });
+
+    it('sends it through the next provider in the same attempt when the provider failed it', async () => {
+      const sendEmail = sent('emailjs');
+      const { attempt, update } = build(sendEmail, {
+        usesRef: true,
+        confirm: failed(),
+      });
+
+      await attempt.execute(accepted(), () => now);
+
+      expect(sendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ after: 'acs', ref: undefined }),
+      );
+      expect(update).toHaveBeenCalledTimes(1);
+      expect(update).toHaveBeenCalledWith('d-1', {
+        status: 'SENT',
+        provider: 'emailjs',
+        providerRef: null,
+        acceptedAt: null,
+        attempts: 1,
+        lastError: 'acs: ACS send Failed: x',
+        nextAttemptAt: null,
+        sentAt: now,
+        params: null,
+      });
+    });
+
+    it('schedules a new attempt with a new id when the next provider also fails', async () => {
+      const sendEmail = jest
+        .fn()
+        .mockRejectedValue(
+          new EmailSendError([{ provider: 'emailjs', error: '429' }]),
+        );
+      const { attempt, update } = build(sendEmail, { confirm: failed() });
 
       await attempt.execute(accepted(), () => now);
 
       expect(update).toHaveBeenCalledWith('d-1', {
         status: 'PENDING',
-        provider: 'acs',
+        provider: 'emailjs',
         providerRef: null,
         acceptedAt: null,
         attempts: 1,
-        lastError: 'acs: ACS send Failed: x',
+        lastError: 'acs: ACS send Failed: x; emailjs: 429',
         nextAttemptAt: new Date('2026-11-08T10:01:00Z'),
       });
+    });
+
+    it('keeps the provider that failed it when no other provider is left', async () => {
+      const sendEmail = jest.fn().mockRejectedValue(new EmailSendError([]));
+      const { attempt, update } = build(sendEmail, { confirm: failed() });
+
+      await attempt.execute(accepted(), () => now);
+
+      expect(update).toHaveBeenCalledWith(
+        'd-1',
+        expect.objectContaining({
+          provider: 'acs',
+          providerRef: null,
+          lastError: 'acs: ACS send Failed: x',
+        }),
+      );
     });
 
     it('checks again later while the provider is still delivering', async () => {
