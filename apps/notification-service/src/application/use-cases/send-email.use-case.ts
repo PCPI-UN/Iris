@@ -11,13 +11,18 @@ import {
 } from './attempt-email-delivery';
 
 /**
- * Records the request and makes the first attempt right away. A request with
- * an idempotency key that was already used returns the existing delivery and
- * sends nothing. A failed first attempt is left for the retry worker.
+ * Records the request and starts the first attempt without waiting for the
+ * provider: it returns the delivery as recorded (PENDING) and the real status
+ * is read later with GetEmailStatus. If the process dies mid-attempt, the row's
+ * lease expires and the retry worker takes it. A request with an idempotency
+ * key that was already used returns the existing delivery and sends nothing.
+ * A failed first attempt is left for the retry worker.
  */
 @Injectable()
 export class SendEmailUseCase {
   private readonly logger = new Logger(SendEmailUseCase.name);
+  /** First attempts running in the background */
+  private readonly inFlight = new Set<Promise<void>>();
 
   constructor(
     private readonly repository: EmailDeliveryRepositoryPort,
@@ -48,6 +53,38 @@ export class SendEmailUseCase {
       return delivery;
     }
 
-    return this.attempt.execute(delivery);
+    const running = this.attempt
+      .execute(delivery)
+      .then(() => undefined)
+      .catch((error: unknown) => {
+        this.logger.error(
+          `First attempt of delivery ${delivery.id} failed; the retry worker takes it when its lease expires`,
+          error instanceof Error ? error.stack : String(error),
+        );
+      })
+      .finally(() => this.inFlight.delete(running));
+    this.inFlight.add(running);
+    return delivery;
+  }
+
+  /**
+   * Waits for the attempts running in the background, up to `timeoutMs`, so a
+   * shutdown does not cut them. Whatever is left keeps its lease and the retry
+   * worker takes it later.
+   */
+  async drain(timeoutMs: number): Promise<void> {
+    if (!this.inFlight.size) return;
+    this.logger.log(`Waiting for ${this.inFlight.size} email attempts`);
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, timeoutMs);
+    });
+    await Promise.race([Promise.allSettled([...this.inFlight]), timeout]);
+    clearTimeout(timer);
+    if (this.inFlight.size) {
+      this.logger.warn(
+        `${this.inFlight.size} email attempts left for the retry worker`,
+      );
+    }
   }
 }

@@ -41,13 +41,13 @@ Every provider implements `EmailProvider` (`application/ports/email-provider.por
 | `acs` | `ACS_CONNECTION_STRING`, `ACS_SENDER_ADDRESS` | Sends with the delivery's operation id and returns once Azure accepts the email (`202`); the final status is read later. Azure rejects a repeated operation id, so a repeated attempt never sends a second email. Sends an HTML and a plain-text body. |
 | `emailjs` | `EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`, `EMAILJS_PUBLIC_KEY`, `EMAILJS_PRIVATE_KEY` | At most 1 request per second, as primary or fallback. A `429` is retried with a growing wait (1 s, 2 s, 4 s) before it counts as a failure. |
 
-- A listed provider whose variables are missing is skipped with a warning, so the service runs with only one provider. The startup log states the primary and the fallback, or that there is no fallback.
-- The service does not start if `EMAIL_PROVIDERS` names an unknown provider or if none of the listed providers is configured.
+- A listed provider whose variables are missing, or that cannot be built (a malformed ACS connection string, for example), is skipped and logged, so the service runs with the others. The startup log states the primary and the fallback, or that there is no fallback.
+- The service does not start if `EMAIL_PROVIDERS` names an unknown provider or if no listed provider is left after skipping.
 - Adding a provider means a new adapter and one entry in the registry of `providers/email-providers.ts`.
 
 ## Send log, retries and idempotency
 
-- Every `SendEmail` creates a row in `email_deliveries` and makes the first attempt in the same call. The response carries the delivery (id, status, provider, attempts, last error) and `success`, which is `true` when the email was sent or is queued for a retry and `false` only when it failed for good.
+- Every `SendEmail` creates a row in `email_deliveries` and starts the first attempt without waiting for the provider. The response carries the delivery as recorded (`PENDING`) and `success`, which is `true` unless the delivery is `FAILED`. It does not say whether the email went out: the real status (`SENT`, `PENDING` with its next retry, or `FAILED`) is read with `GetEmailStatus`. The row is created with a lease (`ATTEMPT_LEASE_MS`), so if the service stops mid-attempt the worker takes the row when the lease expires and reuses its operation id. An error of the attempt in the background is logged and does not reach the caller. On `SIGTERM`/`SIGINT` the service waits up to 20 s for the attempts in the background before closing; any left keeps its lease for the worker.
 - A failed attempt leaves the row `PENDING` with `next_attempt_at` set to 1, 2, 4... times `EMAIL_RETRY_BASE_DELAY_MS`. The retry worker polls every `EMAIL_RETRY_POLL_MS`, claims each due row and runs the whole provider chain again. After `EMAIL_MAX_ATTEMPTS` attempts (first one included) the row is `FAILED`.
 - **Idempotency**: a request may carry an `idempotencyKey`. A second request with the same key returns the first delivery and sends nothing. `invitation-service` uses `invitation:<invitationId>:<expiresAt>`, so a resend (new expiry) sends a new email while a repeated call does not. Requests without a key always send.
 - `GetEmailStatus` returns deliveries by id and/or idempotency key.
@@ -61,6 +61,13 @@ Every provider implements `EmailProvider` (`application/ports/email-provider.por
 | Accepted (ACS `202`) | `PENDING` with `accepted_at`; its final status is read later |
 | Rejected: an error before the provider took the email (`4xx`, connection refused) | The next provider in the chain is tried; if every one rejects, `PENDING` with the next retry, or `FAILED` |
 | No answer: ACS timeout, `5xx` or connection lost after the request left | `PENDING` with the next retry and the same `provider_ref`; the fallback is not used in this attempt, unless it is the last one |
+
+### ACS limits and 429
+
+- Azure limits ACS: with its own domain, 30 sends per minute and 100 per hour, and 60 status reads (`Get Email Status`) per minute and 200 per hour; with an Azure-managed domain (`*.azurecomm.net`), 5 sends per minute, 10 per hour, and 10 status reads per minute and 20 per hour, with no increase. A failure rate above 1 % can make Azure lower or suspend the quota.
+- `ACS_MAX_RETRIES` (default `0`) sets the SDK's own retries per request. The SDK retries `429` and `503` waiting the `Retry-After` of the response, and `5xx`, `408` and network errors with backoff. Each retry counts against the quota, and a long `Retry-After` exceeds the 10 s timeout of a call and leaves the email "in doubt". With `0`, a `429` is rejected at once.
+- A `429` on send is a rejection: the same attempt goes on with the next provider. The adapter also pauses ACS for the `Retry-After` of the response (60 s without it, 15 minutes at most): during the pause `send` rejects without calling Azure. The pause is in memory and per process.
+- Status reads have no pause. Each accepted email costs one read at the first confirmation and one more per rescheduling while the status is `Running`; a read that fails, a `429` included, is rescheduled without sending again.
 
 ### No duplicates with ACS
 
@@ -107,7 +114,8 @@ sequenceDiagram
         N->>N: record delivery (PENDING)
         N->>T: load template for the email type
         N->>N: render subject, HTML and plain text with params
-        N->>P: send (ACS: with the delivery's operation id)
+        N-->>C: success and delivery (PENDING), without waiting
+        N->>P: in the background: send (ACS: with the delivery's operation id)
         alt primary sent it
             N->>N: SENT
         else primary accepted it (ACS 202)
@@ -118,7 +126,6 @@ sequenceDiagram
             N->>F: send (if a fallback is configured)
             N->>N: SENT, or PENDING with next retry, or FAILED
         end
-        N-->>C: success and delivery
     end
 ```
 

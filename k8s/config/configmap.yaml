@@ -53,3 +53,5 @@ data:
   NOTIFICATION_GRPC_PORT: "50056"
   # Ordered email providers: primary first, then fallback (acs, emailjs)
   EMAIL_PROVIDERS: "acs,emailjs"
+  # Retries of the ACS SDK per request (0: a 429 goes to the fallback at once)
+  ACS_MAX_RETRIES: "0"

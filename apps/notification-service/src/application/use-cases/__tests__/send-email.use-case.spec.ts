@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { EmailTemplate } from '@app/common/generated/notification';
 import { SendEmailUseCase } from '../send-email.use-case';
 import { AttemptEmailDelivery } from '../attempt-email-delivery';
@@ -28,7 +29,7 @@ describe('SendEmailUseCase', () => {
     return { useCase, createOrGet, execute, existing };
   };
 
-  it('records the request and makes the first attempt', async () => {
+  it('records the request and starts the first attempt', async () => {
     const { useCase, createOrGet, execute } = build(true);
 
     const result = await useCase.execute(request);
@@ -41,7 +42,67 @@ describe('SendEmailUseCase', () => {
       nextAttemptAt: expect.any(Date) as Date,
     });
     expect(execute).toHaveBeenCalledTimes(1);
-    expect(result.status).toBe('SENT');
+    expect(result.status).toBe('PENDING');
+  });
+
+  it('returns without waiting for the attempt', async () => {
+    const { useCase, execute } = build(true);
+    execute.mockReturnValue(new Promise(() => undefined));
+
+    await expect(useCase.execute(request)).resolves.toMatchObject({
+      status: 'PENDING',
+    });
+  });
+
+  describe('drain', () => {
+    it('waits for the attempts in the background', async () => {
+      const { useCase, execute } = build(true);
+      let finish!: () => void;
+      execute.mockReturnValue(new Promise<void>((r) => (finish = r)));
+      await useCase.execute(request);
+
+      let drained = false;
+      const draining = useCase.drain(1_000).then(() => (drained = true));
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(drained).toBe(false);
+
+      finish();
+      await draining;
+      expect(drained).toBe(true);
+    });
+
+    it('gives up after the timeout and returns', async () => {
+      const { useCase, execute } = build(true);
+      execute.mockReturnValue(new Promise(() => undefined));
+      await useCase.execute(request);
+
+      await expect(useCase.drain(20)).resolves.toBeUndefined();
+    });
+
+    it('returns at once when nothing is running', async () => {
+      const { useCase } = build(true);
+
+      await expect(useCase.drain(1_000)).resolves.toBeUndefined();
+    });
+  });
+
+  it('logs an error of the attempt and does not fail', async () => {
+    const { useCase, execute } = build(true);
+    execute.mockRejectedValue(new Error('db down'));
+    const logged = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+
+    await expect(useCase.execute(request)).resolves.toMatchObject({
+      status: 'PENDING',
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(logged).toHaveBeenCalledWith(
+      expect.stringContaining('First attempt of delivery'),
+      expect.any(String),
+    );
+    logged.mockRestore();
   });
 
   it('returns the existing delivery and sends nothing for a repeated key', async () => {
