@@ -6,8 +6,9 @@ import {
 } from './attempt-email-delivery';
 
 /**
- * Retries the PENDING deliveries whose wait is over. Each row is claimed
- * first, so two workers never attempt the same delivery at the same time.
+ * Takes the PENDING deliveries whose wait is over: retries the ones no
+ * provider took and confirms the ones a provider accepted. Each row is
+ * claimed first, so two workers never handle the same delivery at once.
  */
 @Injectable()
 export class RetryDueEmailsUseCase {

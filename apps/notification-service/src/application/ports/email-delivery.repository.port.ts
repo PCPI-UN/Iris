@@ -14,6 +14,8 @@ export type EmailDeliveryUpdate = Partial<
     EmailDelivery,
     | 'status'
     | 'provider'
+    | 'providerRef'
+    | 'acceptedAt'
     | 'attempts'
     | 'lastError'
     | 'nextAttemptAt'

@@ -10,6 +10,8 @@ export const buildDelivery = (
   params: { firstName: 'Laura', invitationLink: 'https://iris.test/x' },
   status: 'PENDING',
   provider: null,
+  providerRef: null,
+  acceptedAt: null,
   attempts: 0,
   lastError: null,
   nextAttemptAt: new Date('2026-11-08T10:05:00Z'),
