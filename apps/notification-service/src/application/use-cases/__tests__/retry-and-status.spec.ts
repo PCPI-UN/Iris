@@ -103,7 +103,12 @@ describe('GetEmailStatusUseCase', () => {
 
 describe('nextAttemptAt', () => {
   const now = new Date('2026-11-08T10:00:00Z');
-  const policy = { maxAttempts: 4, baseDelayMs: 60_000 };
+  const policy = {
+    maxAttempts: 4,
+    baseDelayMs: 60_000,
+    confirmDelayMs: 30_000,
+    confirmTimeoutMs: 600_000,
+  };
 
   it.each([
     [1, '2026-11-08T10:01:00.000Z'],

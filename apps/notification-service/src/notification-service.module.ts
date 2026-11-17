@@ -63,6 +63,12 @@ const positiveInt = (
       useFactory: (config: ConfigService): RetryPolicy => ({
         maxAttempts: positiveInt(config, 'EMAIL_MAX_ATTEMPTS', 5),
         baseDelayMs: positiveInt(config, 'EMAIL_RETRY_BASE_DELAY_MS', 60_000),
+        confirmDelayMs: positiveInt(config, 'EMAIL_CONFIRM_DELAY_MS', 30_000),
+        confirmTimeoutMs: positiveInt(
+          config,
+          'EMAIL_CONFIRM_TIMEOUT_MS',
+          10 * 60_000,
+        ),
       }),
     },
     {

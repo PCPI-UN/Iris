@@ -11,6 +11,10 @@ export interface EmailDelivery {
   params: Record<string, unknown> | null;
   status: EmailDeliveryStatus;
   provider: string | null;
+  /** Operation id sent to a provider that dedupes by it; reused while the outcome is unknown */
+  providerRef: string | null;
+  /** When the provider accepted the email; while PENDING its final status is still to be confirmed */
+  acceptedAt: Date | null;
   attempts: number;
   lastError: string | null;
   nextAttemptAt: Date | null;
@@ -24,6 +28,35 @@ export interface RetryPolicy {
   maxAttempts: number;
   /** Wait after the first failed attempt; doubles after each following one */
   baseDelayMs: number;
+  /** Wait between the checks of an accepted email's final status */
+  confirmDelayMs: number;
+  /** After this long without a final status, an accepted email is recorded as SENT */
+  confirmTimeoutMs: number;
+}
+
+/**
+ * The last attempt got no answer from the provider that holds `providerRef`,
+ * so that provider may have the email.
+ */
+export function isInDoubt(
+  delivery: Pick<EmailDelivery, 'providerRef' | 'acceptedAt' | 'lastError'>,
+): boolean {
+  return (
+    delivery.providerRef !== null &&
+    delivery.acceptedAt === null &&
+    delivery.lastError !== null
+  );
+}
+
+/** Accepted by a provider and waiting for its final status. */
+export function isAwaitingConfirmation(
+  delivery: Pick<EmailDelivery, 'status' | 'providerRef' | 'acceptedAt'>,
+): boolean {
+  return (
+    delivery.status === 'PENDING' &&
+    delivery.providerRef !== null &&
+    delivery.acceptedAt !== null
+  );
 }
 
 /** When to try again after `attempts` failed attempts, or null when they are exhausted. */

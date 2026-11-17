@@ -1,7 +1,10 @@
 import { EmailTemplate } from '@app/common/generated/notification';
 import { EmailDispatcher } from '../email-dispatcher';
 import { EmailTemplateRenderer } from '../email-template.renderer';
-import { EmailProvider } from '../../../application/ports/email-provider.port';
+import {
+  EmailInDoubtError,
+  EmailProvider,
+} from '../../../application/ports/email-provider.port';
 import { EmailSendError } from '../../../application/ports/email.service.port';
 
 describe('EmailDispatcher', () => {
@@ -26,7 +29,7 @@ describe('EmailDispatcher', () => {
   };
 
   it('renders once and sends through the primary only', async () => {
-    const primary = jest.fn().mockResolvedValue(undefined);
+    const primary = jest.fn().mockResolvedValue('sent');
     const fallback = jest.fn();
     const { dispatcher, render } = build(
       provider('acs', primary),
@@ -35,20 +38,21 @@ describe('EmailDispatcher', () => {
 
     await expect(dispatcher.sendEmail(request)).resolves.toEqual({
       provider: 'acs',
+      outcome: 'sent',
     });
 
     expect(render).toHaveBeenCalledWith(EmailTemplate.PASSWORD_RESET, {
       name: 'Laura',
     });
-    expect(primary).toHaveBeenCalledWith({
-      to: 'laura@test.local',
-      ...rendered,
-    });
+    expect(primary).toHaveBeenCalledWith(
+      { to: 'laura@test.local', ...rendered },
+      undefined,
+    );
     expect(fallback).not.toHaveBeenCalled();
   });
 
   it('uses the fallback when the primary fails', async () => {
-    const fallback = jest.fn().mockResolvedValue(undefined);
+    const fallback = jest.fn().mockResolvedValue('sent');
     const { dispatcher } = build(
       provider(
         'acs',
@@ -59,6 +63,7 @@ describe('EmailDispatcher', () => {
 
     await expect(dispatcher.sendEmail(request)).resolves.toEqual({
       provider: 'emailjs',
+      outcome: 'sent',
     });
     expect(fallback).toHaveBeenCalledTimes(1);
   });
@@ -122,5 +127,114 @@ describe('EmailDispatcher', () => {
     await expect(dispatcher.sendEmail(request)).rejects.toThrow(
       'acs: ACS send Failed',
     );
+  });
+
+  describe('with a provider that dedupes by operation id', () => {
+    const acs = (send: jest.Mock, confirm = jest.fn()): EmailProvider => ({
+      name: 'acs',
+      send,
+      confirm,
+    });
+    const inDoubt = () =>
+      jest.fn().mockRejectedValue(new EmailInDoubtError('no answer'));
+
+    it('gives the id only to that provider and stops when it accepted', async () => {
+      const send = jest.fn().mockResolvedValue('accepted');
+      const fallback = jest.fn();
+      const { dispatcher } = build(acs(send), provider('emailjs', fallback));
+
+      await expect(
+        dispatcher.sendEmail({ ...request, ref: 'ref-1' }),
+      ).resolves.toEqual({ provider: 'acs', outcome: 'accepted' });
+
+      expect(send).toHaveBeenCalledWith(expect.anything(), 'ref-1');
+      expect(fallback).not.toHaveBeenCalled();
+    });
+
+    it('does not use the fallback when the provider gave no answer', async () => {
+      const fallback = jest.fn();
+      const { dispatcher } = build(
+        acs(inDoubt()),
+        provider('emailjs', fallback),
+      );
+
+      const error = (await dispatcher
+        .sendEmail({ ...request, ref: 'ref-1' })
+        .catch((e: unknown) => e)) as EmailSendError;
+
+      expect(fallback).not.toHaveBeenCalled();
+      expect(error).toBeInstanceOf(EmailSendError);
+      expect(error).toMatchObject({ inDoubt: true, provider: 'acs' });
+    });
+
+    it('uses the fallback when the previous attempt also got no answer', async () => {
+      const fallback = jest.fn().mockResolvedValue('sent');
+      const { dispatcher } = build(
+        acs(inDoubt()),
+        provider('emailjs', fallback),
+      );
+
+      await expect(
+        dispatcher.sendEmail({
+          ...request,
+          ref: 'ref-1',
+          fallbackIfInDoubt: true,
+        }),
+      ).resolves.toEqual({ provider: 'emailjs', outcome: 'sent' });
+    });
+
+    it('stays in doubt when the fallback also fails', async () => {
+      const { dispatcher } = build(
+        acs(inDoubt()),
+        provider('emailjs', jest.fn().mockRejectedValue(new Error('429'))),
+      );
+
+      await expect(
+        dispatcher.sendEmail({
+          ...request,
+          ref: 'ref-1',
+          fallbackIfInDoubt: true,
+        }),
+      ).rejects.toMatchObject({ inDoubt: true, provider: 'emailjs' });
+    });
+
+    it('is not in doubt when the provider rejected the email', async () => {
+      const { dispatcher } = build(
+        acs(jest.fn().mockRejectedValue(new Error('Unauthorized'))),
+        provider('emailjs', jest.fn().mockRejectedValue(new Error('429'))),
+      );
+
+      await expect(
+        dispatcher.sendEmail({ ...request, ref: 'ref-1' }),
+      ).rejects.toMatchObject({ inDoubt: false });
+    });
+
+    it('reports whether the chain uses an id', () => {
+      expect(build(acs(jest.fn())).dispatcher.usesRef()).toBe(true);
+      expect(build(provider('emailjs', jest.fn())).dispatcher.usesRef()).toBe(
+        false,
+      );
+    });
+
+    it('confirms through the provider that accepted the email', async () => {
+      const confirm = jest.fn().mockResolvedValue({ status: 'sent' });
+      const { dispatcher } = build(acs(jest.fn(), confirm));
+
+      await expect(dispatcher.confirm('acs', 'ref-1')).resolves.toEqual({
+        status: 'sent',
+      });
+      expect(confirm).toHaveBeenCalledWith('ref-1');
+    });
+
+    it('fails to confirm with a provider that is not configured or cannot confirm', async () => {
+      const { dispatcher } = build(provider('emailjs', jest.fn()));
+
+      await expect(dispatcher.confirm('acs', 'ref-1')).rejects.toThrow(
+        'cannot confirm',
+      );
+      await expect(dispatcher.confirm('emailjs', 'ref-1')).rejects.toThrow(
+        'cannot confirm',
+      );
+    });
   });
 });
