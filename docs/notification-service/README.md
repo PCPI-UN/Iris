@@ -38,7 +38,7 @@ Every provider implements `EmailProvider` (`application/ports/email-provider.por
 
 | Provider | Variables | Behavior |
 | --- | --- | --- |
-| `acs` | `ACS_CONNECTION_STRING`, `ACS_SENDER_ADDRESS` | Waits for Azure's final status; a send that is not `Succeeded` is a failure. Sends an HTML and a plain-text body. |
+| `acs` | `ACS_CONNECTION_STRING`, `ACS_SENDER_ADDRESS` | Sends with the delivery's operation id and returns once Azure accepts the email (`202`); the final status is read later. Azure rejects a repeated operation id, so a repeated attempt never sends a second email. Sends an HTML and a plain-text body. |
 | `emailjs` | `EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`, `EMAILJS_PUBLIC_KEY`, `EMAILJS_PRIVATE_KEY` | At most 1 request per second, as primary or fallback. A `429` is retried with a growing wait (1 s, 2 s, 4 s) before it counts as a failure. |
 
 - A listed provider whose variables are missing is skipped with a warning, so the service runs with only one provider. The startup log states the primary and the fallback, or that there is no fallback.
@@ -51,10 +51,38 @@ Every provider implements `EmailProvider` (`application/ports/email-provider.por
 - A failed attempt leaves the row `PENDING` with `next_attempt_at` set to 1, 2, 4... times `EMAIL_RETRY_BASE_DELAY_MS`. The retry worker polls every `EMAIL_RETRY_POLL_MS`, claims each due row and runs the whole provider chain again. After `EMAIL_MAX_ATTEMPTS` attempts (first one included) the row is `FAILED`.
 - **Idempotency**: a request may carry an `idempotencyKey`. A second request with the same key returns the first delivery and sends nothing. `invitation-service` uses `invitation:<invitationId>:<expiresAt>`, so a resend (new expiry) sends a new email while a repeated call does not. Requests without a key always send.
 - `GetEmailStatus` returns deliveries by id and/or idempotency key.
-- Delivery is at least once: if the service stops in the middle of an attempt, the row is retried when its lease (`next_attempt_at`) expires, and the email may arrive twice.
-- Sending and saving are separate steps. Once a provider accepts the email, a failure to save `SENT` is tried again twice (after 200 ms and 1 s) and then only logged; it never schedules a retry. If the database stays down, the row is still `PENDING` with its lease, so the worker may send it once more when the lease expires.
-- Each row's lease (`ATTEMPT_LEASE_MS`, 5 minutes) starts when the worker claims that row, not when the batch started.
 - Requests are validated by the same `ValidationPipe` as the other services; for example an `idempotencyKey` over 255 characters answers `INVALID_ARGUMENT`.
+
+### What each provider answer does
+
+| Provider answer | Row after the attempt |
+| --- | --- |
+| Sent (EmailJS `200`, or ACS already reports `Succeeded`) | `SENT` |
+| Accepted (ACS `202`) | `PENDING` with `accepted_at`; its final status is read later |
+| Rejected: an error before the provider took the email (`4xx`, connection refused) | The next provider in the chain is tried; if every one rejects, `PENDING` with the next retry, or `FAILED` |
+| No answer: ACS timeout, `5xx` or connection lost after the request left | `PENDING` with the next retry and the same `provider_ref`; the fallback is not used in this attempt |
+
+### No duplicates with ACS
+
+- Before the first ACS send the row saves a new `provider_ref` (a UUID), sent to Azure as the `Operation-Id` header. If it cannot be saved, nothing is sent and the worker takes the row when its lease expires.
+- Azure answers a repeated id with `400 OperationIdAlreadyExists` and does not send again. So when an attempt got no answer, the next one reuses the same id: if Azure already had the email, the adapter reads its status instead of sending it twice. A new id is created only after ACS rejected the email or reported it `Failed`.
+- If ACS gives no answer twice in a row, the second time the email goes to the fallback provider. It arrives twice only if the first send reached Azure and Azure then stopped answering.
+- Azure keeps an operation id for at least several hours (about 7 h when measured), far beyond the default retry delays. A row that waits longer than that before its next attempt (a much larger `EMAIL_RETRY_BASE_DELAY_MS`, or the service down for hours while a send was in doubt) could reuse an id Azure no longer knows, and that send would go out again.
+
+### Confirming an accepted email
+
+An accepted email is never sent again nor handed to another provider. Every `EMAIL_CONFIRM_DELAY_MS` the worker reads its status from the provider that accepted it:
+
+- `Succeeded`: `SENT`.
+- `Failed` or `Canceled`: `PENDING` with the next retry and a new id. It counts as the attempt that sent it.
+- Still running, or the read fails: read again later.
+- No final status after `EMAIL_CONFIRM_TIMEOUT_MS` since it was accepted: `SENT`, with the reason in `last_error`.
+
+### Saving the outcome
+
+- Sending and saving are separate steps. Once a provider takes the email (sent or accepted), a failure to save the status is tried again twice (after 200 ms and 1 s) and then only logged; it never schedules a retry.
+- The row then keeps its lease and its `provider_ref`. With ACS, the next attempt is rejected as repeated and reads the status. EmailJS has no way to ask about an earlier send, so with EmailJS delivery is at least once: if the service stops after EmailJS sent the email and before `SENT` is saved, the worker may send it once more when the lease expires.
+- Each row's lease (`ATTEMPT_LEASE_MS`, 5 minutes) starts when the worker claims that row, not when the batch started.
 
 ## Dependencies
 
@@ -79,10 +107,14 @@ sequenceDiagram
         N->>N: record delivery (PENDING)
         N->>T: load template for the email type
         N->>N: render subject, HTML and plain text with params
-        N->>P: send
-        alt primary succeeds
+        N->>P: send (ACS: with the delivery's operation id)
+        alt primary sent it
             N->>N: SENT
-        else primary fails
+        else primary accepted it (ACS 202)
+            N->>N: PENDING, final status read later
+        else primary gave no answer
+            N->>N: PENDING with next retry, same operation id
+        else primary rejected it
             N->>F: send (if a fallback is configured)
             N->>N: SENT, or PENDING with next retry, or FAILED
         end
@@ -90,7 +122,7 @@ sequenceDiagram
     end
 ```
 
-The retry worker repeats the same provider chain for due `PENDING` deliveries.
+The retry worker repeats the provider chain for due `PENDING` deliveries, or reads the final status of the accepted ones.
 
 ## Related
 
