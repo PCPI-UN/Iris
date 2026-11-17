@@ -25,6 +25,10 @@ model EmailDelivery {
   params         Json?
   status         EmailDeliveryStatus @default(PENDING)
   provider       String?             @db.VarChar(32)
+  /// Operation id sent to a provider that rejects a repeated id (ACS); reused while the outcome is unknown
+  providerRef    String?             @map("provider_ref") @db.VarChar(64)
+  /// When the provider accepted the email; while PENDING its final status is still to be confirmed
+  acceptedAt     DateTime?           @map("accepted_at") @db.Timestamptz(3)
   attempts       Int                 @default(0)
   lastError      String?             @map("last_error")
   /// When the retry worker may pick the row; also a lease while an attempt runs

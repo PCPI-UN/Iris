@@ -16,6 +16,8 @@ erDiagram
         jsonb params "nullable"
         EmailDeliveryStatus status
         varchar provider "nullable"
+        varchar provider_ref "nullable"
+        timestamptz accepted_at "nullable"
         int attempts
         text last_error "nullable"
         timestamptz next_attempt_at "nullable"
@@ -29,7 +31,7 @@ erDiagram
 
 | Enum | Values | Meaning |
 | --- | --- | --- |
-| `EmailDeliveryStatus` | `PENDING`, `SENT`, `FAILED` | `PENDING`: not sent yet; an attempt is running or a retry is scheduled. `SENT`: a provider accepted the email. `FAILED`: every attempt failed. |
+| `EmailDeliveryStatus` | `PENDING`, `SENT`, `FAILED` | `PENDING`: not sent yet, or accepted by a provider whose final status is still to be confirmed; an attempt or a confirmation is scheduled. `SENT`: a provider accepted the email. `FAILED`: every attempt failed. |
 
 ## Tables
 
@@ -46,6 +48,8 @@ One row per email request: what was asked, which provider sent it and how it wen
 | `params` | `JSONB` | yes | template parameters; cleared when the status becomes `SENT` or `FAILED`, since they may hold invitation or password-reset links |
 | `status` | `EmailDeliveryStatus` | no | `PENDING` |
 | `provider` | `VARCHAR(32)` | yes | provider that sent the email, or the last one tried when it failed |
+| `provider_ref` | `VARCHAR(64)` | yes | operation id sent to a provider that rejects a repeated id (Azure ACS). Kept while the outcome is unknown, so the next attempt reuses it and the provider cannot send the email twice |
+| `accepted_at` | `TIMESTAMPTZ(3)` | yes | when the provider accepted the email. While the status is `PENDING`, the final status is confirmed with the provider and the email is never handed to another one |
 | `attempts` | `INTEGER` | no | `0`; attempts made, the first one included |
 | `last_error` | `TEXT` | yes | error of the last failed attempt, one entry per provider tried |
 | `next_attempt_at` | `TIMESTAMPTZ(3)` | yes | when the retry worker may take the row; also a lease while an attempt runs. Null once the status is final |
