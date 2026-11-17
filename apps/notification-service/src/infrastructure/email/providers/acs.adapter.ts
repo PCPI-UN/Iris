@@ -82,7 +82,7 @@ export class AcsAdapter implements EmailProvider {
     } catch (error: unknown) {
       if (accepted) return 'accepted';
       if (isOperationIdTaken(error)) return this.alreadyTaken(ref);
-      if (isInDoubt(error)) {
+      if (mayHaveTaken(error)) {
         throw new EmailInDoubtError(`ACS gave no answer for ${ref}`, {
           cause: error,
         });
@@ -154,7 +154,7 @@ function isOperationIdTaken(error: unknown): boolean {
 }
 
 /** Timeout, 5xx or a connection lost after the request left: Azure may have the email. */
-function isInDoubt(error: unknown): boolean {
+function mayHaveTaken(error: unknown): boolean {
   const { statusCode, code } = (error ?? {}) as {
     statusCode?: number;
     code?: string;

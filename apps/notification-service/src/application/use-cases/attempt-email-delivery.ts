@@ -13,7 +13,11 @@ import {
   EmailDeliveryUpdate,
 } from '../ports/email-delivery.repository.port';
 import { ConfirmOutcome } from '../ports/email-provider.port';
-import { EmailSendError, EmailServicePort } from '../ports/email.service.port';
+import {
+  EmailSendError,
+  EmailServicePort,
+  SendEmailResult,
+} from '../ports/email.service.port';
 
 export const EMAIL_RETRY_POLICY = Symbol('EMAIL_RETRY_POLICY');
 
@@ -80,7 +84,7 @@ export class AttemptEmailDelivery {
       }
     }
 
-    let result: Awaited<ReturnType<EmailServicePort['sendEmail']>>;
+    let result: SendEmailResult;
     try {
       result = await this.emailService.sendEmail({
         to: delivery.recipient,
@@ -91,7 +95,8 @@ export class AttemptEmailDelivery {
         fallbackIfInDoubt,
       });
     } catch (error: unknown) {
-      const keepRef = !(error instanceof EmailSendError) || error.inDoubt;
+      // Only a provider that gave no answer may hold the email with `ref`
+      const keepRef = error instanceof EmailSendError && error.inDoubt;
       return this.recordFailure(delivery, {
         attempts,
         error,

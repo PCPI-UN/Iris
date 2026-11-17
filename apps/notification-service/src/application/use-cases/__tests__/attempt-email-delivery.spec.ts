@@ -117,6 +117,18 @@ describe('AttemptEmailDelivery', () => {
     );
   });
 
+  it('does not keep the id when the error is not from a provider', async () => {
+    const sendEmail = jest.fn().mockRejectedValue(new Error('ENOENT'));
+    const { attempt, update } = build(sendEmail, { usesRef: true });
+
+    await attempt.execute(buildDelivery({ providerRef: 'ref-1' }), () => now);
+
+    expect(update).toHaveBeenCalledWith(
+      'd-1',
+      expect.objectContaining({ providerRef: null }),
+    );
+  });
+
   describe('operation id (providers that dedupe by it)', () => {
     it('saves a new id before sending and sends with it', async () => {
       const sendEmail = sent();
