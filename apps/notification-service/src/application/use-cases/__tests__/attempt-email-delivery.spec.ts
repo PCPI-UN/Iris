@@ -6,10 +6,7 @@ import {
 import { EmailDelivery } from '../../../domain/email-delivery';
 import { buildDelivery } from './delivery.fixture';
 import { EmailDeliveryRepositoryPort } from '../../ports/email-delivery.repository.port';
-import {
-  EmailSendError,
-  EmailServicePort,
-} from '../../ports/email.service.port';
+import { EmailSendError } from '../../ports/email.service.port';
 
 describe('AttemptEmailDelivery', () => {
   const now = new Date('2026-11-08T10:00:00Z');
@@ -22,7 +19,7 @@ describe('AttemptEmailDelivery', () => {
     );
     const attempt = new AttemptEmailDelivery(
       { update } as unknown as EmailDeliveryRepositoryPort,
-      { sendEmail } as unknown as EmailServicePort,
+      { sendEmail },
       policy,
     );
     return { attempt, update };
@@ -52,11 +49,12 @@ describe('AttemptEmailDelivery', () => {
   });
 
   it('keeps it PENDING with a growing wait while attempts remain', async () => {
-    const sendEmail = jest
-      .fn()
-      .mockRejectedValue(
-        new EmailSendError('acs: 503; emailjs: 429', 'emailjs'),
-      );
+    const sendEmail = jest.fn().mockRejectedValue(
+      new EmailSendError([
+        { provider: 'acs', error: '503' },
+        { provider: 'emailjs', error: '429' },
+      ]),
+    );
     const { attempt, update } = build(sendEmail);
 
     await attempt.execute(buildDelivery({ attempts: 1 }), () => now);
@@ -73,7 +71,9 @@ describe('AttemptEmailDelivery', () => {
   it('marks it FAILED and clears the params when the attempts run out', async () => {
     const sendEmail = jest
       .fn()
-      .mockRejectedValue(new EmailSendError('acs: rejected', 'acs'));
+      .mockRejectedValue(
+        new EmailSendError([{ provider: 'acs', error: 'rejected' }]),
+      );
     const { attempt, update } = build(sendEmail);
 
     await attempt.execute(buildDelivery({ attempts: 2 }), () => now);
@@ -136,7 +136,9 @@ describe('AttemptEmailDelivery', () => {
       const result = await run(attempt);
 
       expect(sendEmail).toHaveBeenCalledTimes(1);
-      expect(update).toHaveBeenCalledTimes(SENT_WRITE_RETRY_DELAYS_MS.length + 1);
+      expect(update).toHaveBeenCalledTimes(
+        SENT_WRITE_RETRY_DELAYS_MS.length + 1,
+      );
       for (const [, data] of update.mock.calls) {
         expect(data).toMatchObject({ status: 'SENT', nextAttemptAt: null });
       }

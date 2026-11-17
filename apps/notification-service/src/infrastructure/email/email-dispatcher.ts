@@ -2,10 +2,12 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   EmailSendError,
   EmailServicePort,
+  ProviderFailure,
   SendEmailParams,
   SendEmailResult,
 } from '../../application/ports/email.service.port';
 import { EmailProvider } from '../../application/ports/email-provider.port';
+import { describeError } from './describe-error';
 import { EmailTemplateRenderer } from './email-template.renderer';
 import { EMAIL_PROVIDERS } from './providers/email-providers';
 
@@ -28,7 +30,8 @@ export class EmailDispatcher implements EmailServicePort {
     params,
   }: SendEmailParams): Promise<SendEmailResult> {
     const rendered = await this.renderer.render(template, params);
-    const errors: string[] = [];
+    const failures: ProviderFailure[] = [];
+    let lastError: unknown;
 
     for (const [index, provider] of this.providers.entries()) {
       try {
@@ -36,18 +39,17 @@ export class EmailDispatcher implements EmailServicePort {
         this.logger.log(`Email sent via ${provider.name}`, { template });
         return { provider: provider.name };
       } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
-        errors.push(`${provider.name}: ${message}`);
+        lastError = error;
+        failures.push({ provider: provider.name, error: describeError(error) });
         const next = this.providers[index + 1];
         this.logger.warn(
           `Email provider ${provider.name} failed` +
             (next ? `, trying ${next.name}` : ''),
-          { template, error: message },
+          { template, error: describeError(error) },
         );
       }
     }
 
-    const last = this.providers[this.providers.length - 1];
-    throw new EmailSendError(errors.join('; '), last?.name ?? null);
+    throw new EmailSendError(failures, { cause: lastError });
   }
 }

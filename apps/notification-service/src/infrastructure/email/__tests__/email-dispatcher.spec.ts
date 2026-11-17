@@ -78,7 +78,37 @@ describe('EmailDispatcher', () => {
     expect(error).toMatchObject({
       message: 'emailjs: 429; acs: ACS send Failed',
       provider: 'acs',
+      failures: [
+        { provider: 'emailjs', error: '429' },
+        { provider: 'acs', error: 'ACS send Failed' },
+      ],
     });
+  });
+
+  it('keeps the status, code and cause of the provider error', async () => {
+    const sdkError = Object.assign(new Error('Service unavailable'), {
+      statusCode: 503,
+      code: 'ServiceUnavailable',
+    });
+    const { dispatcher } = build(
+      provider(
+        'acs',
+        jest
+          .fn()
+          .mockRejectedValue(
+            new Error('ACS gave no answer', { cause: sdkError }),
+          ),
+      ),
+    );
+
+    const error = (await dispatcher
+      .sendEmail(request)
+      .catch((e: unknown) => e)) as EmailSendError;
+
+    expect(error.message).toBe(
+      'acs: ACS gave no answer <- caused by: Service unavailable (status 503, code ServiceUnavailable)',
+    );
+    expect((error.cause as Error).cause).toBe(sdkError);
   });
 
   it('fails when the only provider fails', async () => {
