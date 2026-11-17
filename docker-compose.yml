@@ -12,6 +12,7 @@ services:
       EVENT_DB_PASSWORD: ${EVENT_DB_PASSWORD}
       INVITATION_DB_PASSWORD: ${INVITATION_DB_PASSWORD}
       PROJECT_DB_PASSWORD: ${PROJECT_DB_PASSWORD}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -344,8 +345,24 @@ services:
        start_period: 40s
 
   # ==================================================================
-  # NOTIFICATION SERVICE
+  # NOTIFICATION SERVICE - Migration + Application
   # ==================================================================
+
+  notification-migration:
+    build:
+      context: .
+      dockerfile: ./apps/notification-service/Dockerfile
+      target: production
+    environment:
+      - DATABASE_URL=postgresql://notification_user:${NOTIFICATION_DB_PASSWORD}@postgres:5432/notification_service
+      - NODE_ENV=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - dokploy-network
+    command: prisma migrate deploy --schema=./apps/notification-service/prisma/schema.prisma
+    restart: "no"
 
   notification-service:
     build:
@@ -354,15 +371,25 @@ services:
       target: production
     environment:
       - NODE_ENV=production
+      - DATABASE_URL=postgresql://notification_user:${NOTIFICATION_DB_PASSWORD}@postgres:5432/notification_service
       - GRPC_HOST=${GRPC_HOST:-0.0.0.0}
       - GRPC_PORT=${GRPC_PORT:-50056}
       - EMAIL_PROVIDERS=${EMAIL_PROVIDERS:-acs,emailjs}
+      - EMAIL_MAX_ATTEMPTS=${EMAIL_MAX_ATTEMPTS:-5}
+      - EMAIL_RETRY_BASE_DELAY_MS=${EMAIL_RETRY_BASE_DELAY_MS:-60000}
+      - EMAIL_RETRY_POLL_MS=${EMAIL_RETRY_POLL_MS:-15000}
+      - EMAIL_RETRY_BATCH_SIZE=${EMAIL_RETRY_BATCH_SIZE:-20}
       - EMAILJS_SERVICE_ID=${EMAILJS_SERVICE_ID}
       - EMAILJS_TEMPLATE_ID=${EMAILJS_TEMPLATE_ID}
       - EMAILJS_PUBLIC_KEY=${EMAILJS_PUBLIC_KEY}
       - EMAILJS_PRIVATE_KEY=${EMAILJS_PRIVATE_KEY}
       - ACS_CONNECTION_STRING=${ACS_CONNECTION_STRING}
       - ACS_SENDER_ADDRESS=${ACS_SENDER_ADDRESS}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      notification-migration:
+        condition: service_completed_successfully
     networks:
       - dokploy-network
     restart: always

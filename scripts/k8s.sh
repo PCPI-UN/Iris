@@ -22,7 +22,7 @@ K8S_DIR="$BACKEND_DIR/k8s"
 SECRETS_FILE="$K8S_DIR/config/secrets.yaml"
 
 BACKEND_SERVICES=("auth-service" "evaluation-service" "event-service" "invitation-service" "project-service" "notification-service" "gateway")
-DB_SERVICES=("auth-service" "evaluation-service" "event-service" "invitation-service" "project-service")
+DB_SERVICES=("auth-service" "evaluation-service" "event-service" "invitation-service" "project-service" "notification-service")
 
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -550,6 +550,7 @@ show_logs() {
     "event-db"
     "invitation-db"
     "project-db"
+    "notification-db"
   )
 
   if [[ -z "$target" ]]; then

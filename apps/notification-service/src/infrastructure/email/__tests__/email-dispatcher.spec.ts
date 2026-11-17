@@ -2,6 +2,7 @@ import { EmailTemplate } from '@app/common/generated/notification';
 import { EmailDispatcher } from '../email-dispatcher';
 import { EmailTemplateRenderer } from '../email-template.renderer';
 import { EmailProvider } from '../../../application/ports/email-provider.port';
+import { EmailSendError } from '../../../application/ports/email.service.port';
 
 describe('EmailDispatcher', () => {
   const rendered = { subject: 'Hola', html: '<p>Hola</p>', text: 'Hola' };
@@ -33,7 +34,7 @@ describe('EmailDispatcher', () => {
     );
 
     await expect(dispatcher.sendEmail(request)).resolves.toEqual({
-      success: true,
+      provider: 'acs',
     });
 
     expect(render).toHaveBeenCalledWith(EmailTemplate.PASSWORD_RESET, {
@@ -57,12 +58,12 @@ describe('EmailDispatcher', () => {
     );
 
     await expect(dispatcher.sendEmail(request)).resolves.toEqual({
-      success: true,
+      provider: 'emailjs',
     });
     expect(fallback).toHaveBeenCalledTimes(1);
   });
 
-  it('fails when the primary and the fallback fail', async () => {
+  it('fails with every error and the last provider tried when all fail', async () => {
     const { dispatcher } = build(
       provider('emailjs', jest.fn().mockRejectedValue(new Error('429'))),
       provider(
@@ -71,9 +72,13 @@ describe('EmailDispatcher', () => {
       ),
     );
 
-    await expect(dispatcher.sendEmail(request)).rejects.toThrow(
-      'Failed to send email',
-    );
+    const error = await dispatcher.sendEmail(request).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(EmailSendError);
+    expect(error).toMatchObject({
+      message: 'emailjs: 429; acs: ACS send Failed',
+      provider: 'acs',
+    });
   });
 
   it('fails when the only provider fails', async () => {
@@ -85,7 +90,7 @@ describe('EmailDispatcher', () => {
     );
 
     await expect(dispatcher.sendEmail(request)).rejects.toThrow(
-      'Failed to send email',
+      'acs: ACS send Failed',
     );
   });
 });

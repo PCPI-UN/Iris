@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EmailDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+/// One row per email request: what was asked, which provider sent it and how it went.
+model EmailDelivery {
+  id             String              @id @default(uuid())
+  /// Set by the caller (e.g. invitation id + expiry); a repeated request returns the same row
+  idempotencyKey String?             @unique @map("idempotency_key") @db.VarChar(255)
+  recipient      String              @db.VarChar(320)
+  /// EmailTemplate enum name from notification.proto
+  template       String              @db.VarChar(64)
+  /// Template parameters, kept only while a retry may need them
+  params         Json?
+  status         EmailDeliveryStatus @default(PENDING)
+  provider       String?             @db.VarChar(32)
+  attempts       Int                 @default(0)
+  lastError      String?             @map("last_error")
+  /// When the retry worker may pick the row; also a lease while an attempt runs
+  nextAttemptAt  DateTime?           @map("next_attempt_at") @db.Timestamptz(3)
+  sentAt         DateTime?           @map("sent_at") @db.Timestamptz(3)
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([status, nextAttemptAt])
+  @@map("email_deliveries")
+}
