@@ -34,6 +34,7 @@ The service has a single module, `invitations`, following the layering described
 | `PLATFORM` | not used | `auth-service` assigns the invitation's platform roles |
 | `EVENT` | an event in `event-service` | `event-service` adds the user as an event member with each role |
 | `PROJECT` | a project in `project-service` | `project-service` adds the user as a confirmed participant, then `event-service` adds the event membership |
+| `PROJECT_TUTOR` | a project in `project-service` | `auth-service` assigns the Tutor platform role (keeping the user's other roles), then `project-service` links the user as tutor of the project; no event membership is created |
 
 ## Dependencies
 

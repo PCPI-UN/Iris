@@ -1,4 +1,5 @@
 import * as ExcelJS from 'exceljs';
+import { solidFill, thinBorder } from '../../../common/excel/excel-styles';
 import { JUROR_IMPORT_SHEET } from './juror-import-format';
 
 /** Data of the event, as GetJurorImportTemplate returns it */
@@ -11,8 +12,10 @@ export interface JurorImportTemplateData {
     name: string;
     /** Full names of the participants, confirmed first and then pending */
     members: string[];
-    /** Names of the tutors; empty until the tutor is stored in IRIS */
+    /** Full names of the tutors */
     tutors: string[];
+    /** Emails of the tutors */
+    tutorEmails: string[];
   }[];
 }
 
@@ -57,6 +60,8 @@ const REVIEW_COL = col(6 + JUROR_SLOTS * 3 + 1);
 const NOTES_COL = col(LAST_COLUMN);
 /** Hidden column: the tutor without accents and in lowercase, to compare against the jurors */
 const TUTOR_KEY_COL = col(LAST_COLUMN + 1);
+/** Hidden column: the tutor emails in lowercase, each one between ";", for an exact match */
+const TUTOR_EMAILS_COL = col(LAST_COLUMN + 2);
 
 const FIXED_COLUMNS: { header: string; width: number }[] = [
   { header: 'Departamento', width: 30 },
@@ -72,18 +77,7 @@ const SLOT_COLUMNS: { header: string; width: number }[] = [
   { header: 'Correo jurado', width: 30 },
 ];
 
-const border: Partial<ExcelJS.Borders> = {
-  top: { style: 'thin', color: { argb: GRID } },
-  left: { style: 'thin', color: { argb: GRID } },
-  bottom: { style: 'thin', color: { argb: GRID } },
-  right: { style: 'thin', color: { argb: GRID } },
-};
-
-const fill = (argb: string): ExcelJS.Fill => ({
-  type: 'pattern',
-  pattern: 'solid',
-  fgColor: { argb },
-});
+const border = thinBorder(GRID);
 
 /** Text without accents and in lowercase, the same way the hidden column does it */
 const normalize = (expr: string) =>
@@ -107,6 +101,10 @@ const wordInTutor = (cell: string, start: number, r: string) =>
 const looksLikeTutor = (first: string, last: string, r: string) =>
   `AND(${first}<>"",${last}<>"",$${TUTOR_KEY_COL}${r}<>"",${wordInTutor(first, 1, r)},OR(${wordInTutor(last, 1, r)},${wordInTutor(last, 101, r)}))`;
 
+/** The juror email (cell) is exactly one of the tutor emails of the row */
+const emailIsTutor = (email: string, r: string) =>
+  `AND(TRIM(${email})<>"",ISNUMBER(SEARCH(";"&LOWER(TRIM(${email}))&";",$${TUTOR_EMAILS_COL}${r})))`;
+
 /** Letters of the name, last name and email columns of juror `slot` (1-based) */
 const slotColumns = (slot: number) => {
   const first = 6 + (slot - 1) * 3 + 1;
@@ -118,8 +116,9 @@ function reviewFormula(r: number, withoutCode: boolean): string {
   const empty = slots.map((s) => `(${slotColumns(s)[0]}${r}<>"")`).join('+');
   const tutors = slots
     .map((s) => {
-      const [first, last] = slotColumns(s);
-      return `IF(${looksLikeTutor(`${first}${r}`, `${last}${r}`, String(r))},"Jurado ${s} parece ser tutor. ","")`;
+      const [first, last, email] = slotColumns(s);
+      const like = looksLikeTutor(`${first}${r}`, `${last}${r}`, String(r));
+      return `IF(${emailIsTutor(`${email}${r}`, String(r))},"Jurado ${s} es tutor (mismo correo). ",IF(${like},"Jurado ${s} parece ser tutor. ",""))`;
     })
     .join('&');
   const base = `IF((${empty})=0,"Sin jurados",TRIM(${tutors}))`;
@@ -130,7 +129,7 @@ function styleHeader(row: ExcelJS.Row) {
   row.height = 30;
   row.eachCell((cell, n) => {
     cell.font = { ...FONT, bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.fill = fill(
+    cell.fill = solidFill(
       n > 6 && n <= 6 + JUROR_SLOTS * 3
         ? OLIVE
         : n === LAST_COLUMN
@@ -172,6 +171,7 @@ export async function buildJurorImportTemplate(
     { width: 34 },
     { width: 50 },
     { width: 13, hidden: true },
+    { width: 13, hidden: true },
   ];
   ws.columns = columns.map(({ width, hidden }) => ({
     width,
@@ -192,7 +192,7 @@ export async function buildJurorImportTemplate(
     ws.mergeCells(r, 1, r, 6);
     const cell = ws.getCell(r, 1);
     cell.value = text;
-    cell.fill = fill(argb);
+    cell.fill = solidFill(argb);
   });
 
   const headers = [
@@ -228,13 +228,16 @@ export async function buildJurorImportTemplate(
     row.getCell(LAST_COLUMN + 1).value = {
       formula: normalize(`D${r}`),
     };
+    row.getCell(LAST_COLUMN + 2).value = project.tutorEmails.length
+      ? `;${project.tutorEmails.map((e) => e.trim().toLowerCase()).join(';')};`
+      : null;
     for (let c = 1; c <= LAST_COLUMN; c++) {
       const cell = row.getCell(c);
       const input = c > 6 && c <= 6 + JUROR_SLOTS * 3;
       cell.border = border;
-      if (c <= 6 || c === LAST_COLUMN - 1) cell.fill = fill(AUTO_FILL);
-      else if (input) cell.fill = fill(INPUT_FILL);
-      else if (c === LAST_COLUMN) cell.fill = fill(NOTES_FILL);
+      if (c <= 6 || c === LAST_COLUMN - 1) cell.fill = solidFill(AUTO_FILL);
+      else if (input) cell.fill = solidFill(INPUT_FILL);
+      else if (c === LAST_COLUMN) cell.fill = solidFill(NOTES_FILL);
       cell.font =
         c === LAST_COLUMN ? { ...FONT, size: 9, color: { argb: OLIVE } } : FONT;
       cell.alignment =
@@ -242,28 +245,30 @@ export async function buildJurorImportTemplate(
           ? { horizontal: 'center', vertical: 'top' }
           : { vertical: 'top', wrapText: true };
     }
-    row.getCell(LAST_COLUMN + 1).font = {
-      name: 'Arial',
-      size: 8,
-      color: { argb: MUTED_FONT },
-    };
+    for (const c of [LAST_COLUMN + 1, LAST_COLUMN + 2]) {
+      row.getCell(c).font = {
+        name: 'Arial',
+        size: 8,
+        color: { argb: MUTED_FONT },
+      };
+    }
   });
 
-  // A juror that looks like the tutor is painted in red, name and last name together
+  // A juror that is or looks like the tutor is painted in red, name, last name and email together
   for (let s = 1, priority = 2; s <= JUROR_SLOTS; s++) {
-    const [first, last] = slotColumns(s);
+    const [first, last, email] = slotColumns(s);
     ws.addConditionalFormatting({
-      ref: `${first}${FIRST_ROW}:${last}${lastRow}`,
+      ref: `${first}${FIRST_ROW}:${email}${lastRow}`,
       rules: [
         {
           type: 'expression',
           priority: priority++,
           formulae: [
-            looksLikeTutor(
+            `OR(${looksLikeTutor(
               `$${first}${FIRST_ROW}`,
               `$${last}${FIRST_ROW}`,
               String(FIRST_ROW),
-            ),
+            )},${emailIsTutor(`$${email}${FIRST_ROW}`, String(FIRST_ROW))})`,
           ],
           style: {
             font: { bold: true, color: { argb: TUTOR_FONT } },

@@ -1,4 +1,4 @@
-import {TypedDocument, JurorKey, Project, UserParticipation, ProjectDocument, ProjectState, ProjectParticipant, StudentStatus, PendingProjectParticipant, Status, ProjectWithJurorIds } from '../entities/project.entity';
+import {TypedDocument, JurorKey, Project, UserParticipation, ProjectDocument, ProjectState, ProjectParticipant, StudentStatus, PendingProjectParticipant, PendingProjectTutor, PendingProjectTutorInput, Status, ProjectWithJurorIds } from '../entities/project.entity';
 
 export interface ProjectRepository {
   create(input: {
@@ -64,6 +64,19 @@ export interface ProjectRepository {
   markPendingsInvited(projectId: number, emails: string[], invitedAt: Date): Promise<number>;
 
   markPendingJoined(projectId: number, studentCode: string, joinedAt: Date): Promise<boolean>;
+
+  /** Idempotent: linking the same user twice keeps a single row. */
+  addTutor(projectId: number, userId: number): Promise<void>;
+  listTutorUserIds(projectId: number): Promise<number[]>;
+  /** Leaves exactly these linked tutors and pending tutors (matched by email) on the project. */
+  replaceTutors(projectId: number, userIds: number[], pendings: PendingProjectTutorInput[]): Promise<void>;
+  addPendingTutor(projectId: number, input: PendingProjectTutorInput): Promise<PendingProjectTutor>;
+  listPendingTutors(projectId: number): Promise<PendingProjectTutor[]>;
+  /** Linked tutors of several projects in one query. */
+  listTutorLinksByProjects(projectIds: number[]): Promise<{ projectId: number; userId: number }[]>;
+  listPendingTutorsByProjects(projectIds: number[]): Promise<PendingProjectTutor[]>;
+  markPendingTutorsInvited(projectId: number, emails: string[], invitedAt: Date): Promise<number>;
+  markPendingTutorJoined(projectId: number, email: string, joinedAt: Date): Promise<boolean>;
 
   listAssignedToJuror(juror: JurorKey,opts?: { page?: number; pageSize?: number }
   ): Promise<{ items: Project[]; total: number }>;

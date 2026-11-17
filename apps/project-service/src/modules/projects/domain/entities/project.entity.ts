@@ -25,6 +25,9 @@ export interface ProjectDocument {
 
 /** Role id stored in project assignments for jurors */
 export const JUROR_ROLE_ID = 4;
+/** Platform roles: Professor may be chosen as tutor; the tutor of a project always ends up with Tutor. */
+export const PROFESSOR_ROLE_ID = 9;
+export const TUTOR_ROLE_ID = 10;
 
 /** A project of an event with the users assigned to it as jurors */
 export interface ProjectWithJurorIds extends Project {
@@ -72,4 +75,29 @@ export interface PendingProjectParticipant {
   semester: string;
   career: string;
   status: StudentStatus;
+}
+
+/** Tutor typed in at submission who has no platform account yet. */
+export interface PendingProjectTutor {
+  projectId: number;
+  firstName: string;
+  lastName?: string | null;
+  email: string;
+  status: StudentStatus;
+}
+
+/** Tutor as shown in reads: linked (userId set) or pending. */
+export interface ProjectTutorView {
+  userId?: number;
+  firstName: string;
+  lastName?: string | null;
+  pending: boolean;
+  /** Only for pending tutors. */
+  email?: string;
+}
+
+export interface PendingProjectTutorInput {
+  firstName: string;
+  lastName?: string | null;
+  email: string;
 }

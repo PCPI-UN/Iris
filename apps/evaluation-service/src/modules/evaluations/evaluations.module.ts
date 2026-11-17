@@ -7,6 +7,7 @@ import { EvaluateProjectUseCase } from './application/use-cases/evaluate-project
 import { FindByIdUseCase } from './application/use-cases/find-evaluation.use-case';
 import { FindEvaluationsByEvaluatorUseCase } from './application/use-cases/find-evaluations-by-evaluator.use-case';
 import { GetProjectStatsUseCase } from './application/use-cases/get-project-stats.use-case';
+import { GetProjectResultUseCase } from './application/use-cases/get-project-result.use-case';
 import { CheckEvaluationStatusUseCase } from './application/use-cases/check-evaluation-status.use-case';
 import { GetTopProjectsByCourseUseCase } from './application/use-cases/get-top-projects-by-course.use-case';
 import { EvaluationRepositoryPort } from './domain/repositories/evaluation.repository.port';
@@ -42,6 +43,7 @@ import { GetDashboardStatsUC } from './application/use-cases/get-dashboard-stats
         FindByIdUseCase,
         FindEvaluationsByEvaluatorUseCase,
         GetProjectStatsUseCase,
+        GetProjectResultUseCase,
         CheckEvaluationStatusUseCase,
         GetTopProjectsByCourseUseCase,
         GetDashboardStatsUC,

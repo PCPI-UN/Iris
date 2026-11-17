@@ -33,7 +33,7 @@ El backend de IRIS está diseñado bajo una arquitectura orientada a microservic
 | **Invitation Service** | Microservicio | `50054` | gRPC | `invitation_service` |
 | **Project Service** | Microservicio | `50055` | gRPC | `project_service` |
 | **Notification Service** | Microservicio | `50056` | gRPC | No tiene (Azure ACS) |
-| **PostgreSQL** | Base de Datos | `5432` | TCP / PostgreSQL | Contiene las 5 bases de datos |
+| **PostgreSQL** | Base de Datos | `5432` | TCP / PostgreSQL | Contiene las 6 bases de datos |
 | **Redis** | Caché / Sesiones | `6379` | TCP / Redis | En memoria con persistencia |
 
 ### 📚 Documentación de API y Contratos
@@ -81,6 +81,7 @@ El contenedor oficial corre en el puerto `5432` y ejecuta el script de inicializ
 - `EVENT_DB_PASSWORD`: Contraseña del usuario `event_user` para `event_service`.
 - `INVITATION_DB_PASSWORD`: Contraseña del usuario `invitation_user` para `invitation_service`.
 - `PROJECT_DB_PASSWORD`: Contraseña del usuario `project_user` para `project_service`.
+- `NOTIFICATION_DB_PASSWORD`: Contraseña del usuario `notification_user` para `notification_service`.
 
 > [!NOTE]
 > En desarrollo, la cadena de conexión local sigue el formato:
@@ -280,18 +281,19 @@ Si necesita trabajar activamente en un microservicio en particular y prefiere ej
 
 ### 🔌 Aprovisionamiento Inicial
 
-El backend utiliza una sola instancia de PostgreSQL 16 en el puerto `5432`. El script `docker/postgres-init.sh` crea cinco bases de datos independientes con permisos restringidos por usuario:
+El backend utiliza una sola instancia de PostgreSQL 16 en el puerto `5432`. El script `docker/postgres-init.sh` crea seis bases de datos independientes con permisos restringidos por usuario:
 - `auth_service` (propietario: `auth_user`)
 - `evaluation_service` (propietario: `evaluation_user`)
 - `event_service` (propietario: `event_user`)
 - `invitation_service` (propietario: `invitation_user`)
 - `project_service` (propietario: `project_user`)
+- `notification_service` (propietario: `notification_user`)
 
 ### 🔄 Estrategia de Migraciones con Prisma
 
 Cada microservicio gestiona su propio esquema de base de datos bajo `apps/<servicio>/prisma/schema.prisma`.
 
-Todos los microservicios con base de datos (`auth-service`, `evaluation-service`, `event-service`, `invitation-service`, `project-service`) utilizan migraciones formales versionadas gestionadas con Prisma:
+Todos los microservicios con base de datos (`auth-service`, `evaluation-service`, `event-service`, `invitation-service`, `project-service`, `notification-service`) utilizan migraciones formales versionadas gestionadas con Prisma:
 
 - **Aplicar migraciones pendientes:**
   ```bash

@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { NotificationServiceModule } from './notification-service.module';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { join } from 'path';
+import { buildValidationPipe } from './interface/grpc/validation-pipe';
 
 async function bootstrap() {
   const app = await NestFactory.createMicroservice<MicroserviceOptions>(
@@ -20,6 +21,8 @@ async function bootstrap() {
       },
     },
   );
+
+  app.useGlobalPipes(buildValidationPipe());
 
   await app.listen();
 }

@@ -13,9 +13,15 @@ export class NotificationServiceAdapter implements NotificationServicePort {
     to: string;
     template: EmailTemplate;
     params: Record<string, any>;
+    idempotencyKey?: string;
   }): Promise<{ success: boolean }> {
     try {
-      const res = await this.grpc.sendEmail(params.to, params.template, params.params);
+      const res = await this.grpc.sendEmail(
+        params.to,
+        params.template,
+        params.params,
+        params.idempotencyKey,
+      );
       return { success: res.success };
     } catch (err) {
       // Don't break the invitation flow if email fails
@@ -30,15 +36,36 @@ export class NotificationServiceAdapter implements NotificationServicePort {
     lastName?: string;
     invitationLink: string;
     roles: string;
+    idempotencyKey?: string;
   }): Promise<{ success: boolean }> {
     return this.sendEmail({
       to: params.to,
+      idempotencyKey: params.idempotencyKey,
       template: EmailTemplate.PLATFORM_INVITATION,
       params: {
         firstName: params.firstName,
         lastName: params.lastName || '',
         invitationLink: params.invitationLink,
         roles: params.roles,
+      },
+    });
+  }
+
+  async sendProjectTutorInvitationEmail(params: {
+    to: string;
+    firstName: string;
+    lastName?: string;
+    invitationLink: string;
+    projectName: string;
+  }): Promise<{ success: boolean }> {
+    return this.sendEmail({
+      to: params.to,
+      template: EmailTemplate.PROJECT_TUTOR_INVITATION,
+      params: {
+        firstName: params.firstName,
+        lastName: params.lastName || '',
+        invitationLink: params.invitationLink,
+        projectName: params.projectName,
       },
     });
   }
@@ -51,9 +78,11 @@ export class NotificationServiceAdapter implements NotificationServicePort {
     eventName: string;
     eventDescription: string;
     roles: string;
+    idempotencyKey?: string;
   }): Promise<{ success: boolean }> {
     return this.sendEmail({
       to: params.to,
+      idempotencyKey: params.idempotencyKey,
       template: EmailTemplate.JUROR_INVITATION,
       params: {
         firstName: params.firstName,
@@ -74,6 +103,7 @@ export class NotificationServiceAdapter implements NotificationServicePort {
     invitationLink: string;
     projectName: string;
     eventName: string;
+    idempotencyKey?: string;
   }): Promise<{ success: boolean }> {
     const template = params.eventType === 'Exposition'
       ? EmailTemplate.PROJECT_SUBMITTED
@@ -81,6 +111,7 @@ export class NotificationServiceAdapter implements NotificationServicePort {
 
     return this.sendEmail({
       to: params.to,
+      idempotencyKey: params.idempotencyKey,
       template,
       params: {
         firstName: params.firstName,

@@ -111,8 +111,8 @@ export class JurorImportsService implements OnModuleInit {
       projectCode: project.projectCode ?? '',
       name: project.name ?? '',
       members: project.members ?? [],
-      // IRIS does not store the tutor yet: the column goes out empty
-      tutors: [],
+      tutors: project.tutors ?? [],
+      tutorEmails: project.tutorEmails ?? [],
     }));
     const file = await buildJurorImportTemplate({
       eventName: data.eventName ?? '',

@@ -34,6 +34,7 @@ export class EventMapper {
         ? e.inscriptionDeadline.toISOString()
         : '',
       evaluationsOpened: e.evaluationsOpened ?? false,
+      resultsPublished: e.resultsPublished ?? false,
       startDate: e.startDate ? e.startDate.toISOString() : '',
       endDate: e.endDate ? e.endDate.toISOString() : '',
       active: e.active ?? true,

@@ -5,6 +5,8 @@ import {
   AUTH_SERVICE_NAME,
   AuthServiceClient,
   User,
+  FindUsersByRolesRequest,
+  UserSummary,
 } from '@app/common/generated/auth';
 
 @Injectable()
@@ -23,5 +25,15 @@ export class AuthGrpcClient implements OnModuleInit {
 
   async getUser(id: number): Promise<User> {
     return firstValueFrom(this.svc.getUser({ id }));
+  }
+
+  async findUsersByRoles(request: FindUsersByRolesRequest): Promise<UserSummary[]> {
+    const res = await firstValueFrom(this.svc.findUsersByRoles(request));
+    // proto3 leaves an empty repeated field out of the message
+    return res.users ?? [];
+  }
+
+  async assignPlatformRoles(userId: number, roleIds: number[]): Promise<void> {
+    await firstValueFrom(this.svc.assignPlatformRoles({ userId, roleIds }));
   }
 }

@@ -7,6 +7,7 @@ import { InvitationsModule } from './modules/invitations/invitations.module';
 import { CriterionsModule } from './modules/criterions/criterions.module';
 import { TieBreaksModule } from './modules/tiebreaks/tiebreaks.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { ReportsModule } from './modules/reports/reports.module';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -31,6 +32,7 @@ import { HealthController } from './health.controller';
     CriterionsModule,
     TieBreaksModule,
     DashboardModule,
+    ReportsModule,
   ],
   controllers: [CacheManagementController, HealthController],
   providers: [

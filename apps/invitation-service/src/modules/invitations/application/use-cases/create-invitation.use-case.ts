@@ -12,7 +12,10 @@ import {
 import { InvitationRepositoryPort } from '../../domain/repositories/invitation.repository.port';
 import { InvitationRole } from '../../domain/entities/invitation-role.entity';
 import { InvitationRoleRepositoryPort } from '../../domain/repositories/invitation-role.repository.port';
-import { NotificationServicePort } from '../../infrastructure/ports/notification-service.port';
+import {
+  NotificationServicePort,
+  invitationEmailKey,
+} from '../../infrastructure/ports/notification-service.port';
 import { ProjectServicePort } from '../../infrastructure/ports/project-service.port';
 import { AuthServicePort } from '../../infrastructure/ports/auth-service.port';
 import { EventServicePort } from '../../infrastructure/ports/event-service.port';
@@ -50,7 +53,8 @@ export class CreateInvitationUseCase {
     if (acceptedInvitation) {
       const targetName = rest.targetType === InvitationTargetType.EVENT
         ? 'event'
-        : rest.targetType === InvitationTargetType.PROJECT
+        : rest.targetType === InvitationTargetType.PROJECT ||
+            rest.targetType === InvitationTargetType.PROJECT_TUTOR
           ? 'project'
           : 'platform';
 
@@ -118,6 +122,23 @@ export class CreateInvitationUseCase {
           }
         } catch (error) {
           // Re-throw as RpcException with proper code
+          throw new RpcException({
+            code: error.code || status.INTERNAL,
+            message: error.details || error.message || `Project with ID ${rest.targetId} not found`,
+          });
+        }
+        break;
+
+      case InvitationTargetType.PROJECT_TUTOR:
+        try {
+          projectData = await this.projectService.getProject(rest.targetId);
+          if (!projectData) {
+            throw new RpcException({
+              code: status.NOT_FOUND,
+              message: `Project with ID ${rest.targetId} not found`,
+            });
+          }
+        } catch (error) {
           throw new RpcException({
             code: error.code || status.INTERNAL,
             message: error.details || error.message || `Project with ID ${rest.targetId} not found`,
@@ -214,6 +235,7 @@ export class CreateInvitationUseCase {
       invitationLink = `${frontendUrl}/app/invitations`;
 
     await this.sendInvitationEmail({
+      idempotencyKey: invitationEmailKey(savedInvitation.id, expiresAt),
       targetType: rest.targetType,
       eventType,
       to: email,
@@ -232,6 +254,7 @@ export class CreateInvitationUseCase {
    * Sends invitation email based on target type using already-fetched data
    */
   private async sendInvitationEmail(params: {
+    idempotencyKey: string;
     targetType: InvitationTargetType;
     eventType: string;
     to: string;
@@ -252,6 +275,7 @@ export class CreateInvitationUseCase {
         }
 
         await this.notificationService.sendPlatformInvitationEmail({
+          idempotencyKey: params.idempotencyKey,
           to: params.to,
           firstName: params.firstName,
           lastName: params.lastName,
@@ -261,10 +285,22 @@ export class CreateInvitationUseCase {
         break;
       }
 
+      case InvitationTargetType.PROJECT_TUTOR: {
+        await this.notificationService.sendProjectTutorInvitationEmail({
+          to: params.to,
+          firstName: params.firstName,
+          lastName: params.lastName,
+          invitationLink: params.invitationLink,
+          projectName: params.projectData.name,
+        });
+        break;
+      }
+
       case InvitationTargetType.EVENT: {
         // NOTE: EVENT invitations use JUROR_INVITATION template
         // This is because currently just jurors receive event invitations
         await this.notificationService.sendJurorInvitationEmail({
+          idempotencyKey: params.idempotencyKey,
           to: params.to,
           firstName: params.firstName,
           lastName: params.lastName,
@@ -278,6 +314,7 @@ export class CreateInvitationUseCase {
 
       case InvitationTargetType.PROJECT: {
         await this.notificationService.sendProjectSubmittedInvitationEmail({
+          idempotencyKey: params.idempotencyKey,
           to: params.to,
           eventType: params.eventType,
           firstName: params.firstName,

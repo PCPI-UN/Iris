@@ -16,6 +16,7 @@ import {
   toProtoPendingParticipant,
   protoToTypedDocument,
   toProtoProjectComplete,
+  toProtoTutor,
   protoToDocumentStatus,
   toPreviewJurorImportResponse,
   toGetJurorImportTemplateResponse,
@@ -32,6 +33,9 @@ import { GetDashboardStatsUC } from '../../application/use-cases/get-dashboard-s
 import { AddParticipantUC } from '../../application/use-cases/add-participant.uc';
 import { ListParticipantsUC } from '../../application/use-cases/list-participants.uc';
 import { AddPendingParticipantUC } from '../../application/use-cases/add-pending-participant.us';
+import { AddProjectTutorUC } from '../../application/use-cases/add-project-tutor.uc';
+import { SetProjectTutorsUC } from '../../application/use-cases/set-project-tutors.uc';
+import { ListProjectTutorsUC } from '../../application/use-cases/list-project-tutors.uc';
 import { ListPendingParticipantsUC } from '../../application/use-cases/list-pending-participants.uc';
 import { ListProjectsAssignedToJurorUC } from '../../application/use-cases/list-projects-assigned-to-juror.uc';
 import { NotificateStudentUC } from '../../application/use-cases/notificate-student.uc';
@@ -94,6 +98,9 @@ export class ProjectsController {
     private readonly listParticipantsUC: ListParticipantsUC,
     private readonly addPendingParticipantUC: AddPendingParticipantUC,
     private readonly listPendingParticipantsUC: ListPendingParticipantsUC,
+    private readonly addProjectTutorUC: AddProjectTutorUC,
+    private readonly setProjectTutorsUC: SetProjectTutorsUC,
+    private readonly listProjectTutorsUC: ListProjectTutorsUC,
     private readonly listAssignedToJurorUC: ListProjectsAssignedToJurorUC,
     private readonly notificateStudentUC: NotificateStudentUC,
     private readonly listProjectsForReviewUC: ListProjectsForReviewUC,
@@ -111,6 +118,10 @@ export class ProjectsController {
   onModuleInit() {
     this.invitationService =
       this.client.getService<InvitationGrpcService>('InvitationService');
+  }
+
+  private async tutorsOf(projectId: number) {
+    return (await this.listProjectTutorsUC.execute([projectId])).get(projectId) ?? [];
   }
 
   @GrpcMethod('ProjectsService', 'CreateProject')
@@ -143,8 +154,11 @@ export class ProjectsController {
       req.state = protoToState(parseInt(req.state));
     }
     const res = await this.listByEvent.execute(req);
+    const tutorsByProject = await this.listProjectTutorsUC.execute(res.items.map((p) => p.id));
     return {
-      items: res.items.map(toProtoProjectComplete),
+      items: res.items.map((p) =>
+        toProtoProjectComplete({ ...p, tutors: tutorsByProject.get(p.id) ?? [] }),
+      ),
       total: res.total,
       currentPage: res.currentPage,
       itemsOnCurrentPage: res.itemsOnCurrentPage,
@@ -196,6 +210,8 @@ export class ProjectsController {
       actingUserId: req.actingUserId,
       eventType: req.eventType,
     });
+    // Approving an approved project changes nothing, so approving again retries a failed activation
+    await this.setProjectTutorsUC.activate(req.id, req.eventType);
     return { project: toProtoProject(updated) };
   }
 
@@ -296,6 +312,29 @@ export class ProjectsController {
     return { participant };
   }
 
+  @GrpcMethod('ProjectsService', 'AddProjectTutor')
+  async addProjectTutorRpc(req: { projectId: number; userId: number; email: string }) {
+    return this.addProjectTutorUC.execute({
+      projectId: req.projectId,
+      userId: req.userId,
+      email: req.email,
+    });
+  }
+
+  @GrpcMethod('ProjectsService', 'SetProjectTutors')
+  async setProjectTutorsRpc(req: {
+    projectId: number;
+    tutorUserIds?: number[];
+    pendingTutors?: { firstName: string; lastName?: string; email: string }[];
+  }) {
+    const tutors = await this.setProjectTutorsUC.execute({
+      projectId: req.projectId,
+      tutorUserIds: req.tutorUserIds ?? [],
+      pendingTutors: req.pendingTutors ?? [],
+    });
+    return { tutors: tutors.map(toProtoTutor) };
+  }
+
   @GrpcMethod('ProjectsService', 'ListParticipants')
   async listParticipantsRpc(req: { projectId: number }) {
     const participants = await this.listParticipantsUC.execute({
@@ -329,6 +368,12 @@ export class ProjectsController {
 
   @GrpcMethod('ProjectsService', 'CreateProjectWithPendingParticipants')
   async createProjectWithPendingParticipantsRpc(req: any) {
+    // Validated before anything is created, so a bad tutor selection leaves no project behind
+    const tutors = await this.setProjectTutorsUC.resolve({
+      tutorUserIds: req.tutorUserIds ?? [],
+      pendingTutors: req.pendingTutors ?? [],
+    });
+
     if (req.participants && req.participants.length > 0) {
       const emails = req.participants.map((p: any) => p.email);
       const { hasConflict, conflictEmails } =
@@ -355,6 +400,14 @@ export class ProjectsController {
         state: 'UNDER_REVIEW',
       });
       console.log('Project created with ID:', project.id);
+      try {
+        // The submission is public: tutors get their role and invitation when the project is approved
+        await this.setProjectTutorsUC.store(project.id, tutors);
+      } catch (error) {
+        console.error('❌ Error saving project tutors, deleting project:', error);
+        await this.deleteProjectUC.execute({ id: project.id });
+        throw error;
+      }
       const pendingParticipants = [];
 
       if (req.participants && req.participants.length > 0) {
@@ -419,6 +472,7 @@ export class ProjectsController {
         project: toProtoProject(project),
         participants: pendingParticipants,
         documents: projectDocuments,
+        tutors: await this.tutorsOf(project.id),
       };
     } catch (err) {
       console.error(
@@ -465,10 +519,11 @@ export class ProjectsController {
   async getProjectCompleteRpc(req: { id: number }) {
     const project = await this.getProject.execute({ id: req.id });
 
-    const [participants, documents, pending] = await Promise.all([
+    const [participants, documents, pending, tutors] = await Promise.all([
       this.listParticipantsUC.execute({ projectId: project.id }),
       this.listDocs.execute({ projectId: project.id }),
       this.listPendingParticipantsUC.execute({ projectId: project.id }),
+      this.tutorsOf(project.id),
     ]);
 
     const projectComplete = {
@@ -476,6 +531,7 @@ export class ProjectsController {
       participants,
       documents,
       pendingParticipants: pending,
+      tutors,
     };
 
     return {
@@ -500,7 +556,12 @@ export class ProjectsController {
       eventId: req.eventId,
       userId: req.userId,
     });
-    return { project: toProtoProjectComplete(project) };
+    return {
+      project: toProtoProjectComplete({
+        ...project,
+        tutors: await this.tutorsOf(project.id),
+      }),
+    };
   }
 
   @GrpcMethod('ProjectsService', 'PreviewJurorImport')

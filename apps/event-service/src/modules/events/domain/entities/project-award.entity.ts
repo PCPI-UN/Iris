@@ -1,7 +1,7 @@
 /**
  * An award won by a project, with the award, category and event it belongs to.
  * Co-winners of the same award are one ProjectAward each. `resultsPublished` tells whether
- * the event ranking is published, so callers can hide awards until then.
+ * the admin published the event results, so callers can hide awards until then.
  */
 export class ProjectAward {
   constructor(

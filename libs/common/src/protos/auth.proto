@@ -63,6 +63,8 @@ service AuthService {
   rpc RemovePlatformRole(RemovePlatformRoleRequest) returns (RemovePlatformRoleResponse) {}
   // Replaces the platform roles of a user, applying the administrator rules
   rpc SetUserPlatformRoles(SetUserPlatformRolesRequest) returns (SetUserPlatformRolesResponse) {}
+  // Finds active users holding at least one of the given platform roles
+  rpc FindUsersByRoles(FindUsersByRolesRequest) returns (FindUsersByRolesResponse) {}
 
   // ---- PERMISSIONS MODULE ----
   // Gets a user's platform roles and permissions
@@ -335,6 +337,29 @@ message AssignPlatformRolesRequest {
 // The response message for assigning platform roles.
 message AssignPlatformRolesResponse {
   bool success = 1;
+}
+
+// Finds active users that hold at least one of the given active platform roles.
+message FindUsersByRolesRequest {
+  repeated int32 roleIds = 1;
+  // Case-insensitive match on first or last name
+  optional string search = 2;
+  // Restricts the result to these users (to validate concrete ids)
+  repeated int32 userIds = 3;
+  // Defaults to 10, capped at 10
+  optional int32 limit = 4;
+}
+
+message UserSummary {
+  int32 id = 1;
+  string firstName = 2;
+  optional string lastName = 3;
+  // Active roles of the user among the requested ones
+  repeated int32 roleIds = 4;
+}
+
+message FindUsersByRolesResponse {
+  repeated UserSummary users = 1;
 }
 
 // The request message for retrieving roles by IDs.

@@ -32,7 +32,7 @@ export class StudentDashboardController {
     summary: 'Get my student dashboard',
     description:
       'Profile, accumulated KPIs (fairs, approved projects, awards), the project of the event that has not ended and the history of approved participations of the authenticated student. ' +
-      'Awards only count once the event ranking is published. Scores and certificates are not included yet.',
+      'Awards and scores are only sent once the admin publishes the event results. Certificates are not included yet.',
   })
   @ApiResponse({ status: 200, type: StudentDashboardResponse })
   @ApiResponse({

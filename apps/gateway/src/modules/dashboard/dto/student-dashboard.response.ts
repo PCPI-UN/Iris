@@ -121,7 +121,8 @@ export class StudentDashboardCurrentProject {
 export class StudentDashboardEvaluation {
   @ApiProperty({
     example: false,
-    description: 'Always false for now: scores are not exposed yet',
+    description:
+      'true when the admin published the results of the current event',
   })
   resultsPublished: boolean;
 
@@ -157,7 +158,8 @@ export class StudentDashboardTrajectoryItem {
     example: null,
     nullable: true,
     type: Number,
-    description: 'Always null for now: scores are not exposed yet',
+    description:
+      'Average of the jurors grades; null until the event results are published or when it was not evaluated',
   })
   finalScore: number | null;
 
