@@ -41,8 +41,8 @@ Every provider implements `EmailProvider` (`application/ports/email-provider.por
 | `acs` | `ACS_CONNECTION_STRING`, `ACS_SENDER_ADDRESS` | Sends with the delivery's operation id and returns once Azure accepts the email (`202`); the final status is read later. Azure rejects a repeated operation id, so a repeated attempt never sends a second email. Sends an HTML and a plain-text body. |
 | `emailjs` | `EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`, `EMAILJS_PUBLIC_KEY`, `EMAILJS_PRIVATE_KEY` | At most 1 request per second, as primary or fallback. A `429` is retried with a growing wait (1 s, 2 s, 4 s) before it counts as a failure. |
 
-- A listed provider whose variables are missing is skipped with a warning, so the service runs with only one provider. The startup log states the primary and the fallback, or that there is no fallback.
-- The service does not start if `EMAIL_PROVIDERS` names an unknown provider or if none of the listed providers is configured.
+- A listed provider whose variables are missing, or that cannot be built (a malformed ACS connection string, for example), is skipped and logged, so the service runs with the others. The startup log states the primary and the fallback, or that there is no fallback.
+- The service does not start if `EMAIL_PROVIDERS` names an unknown provider or if no listed provider is left after skipping.
 - Adding a provider means a new adapter and one entry in the registry of `providers/email-providers.ts`.
 
 ## Send log, retries and idempotency

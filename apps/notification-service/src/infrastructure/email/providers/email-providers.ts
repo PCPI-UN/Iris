@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 import { EmailProvider } from '../../../application/ports/email-provider.port';
 import { AcsAdapter } from './acs.adapter';
 import { EmailJsAdapter } from './emailjs.adapter';
+import { describeError } from '../describe-error';
 
 /** Ordered list: the first configured provider is the primary, the next one the fallback. */
 export const EMAIL_PROVIDERS_ENV = 'EMAIL_PROVIDERS';
@@ -46,13 +47,14 @@ const REGISTRY: Record<
 
 /**
  * Builds the provider chain from EMAIL_PROVIDERS (default "acs,emailjs").
- * A listed provider without its variables is skipped with a warning, so the
- * service runs with only one configured. It fails to start if the list names
- * an unknown provider or none of the listed providers is configured.
+ * A listed provider without its variables, or that cannot be built (a
+ * malformed key, an SDK without the expected API), is skipped and logged, so
+ * the service runs with the others. It fails to start if the list names an
+ * unknown provider or no listed provider is left.
  */
 export function resolveEmailProviders(
   env: Env,
-  logger: Pick<Logger, 'log' | 'warn'> = new Logger('EmailProviders'),
+  logger: Pick<Logger, 'log' | 'warn' | 'error'> = new Logger('EmailProviders'),
 ): EmailProvider[] {
   // docker-compose passes an unset variable as "", which also means the default
   const names = parseList(
@@ -69,7 +71,15 @@ export function resolveEmailProviders(
 
   const providers: EmailProvider[] = [];
   for (const name of names) {
-    const built = REGISTRY[name](env);
+    let built: EmailProvider | { missing: string[] };
+    try {
+      built = REGISTRY[name](env);
+    } catch (error) {
+      logger.error(
+        `Email provider "${name}" skipped: it could not be built (${describeError(error)})`,
+      );
+      continue;
+    }
     if ('missing' in built) {
       logger.warn(
         `Email provider "${name}" skipped: missing ${built.missing.join(', ')}`,

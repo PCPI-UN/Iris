@@ -127,7 +127,7 @@ export class AcsAdapter implements EmailProvider {
  * SDK 1.1.0 has no public method to read the status of an operation by id;
  * the generated client it wraps does. That client is private, so a new SDK
  * version may drop it: a unit test checks it with the installed version, and
- * the service fails to start without it.
+ * ACS is skipped without it.
  */
 export function sdkClient(connectionString: string): AcsClient {
   const client = new EmailClient(connectionString);
