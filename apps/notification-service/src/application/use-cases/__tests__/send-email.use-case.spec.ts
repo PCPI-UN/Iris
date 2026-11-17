@@ -54,6 +54,38 @@ describe('SendEmailUseCase', () => {
     });
   });
 
+  describe('drain', () => {
+    it('waits for the attempts in the background', async () => {
+      const { useCase, execute } = build(true);
+      let finish!: () => void;
+      execute.mockReturnValue(new Promise<void>((r) => (finish = r)));
+      await useCase.execute(request);
+
+      let drained = false;
+      const draining = useCase.drain(1_000).then(() => (drained = true));
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(drained).toBe(false);
+
+      finish();
+      await draining;
+      expect(drained).toBe(true);
+    });
+
+    it('gives up after the timeout and returns', async () => {
+      const { useCase, execute } = build(true);
+      execute.mockReturnValue(new Promise(() => undefined));
+      await useCase.execute(request);
+
+      await expect(useCase.drain(20)).resolves.toBeUndefined();
+    });
+
+    it('returns at once when nothing is running', async () => {
+      const { useCase } = build(true);
+
+      await expect(useCase.drain(1_000)).resolves.toBeUndefined();
+    });
+  });
+
   it('logs an error of the attempt and does not fail', async () => {
     const { useCase, execute } = build(true);
     execute.mockRejectedValue(new Error('db down'));

@@ -21,6 +21,8 @@ import {
 @Injectable()
 export class SendEmailUseCase {
   private readonly logger = new Logger(SendEmailUseCase.name);
+  /** First attempts running in the background */
+  private readonly inFlight = new Set<Promise<void>>();
 
   constructor(
     private readonly repository: EmailDeliveryRepositoryPort,
@@ -51,12 +53,38 @@ export class SendEmailUseCase {
       return delivery;
     }
 
-    void this.attempt.execute(delivery).catch((error: unknown) => {
-      this.logger.error(
-        `First attempt of delivery ${delivery.id} failed; the retry worker takes it when its lease expires`,
-        error instanceof Error ? error.stack : String(error),
-      );
-    });
+    const running = this.attempt
+      .execute(delivery)
+      .then(() => undefined)
+      .catch((error: unknown) => {
+        this.logger.error(
+          `First attempt of delivery ${delivery.id} failed; the retry worker takes it when its lease expires`,
+          error instanceof Error ? error.stack : String(error),
+        );
+      })
+      .finally(() => this.inFlight.delete(running));
+    this.inFlight.add(running);
     return delivery;
+  }
+
+  /**
+   * Waits for the attempts running in the background, up to `timeoutMs`, so a
+   * shutdown does not cut them. Whatever is left keeps its lease and the retry
+   * worker takes it later.
+   */
+  async drain(timeoutMs: number): Promise<void> {
+    if (!this.inFlight.size) return;
+    this.logger.log(`Waiting for ${this.inFlight.size} email attempts`);
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, timeoutMs);
+    });
+    await Promise.race([Promise.allSettled([...this.inFlight]), timeout]);
+    clearTimeout(timer);
+    if (this.inFlight.size) {
+      this.logger.warn(
+        `${this.inFlight.size} email attempts left for the retry worker`,
+      );
+    }
   }
 }
