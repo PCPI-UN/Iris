@@ -387,6 +387,7 @@ services:
       - EMAILJS_PRIVATE_KEY=${EMAILJS_PRIVATE_KEY}
       - ACS_CONNECTION_STRING=${ACS_CONNECTION_STRING}
       - ACS_SENDER_ADDRESS=${ACS_SENDER_ADDRESS}
+      - ACS_MAX_RETRIES=${ACS_MAX_RETRIES:-0}
     depends_on:
       postgres:
         condition: service_healthy

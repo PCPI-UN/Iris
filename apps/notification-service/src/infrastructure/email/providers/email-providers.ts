@@ -26,6 +26,7 @@ const REGISTRY: Record<
     return new AcsAdapter({
       connectionString: vars.ACS_CONNECTION_STRING,
       senderAddress: vars.ACS_SENDER_ADDRESS,
+      maxRetries: parseMaxRetries(env('ACS_MAX_RETRIES')),
     });
   },
   emailjs: (env) => {
@@ -103,6 +104,17 @@ export function resolveEmailProviders(
   );
 
   return providers;
+}
+
+/** ACS_MAX_RETRIES: retries of the SDK per request, 0 (none) when unset. */
+function parseMaxRetries(value: string | undefined): number {
+  const text = value?.trim();
+  if (!text) return 0;
+  const retries = Number(text);
+  if (!Number.isInteger(retries) || retries < 0) {
+    throw new Error(`ACS_MAX_RETRIES must be an integer >= 0, got "${text}"`);
+  }
+  return retries;
 }
 
 function parseList(value: string): string[] {

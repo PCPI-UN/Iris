@@ -62,6 +62,13 @@ Every provider implements `EmailProvider` (`application/ports/email-provider.por
 | Rejected: an error before the provider took the email (`4xx`, connection refused) | The next provider in the chain is tried; if every one rejects, `PENDING` with the next retry, or `FAILED` |
 | No answer: ACS timeout, `5xx` or connection lost after the request left | `PENDING` with the next retry and the same `provider_ref`; the fallback is not used in this attempt, unless it is the last one |
 
+### ACS limits and 429
+
+- Azure limits ACS: with its own domain, 30 sends per minute and 100 per hour, and 60 status reads (`Get Email Status`) per minute and 200 per hour; with an Azure-managed domain (`*.azurecomm.net`), 5 sends per minute, 10 per hour, and 10 status reads per minute and 20 per hour, with no increase. A failure rate above 1 % can make Azure lower or suspend the quota.
+- `ACS_MAX_RETRIES` (default `0`) sets the SDK's own retries per request. The SDK retries `429` and `503` waiting the `Retry-After` of the response, and `5xx`, `408` and network errors with backoff. Each retry counts against the quota, and a long `Retry-After` exceeds the 10 s timeout of a call and leaves the email "in doubt". With `0`, a `429` is rejected at once.
+- A `429` on send is a rejection: the same attempt goes on with the next provider. The adapter also pauses ACS for the `Retry-After` of the response (60 s without it, 15 minutes at most): during the pause `send` rejects without calling Azure. The pause is in memory and per process.
+- Status reads have no pause. Each accepted email costs one read at the first confirmation and one more per rescheduling while the status is `Running`; a read that fails, a `429` included, is rescheduled without sending again.
+
 ### No duplicates with ACS
 
 - Before the first ACS send the row saves a new `provider_ref` (a UUID), sent to Azure as the `Operation-Id` header. If it cannot be saved, nothing is sent and the worker takes the row when its lease expires.

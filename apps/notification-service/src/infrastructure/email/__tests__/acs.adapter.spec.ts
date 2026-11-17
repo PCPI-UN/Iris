@@ -158,6 +158,88 @@ describe('AcsAdapter', () => {
     });
   });
 
+  describe('429', () => {
+    const throttled = (retryAfter?: string) =>
+      Object.assign(restError({ statusCode: 429 }), {
+        response: {
+          headers: {
+            get: (name: string) =>
+              name === 'retry-after' ? retryAfter : undefined,
+          },
+        },
+      });
+
+    const buildAt = (beginSend: jest.Mock, clock: { t: number }) =>
+      new AcsAdapter(
+        {
+          connectionString: 'unused',
+          senderAddress: 'noreply@iris.test',
+          now: () => clock.t,
+        },
+        { beginSend, getSendResult: jest.fn() },
+      );
+
+    it('is rejected, not in doubt, so the dispatcher uses the fallback', async () => {
+      const error = throttled('30');
+      const adapter = build({ beginSend: jest.fn().mockRejectedValue(error) });
+
+      const thrown = await failure(adapter.send(email, 'ref-1'));
+
+      expect(thrown).toBe(error);
+      expect(thrown).not.toBeInstanceOf(EmailInDoubtError);
+    });
+
+    it('pauses for Retry-After without calling Azure, then calls again', async () => {
+      const clock = { t: 1_000_000 };
+      const beginSend = jest
+        .fn()
+        .mockRejectedValueOnce(throttled('30'))
+        .mockImplementation((_m: unknown, o: { onResponse: OnResponse }) => {
+          o.onResponse({ request: { method: 'POST' }, status: 202 });
+          return Promise.resolve({});
+        });
+      const adapter = buildAt(beginSend, clock);
+
+      await failure(adapter.send(email, 'ref-1'));
+      clock.t += 29_000;
+      const paused = await failure(adapter.send(email, 'ref-2'));
+      expect(paused.message).toContain('ACS paused');
+      expect(paused).not.toBeInstanceOf(EmailInDoubtError);
+      expect(beginSend).toHaveBeenCalledTimes(1);
+
+      clock.t += 1_001;
+      await expect(adapter.send(email, 'ref-2')).resolves.toBe('accepted');
+      expect(beginSend).toHaveBeenCalledTimes(2);
+    });
+
+    it('pauses 60 s when Retry-After is missing', async () => {
+      const clock = { t: 0 };
+      const beginSend = jest.fn().mockRejectedValue(throttled());
+      const adapter = buildAt(beginSend, clock);
+
+      await failure(adapter.send(email, 'ref-1'));
+      clock.t = 59_000;
+      await failure(adapter.send(email, 'ref-2'));
+      expect(beginSend).toHaveBeenCalledTimes(1);
+
+      clock.t = 60_001;
+      await failure(adapter.send(email, 'ref-2'));
+      expect(beginSend).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not pause on other 4xx errors', async () => {
+      const beginSend = jest
+        .fn()
+        .mockRejectedValue(restError({ statusCode: 401 }));
+      const adapter = build({ beginSend });
+
+      await failure(adapter.send(email, 'ref-1'));
+      await failure(adapter.send(email, 'ref-2'));
+
+      expect(beginSend).toHaveBeenCalledTimes(2);
+    });
+  });
+
   describe('confirm', () => {
     it.each([
       ['Succeeded', { status: 'sent' }],

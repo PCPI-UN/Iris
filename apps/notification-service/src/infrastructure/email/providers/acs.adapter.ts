@@ -16,6 +16,10 @@ export interface AcsConfig {
   senderAddress: string;
   /** Limit for one call to Azure, the SDK's own retries included */
   timeoutMs?: number;
+  /** Retries of the SDK on 429, 5xx and network errors; 0 when absent */
+  maxRetries?: number;
+  /** Clock, for tests */
+  now?: () => number;
 }
 
 interface RequestOptions {
@@ -31,6 +35,10 @@ export interface AcsClient {
 }
 
 const DEFAULT_TIMEOUT_MS = 10_000;
+/** Pause after a 429 without a usable `Retry-After` */
+const DEFAULT_PAUSE_MS = 60_000;
+/** Longest pause honored, so a bad header cannot silence ACS for long */
+const MAX_PAUSE_MS = 15 * 60_000;
 const OPERATION_ID_TAKEN = 'OperationIdAlreadyExists';
 /** The request never reached Azure, so it cannot have taken the email */
 const NOT_SENT_CODES = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN']);
@@ -40,17 +48,26 @@ const NOT_SENT_CODES = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN']);
  * id (`Operation-Id`); Azure rejects a repeated id with
  * `OperationIdAlreadyExists` and does not send the email again. The adapter
  * returns once Azure accepted the email (202) and does not wait for the
- * delivery: `confirm` reads the final status later.
+ * delivery: `confirm` reads the final status later. After a 429 ACS is
+ * paused (`Retry-After`, 60 s without it): `send` rejects without calling
+ * Azure, so the dispatcher goes straight to the next provider.
  */
 export class AcsAdapter implements EmailProvider {
   readonly name = 'acs';
   private readonly timeoutMs: number;
+  private readonly now: () => number;
+  /** In memory, per process */
+  private pausedUntil = 0;
 
   constructor(
     private readonly config: AcsConfig,
-    private readonly client: AcsClient = sdkClient(config.connectionString),
+    private readonly client: AcsClient = sdkClient(
+      config.connectionString,
+      config.maxRetries ?? 0,
+    ),
   ) {
     this.timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.now = config.now ?? Date.now;
   }
 
   async send(
@@ -58,6 +75,13 @@ export class AcsAdapter implements EmailProvider {
     ref?: string,
   ): Promise<SendOutcome> {
     if (!ref) throw new Error('ACS needs the operation id of the delivery');
+
+    const remaining = this.pausedUntil - this.now();
+    if (remaining > 0) {
+      throw new Error(
+        `ACS paused for ${Math.ceil(remaining / 1000)} s after a 429`,
+      );
+    }
 
     const message: EmailMessage = {
       senderAddress: this.config.senderAddress,
@@ -82,6 +106,7 @@ export class AcsAdapter implements EmailProvider {
     } catch (error: unknown) {
       if (accepted) return 'accepted';
       if (isOperationIdTaken(error)) return this.alreadyTaken(ref);
+      if (isThrottled(error)) this.pause(error);
       if (mayHaveTaken(error)) {
         throw new EmailInDoubtError(`ACS gave no answer for ${ref}`, {
           cause: error,
@@ -109,6 +134,11 @@ export class AcsAdapter implements EmailProvider {
     }
   }
 
+  private pause(error: unknown): void {
+    const wait = retryAfterMs(error) ?? DEFAULT_PAUSE_MS;
+    this.pausedUntil = this.now() + Math.min(wait, MAX_PAUSE_MS);
+  }
+
   /** An earlier attempt with this id reached Azure: report how it went. */
   private async alreadyTaken(ref: string): Promise<SendOutcome> {
     let outcome: ConfirmOutcome;
@@ -129,8 +159,10 @@ export class AcsAdapter implements EmailProvider {
  * version may drop it: a unit test checks it with the installed version, and
  * ACS is skipped without it.
  */
-export function sdkClient(connectionString: string): AcsClient {
-  const client = new EmailClient(connectionString);
+export function sdkClient(connectionString: string, maxRetries = 0): AcsClient {
+  const client = new EmailClient(connectionString, {
+    retryOptions: { maxRetries },
+  });
   const generated = (
     client as unknown as {
       generatedClient?: { email?: Partial<Pick<AcsClient, 'getSendResult'>> };
@@ -143,6 +175,25 @@ export function sdkClient(connectionString: string): AcsClient {
     );
   }
   return { beginSend: client.beginSend.bind(client), getSendResult };
+}
+
+function isThrottled(error: unknown): boolean {
+  return (error as { statusCode?: number } | null)?.statusCode === 429;
+}
+
+/** `Retry-After` of a 429: seconds or an HTTP date. */
+function retryAfterMs(error: unknown): number | undefined {
+  const headers = (
+    error as { response?: { headers?: { get?: (n: string) => unknown } } }
+  )?.response?.headers;
+  const raw = headers?.get?.('retry-after');
+  if (typeof raw !== 'string') return undefined;
+  const seconds = Number(raw);
+  if (raw.trim() && Number.isFinite(seconds) && seconds >= 0) {
+    return seconds * 1000;
+  }
+  const date = Date.parse(raw);
+  return Number.isNaN(date) ? undefined : Math.max(0, date - Date.now());
 }
 
 function isOperationIdTaken(error: unknown): boolean {

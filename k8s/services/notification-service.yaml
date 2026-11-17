@@ -97,6 +97,11 @@ spec:
                 configMapKeyRef:
                   name: pcpi-config
                   key: EMAIL_PROVIDERS
+            - name: ACS_MAX_RETRIES
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: ACS_MAX_RETRIES
             # EmailJS
             - name: EMAILJS_SERVICE_ID
               valueFrom:
