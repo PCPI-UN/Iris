@@ -47,7 +47,7 @@ Every provider implements `EmailProvider` (`application/ports/email-provider.por
 
 ## Send log, retries and idempotency
 
-- Every `SendEmail` creates a row in `email_deliveries` and makes the first attempt in the same call. The response carries the delivery (id, status, provider, attempts, last error) and `success`, which is `true` when the email was sent or is queued for a retry and `false` only when it failed for good.
+- Every `SendEmail` creates a row in `email_deliveries` and starts the first attempt without waiting for the provider. The response carries the delivery as recorded (`PENDING`) and `success`, which is `true` unless the delivery is `FAILED`. It does not say whether the email went out: the real status (`SENT`, `PENDING` with its next retry, or `FAILED`) is read with `GetEmailStatus`. The row is created with a lease (`ATTEMPT_LEASE_MS`), so if the service stops mid-attempt the worker takes the row when the lease expires and reuses its operation id. An error of the attempt in the background is logged and does not reach the caller.
 - A failed attempt leaves the row `PENDING` with `next_attempt_at` set to 1, 2, 4... times `EMAIL_RETRY_BASE_DELAY_MS`. The retry worker polls every `EMAIL_RETRY_POLL_MS`, claims each due row and runs the whole provider chain again. After `EMAIL_MAX_ATTEMPTS` attempts (first one included) the row is `FAILED`.
 - **Idempotency**: a request may carry an `idempotencyKey`. A second request with the same key returns the first delivery and sends nothing. `invitation-service` uses `invitation:<invitationId>:<expiresAt>`, so a resend (new expiry) sends a new email while a repeated call does not. Requests without a key always send.
 - `GetEmailStatus` returns deliveries by id and/or idempotency key.
@@ -114,7 +114,8 @@ sequenceDiagram
         N->>N: record delivery (PENDING)
         N->>T: load template for the email type
         N->>N: render subject, HTML and plain text with params
-        N->>P: send (ACS: with the delivery's operation id)
+        N-->>C: success and delivery (PENDING), without waiting
+        N->>P: in the background: send (ACS: with the delivery's operation id)
         alt primary sent it
             N->>N: SENT
         else primary accepted it (ACS 202)
@@ -125,7 +126,6 @@ sequenceDiagram
             N->>F: send (if a fallback is configured)
             N->>N: SENT, or PENDING with next retry, or FAILED
         end
-        N-->>C: success and delivery
     end
 ```
 
