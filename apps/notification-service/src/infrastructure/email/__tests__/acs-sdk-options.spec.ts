@@ -43,12 +43,9 @@ describe('ACS SDK retry options', () => {
     });
   });
 
-  it('skips ACS on an invalid ACS_MAX_RETRIES', () => {
+  it('fails to start on an invalid ACS_MAX_RETRIES instead of skipping ACS', () => {
     expect(() =>
       resolveEmailProviders(env({ ACS_MAX_RETRIES: '-1' }), logger),
-    ).toThrow('No email provider configured');
-    expect(logger.error).toHaveBeenCalledWith(
-      expect.stringContaining('ACS_MAX_RETRIES must be an integer'),
-    );
+    ).toThrow('ACS_MAX_RETRIES must be an integer');
   });
 });

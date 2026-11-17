@@ -135,7 +135,7 @@ export class AcsAdapter implements EmailProvider {
   }
 
   private pause(error: unknown): void {
-    const wait = retryAfterMs(error) ?? DEFAULT_PAUSE_MS;
+    const wait = retryAfterMs(error, this.now()) ?? DEFAULT_PAUSE_MS;
     this.pausedUntil = this.now() + Math.min(wait, MAX_PAUSE_MS);
   }
 
@@ -182,7 +182,7 @@ function isThrottled(error: unknown): boolean {
 }
 
 /** `Retry-After` of a 429: seconds or an HTTP date. */
-function retryAfterMs(error: unknown): number | undefined {
+function retryAfterMs(error: unknown, now: number): number | undefined {
   const headers = (
     error as { response?: { headers?: { get?: (n: string) => unknown } } }
   )?.response?.headers;
@@ -193,7 +193,7 @@ function retryAfterMs(error: unknown): number | undefined {
     return seconds * 1000;
   }
   const date = Date.parse(raw);
-  return Number.isNaN(date) ? undefined : Math.max(0, date - Date.now());
+  return Number.isNaN(date) ? undefined : Math.max(0, date - now);
 }
 
 function isOperationIdTaken(error: unknown): boolean {

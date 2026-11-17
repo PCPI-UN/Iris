@@ -212,6 +212,23 @@ describe('AcsAdapter', () => {
       expect(beginSend).toHaveBeenCalledTimes(2);
     });
 
+    it('reads an HTTP date in Retry-After against the injected clock', async () => {
+      const clock = { t: Date.parse('2026-11-17T10:00:00Z') };
+      const beginSend = jest
+        .fn()
+        .mockRejectedValue(throttled('Tue, 17 Nov 2026 10:00:30 GMT'));
+      const adapter = buildAt(beginSend, clock);
+
+      await failure(adapter.send(email, 'ref-1'));
+      clock.t += 29_000;
+      await failure(adapter.send(email, 'ref-2'));
+      expect(beginSend).toHaveBeenCalledTimes(1);
+
+      clock.t += 1_001;
+      await failure(adapter.send(email, 'ref-2'));
+      expect(beginSend).toHaveBeenCalledTimes(2);
+    });
+
     it('pauses 60 s when Retry-After is missing', async () => {
       const clock = { t: 0 };
       const beginSend = jest.fn().mockRejectedValue(throttled());

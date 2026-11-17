@@ -10,6 +10,9 @@ export const DEFAULT_EMAIL_PROVIDERS = 'acs,emailjs';
 
 export const EMAIL_PROVIDERS = Symbol('EMAIL_PROVIDERS');
 
+/** An invalid value in the environment: stops the startup instead of skipping the provider. */
+class ProviderConfigError extends Error {}
+
 type Env = (key: string) => string | undefined;
 
 /**
@@ -76,6 +79,8 @@ export function resolveEmailProviders(
     try {
       built = REGISTRY[name](env);
     } catch (error) {
+      // A wrong setting is the operator's to fix, not a provider to drop
+      if (error instanceof ProviderConfigError) throw error;
       logger.error(
         `Email provider "${name}" skipped: it could not be built (${describeError(error)})`,
       );
@@ -112,7 +117,9 @@ function parseMaxRetries(value: string | undefined): number {
   if (!text) return 0;
   const retries = Number(text);
   if (!Number.isInteger(retries) || retries < 0) {
-    throw new Error(`ACS_MAX_RETRIES must be an integer >= 0, got "${text}"`);
+    throw new ProviderConfigError(
+      `ACS_MAX_RETRIES must be an integer >= 0, got "${text}"`,
+    );
   }
   return retries;
 }
