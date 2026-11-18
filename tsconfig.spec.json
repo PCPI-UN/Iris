@@ -16,6 +16,9 @@
       ],
       "@events/*": [
         "apps/event-service/src/modules/events/*"
+      ],
+      "@invitations/*": [
+        "apps/invitation-service/src/modules/invitations/*"
       ]
     }
   }
