@@ -27,6 +27,12 @@ The service has a single module, `invitations`, following the layering described
 | Acceptance | Activate the account if it is pending, then apply the target: platform roles, event membership or project participation |
 | Resend and rejection | Resend pending or expired invitations; reject by token |
 
+## Email status in the event listing
+
+`GetEventInvitations` (the admin listing of an event) adds `emailStatus` to each invitation: `PENDING` (registered or waiting for a retry), `SENT` or `FAILED` (every attempt failed). It is read from `notification-service` (`GetEmailStatus`) with one call per page (in batches of 100 keys), looking up each invitation by its idempotency key `invitation:<invitationId>:<expiresAt>`; the same function builds it when the email is sent and when the status is read.
+
+`emailStatus` is absent when it is unknown: the invitation has no recorded delivery (it predates the delivery log), or `notification-service` returned an error. In that case the listing still works and the service logs a warning. The call has no timeout: if `notification-service` hangs, the listing waits for it. The other invitation reads (by token, by user) do not carry the field.
+
 ## Target types
 
 | Target | `target_id` refers to | On acceptance |
