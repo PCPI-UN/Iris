@@ -50,11 +50,36 @@ describe('NotificationServiceAdapter.getEmailStatuses', () => {
     ).toEqual([100, 100, 50]);
   });
 
-  it('propagates notification-service errors', async () => {
-    grpc.getEmailStatus.mockRejectedValue(new Error('unavailable'));
+  it('ignores statuses outside PENDING, SENT and FAILED', async () => {
+    grpc.getEmailStatus.mockResolvedValue({
+      deliveries: [
+        delivery('k1', EmailDeliveryStatus.UNRECOGNIZED),
+        delivery('k2', 99 as EmailDeliveryStatus),
+        delivery('k3', EmailDeliveryStatus.SENT),
+      ],
+    });
 
-    await expect(adapter.getEmailStatuses(['k1'])).rejects.toThrow(
-      'unavailable',
-    );
+    const result = await adapter.getEmailStatuses(['k1', 'k2', 'k3']);
+
+    expect([...result.entries()]).toEqual([['k3', 'SENT']]);
+  });
+
+  it('keeps the statuses of the batches that answered when one fails', async () => {
+    grpc.getEmailStatus
+      .mockResolvedValueOnce({
+        deliveries: [delivery('k0', EmailDeliveryStatus.SENT)],
+      })
+      .mockRejectedValueOnce(new Error('timeout'))
+      .mockResolvedValueOnce({
+        deliveries: [delivery('k200', EmailDeliveryStatus.FAILED)],
+      });
+    const keys = Array.from({ length: 250 }, (_, i) => `k${i}`);
+
+    const result = await adapter.getEmailStatuses(keys);
+
+    expect(grpc.getEmailStatus).toHaveBeenCalledTimes(3);
+    expect(result.get('k0')).toBe('SENT');
+    expect(result.get('k200')).toBe('FAILED');
+    expect(result.size).toBe(2);
   });
 });

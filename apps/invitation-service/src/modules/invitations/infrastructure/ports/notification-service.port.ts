@@ -12,7 +12,7 @@ export type EmailStatus = 'PENDING' | 'SENT' | 'FAILED';
 export abstract class NotificationServicePort {
   /**
    * Delivery status of emails by idempotency key. Keys without a recorded
-   * delivery are absent from the map. Throws if notification-service fails.
+   * delivery are absent from the map. A failed batch is logged and its keys are left out.
    */
   abstract getEmailStatuses(keys: string[]): Promise<Map<string, EmailStatus>>;
 

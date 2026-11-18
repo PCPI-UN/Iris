@@ -6,6 +6,13 @@ import { EmailDeliveryStatus, EmailTemplate } from '@app/common/generated/notifi
 /** notification-service rejects more lookups than this per call */
 const MAX_LOOKUPS = 100;
 
+/** Only these statuses leave the service; anything else (UNRECOGNIZED, new values) is unknown */
+const EMAIL_STATUS: Partial<Record<EmailDeliveryStatus, EmailStatus>> = {
+  [EmailDeliveryStatus.PENDING]: 'PENDING',
+  [EmailDeliveryStatus.SENT]: 'SENT',
+  [EmailDeliveryStatus.FAILED]: 'FAILED',
+};
+
 @Injectable()
 export class NotificationServiceAdapter implements NotificationServicePort {
   private readonly logger = new Logger(NotificationServiceAdapter.name);
@@ -15,14 +22,21 @@ export class NotificationServiceAdapter implements NotificationServicePort {
   async getEmailStatuses(keys: string[]): Promise<Map<string, EmailStatus>> {
     const statuses = new Map<string, EmailStatus>();
     for (let i = 0; i < keys.length; i += MAX_LOOKUPS) {
-      const res = await this.grpc.getEmailStatus(
-        keys.slice(i, i + MAX_LOOKUPS),
-      );
-      for (const delivery of res.deliveries) {
-        const status = EmailDeliveryStatus[delivery.status];
-        if (delivery.idempotencyKey && status) {
-          statuses.set(delivery.idempotencyKey, status as EmailStatus);
+      try {
+        const res = await this.grpc.getEmailStatus(
+          keys.slice(i, i + MAX_LOOKUPS),
+        );
+        for (const delivery of res.deliveries) {
+          const status = EMAIL_STATUS[delivery.status];
+          if (delivery.idempotencyKey && status) {
+            statuses.set(delivery.idempotencyKey, status);
+          }
         }
+      } catch (err) {
+        // A failed batch only leaves its own keys without status
+        this.logger.warn(
+          `Could not load email statuses for a batch of ${keys.slice(i, i + MAX_LOOKUPS).length} keys: ${(err as Error).message}`,
+        );
       }
     }
     return statuses;
