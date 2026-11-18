@@ -7,7 +7,15 @@ import { EmailTemplate } from '@app/common/generated/notification';
 export const invitationEmailKey = (invitationId: string, expiresAt: Date) =>
   `invitation:${invitationId}:${expiresAt.getTime()}`;
 
+export type EmailStatus = 'PENDING' | 'SENT' | 'FAILED';
+
 export abstract class NotificationServicePort {
+  /**
+   * Delivery status of emails by idempotency key. Keys without a recorded
+   * delivery are absent from the map. Throws if notification-service fails.
+   */
+  abstract getEmailStatuses(keys: string[]): Promise<Map<string, EmailStatus>>;
+
   abstract sendEmail(params: {
     to: string;
     template: EmailTemplate;

@@ -3,6 +3,8 @@ import { ClientGrpc } from '@nestjs/microservices';
 import { Observable, firstValueFrom } from 'rxjs';
 import {
   EmailTemplate,
+  GetEmailStatusRequest,
+  GetEmailStatusResponse,
   SendEmailRequest,
   SendEmailResponse,
   NOTIFICATION_SERVICE_NAME,
@@ -10,6 +12,7 @@ import {
 
 interface NotificationServiceGrpc {
   sendEmail(data: SendEmailRequest): Observable<SendEmailResponse>;
+  getEmailStatus(data: GetEmailStatusRequest): Observable<GetEmailStatusResponse>;
 }
 
 @Injectable()
@@ -32,6 +35,12 @@ export class NotificationGrpcClient implements OnModuleInit {
   ) {
     return firstValueFrom(
       this.svc.sendEmail({ to, template, params, idempotencyKey }),
+    );
+  }
+
+  async getEmailStatus(idempotencyKeys: string[]) {
+    return firstValueFrom(
+      this.svc.getEmailStatus({ ids: [], idempotencyKeys }),
     );
   }
 }
