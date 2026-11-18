@@ -155,6 +155,6 @@ message Invitation {
   repeated int32 roleIds = 10;
   string createdAt = 11;
   // Delivery state of the invitation email: PENDING, SENT or FAILED. Absent when unknown
-  // (no delivery recorded, or notification-service did not answer). Only set in GetEventInvitations.
+  // (no delivery recorded, or notification-service returned an error). Only set in GetEventInvitations.
   optional string emailStatus = 12;
 }
