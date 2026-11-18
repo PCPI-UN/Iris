@@ -185,7 +185,7 @@ export class InvitationsController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get invitations for an event',
-    description: 'Retrieves a list of invitations for a specific event. Can be filtered by role (e.g., "Juror", "Participant").',
+    description: 'Retrieves a list of invitations for a specific event. Can be filtered by role (e.g., "Juror", "Participant"). Each invitation carries `emailStatus` with the delivery state of its email: `PENDING` (registered or waiting for a retry), `SENT` or `FAILED` (every attempt failed). It is absent when unknown (no delivery recorded, or the notification service did not answer).',
   })
   @ApiParam({
     name: 'eventId',
