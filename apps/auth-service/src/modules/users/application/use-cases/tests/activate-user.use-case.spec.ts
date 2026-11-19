@@ -5,11 +5,13 @@ import { ActivateUserDto } from '../../../../users/application/dto/activate-user
 import { User, UserStatus } from '../../../../users/domain/entities/user.entity';
 import { RpcException } from '@nestjs/microservices';
 import { status } from '@grpc/grpc-js';
+import { UserTokenRepositoryPort } from '../../../../users/domain/repositories/user-token.repository.port';
 
 describe('ActivateUserUseCase', () => {
   let useCase: ActivateUserUseCase;
   let mockUserRepository: jest.Mocked<UserRepositoryPort>;
   let mockPasswordHasher: jest.Mocked<PasswordHasherPort>;
+  let mockUserTokenRepository: { markAllAccountSetupTokensAsUsedForUser: jest.Mock };
 
   beforeEach(() => {
     mockUserRepository = {
@@ -29,7 +31,13 @@ describe('ActivateUserUseCase', () => {
       compare: jest.fn(),
     } as jest.Mocked<PasswordHasherPort>;
 
-    useCase = new ActivateUserUseCase(mockUserRepository, mockPasswordHasher);
+    mockUserTokenRepository = { markAllAccountSetupTokensAsUsedForUser: jest.fn() };
+
+    useCase = new ActivateUserUseCase(
+      mockUserRepository,
+      mockPasswordHasher,
+      mockUserTokenRepository as unknown as UserTokenRepositoryPort,
+    );
   });
 
   describe('execute', () => {
@@ -76,6 +84,8 @@ describe('ActivateUserUseCase', () => {
           status: UserStatus.CONFIRMED,
         }),
       );
+      // The account setup links of the user stop working once it is activated
+      expect(mockUserTokenRepository.markAllAccountSetupTokensAsUsedForUser).toHaveBeenCalledWith(1);
     });
 
     it('should throw NOT_FOUND when user does not exist', async () => {
@@ -98,6 +108,7 @@ describe('ActivateUserUseCase', () => {
 
       expect(mockPasswordHasher.hash).not.toHaveBeenCalled();
       expect(mockUserRepository.save).not.toHaveBeenCalled();
+      expect(mockUserTokenRepository.markAllAccountSetupTokensAsUsedForUser).not.toHaveBeenCalled();
     });
 
     it('should throw FAILED_PRECONDITION when user is not PENDING', async () => {
@@ -131,6 +142,7 @@ describe('ActivateUserUseCase', () => {
 
       expect(mockPasswordHasher.hash).not.toHaveBeenCalled();
       expect(mockUserRepository.save).not.toHaveBeenCalled();
+      expect(mockUserTokenRepository.markAllAccountSetupTokensAsUsedForUser).not.toHaveBeenCalled();
     });
   });
 });

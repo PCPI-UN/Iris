@@ -5,15 +5,18 @@ import { CreateBasicUserDto } from '../../../../users/application/dto/create-bas
 import { User, UserStatus } from '../../../../users/domain/entities/user.entity';
 import { RpcException } from '@nestjs/microservices';
 import { status } from '@grpc/grpc-js';
+import { GetRolesUseCase } from '../../../../roles/application/use-cases/get-roles.use-case';
 
 describe('CreateBasicUserUseCase', () => {
   let useCase: CreateBasicUserUseCase;
   let mockUserRepository: jest.Mocked<UserRepositoryPort>;
   let mockPasswordHasher: jest.Mocked<PasswordHasherPort>;
+  let mockGetRoles: { execute: jest.Mock };
 
   beforeEach(() => {
     mockUserRepository = {
       save: jest.fn(),
+      createWithRoles: jest.fn(),
       findById: jest.fn(),
       findByEmail: jest.fn(),
       existsByEmail: jest.fn(),
@@ -29,7 +32,19 @@ describe('CreateBasicUserUseCase', () => {
       compare: jest.fn(),
     } as jest.Mocked<PasswordHasherPort>;
 
-    useCase = new CreateBasicUserUseCase(mockUserRepository, mockPasswordHasher);
+    // The new user gets the platform role "User"
+    mockGetRoles = {
+      execute: jest.fn().mockResolvedValue([
+        { id: 1, name: 'Admin' },
+        { id: 2, name: 'User' },
+      ]),
+    };
+
+    useCase = new CreateBasicUserUseCase(
+      mockUserRepository,
+      mockPasswordHasher,
+      mockGetRoles as unknown as GetRolesUseCase,
+    );
   });
 
   describe('execute', () => {
@@ -55,7 +70,7 @@ describe('CreateBasicUserUseCase', () => {
       mockUserRepository.existsByEmail.mockResolvedValue(false);
       mockUserRepository.existsByPhone.mockResolvedValue(false);
       mockPasswordHasher.hash.mockResolvedValue('hashed-password');
-      mockUserRepository.save.mockResolvedValue(createdUser);
+      mockUserRepository.createWithRoles.mockResolvedValue(createdUser);
 
       const result = await useCase.execute(createDto);
 
@@ -65,7 +80,10 @@ describe('CreateBasicUserUseCase', () => {
       expect(mockPasswordHasher.hash).toHaveBeenCalledWith(
         expect.stringMatching(/^[a-f0-9]{32}$/), // Random hex password
       );
-      expect(mockUserRepository.save).toHaveBeenCalled();
+      expect(mockUserRepository.createWithRoles).toHaveBeenCalledWith(
+        expect.objectContaining({ email: 'john@example.com', password: 'hashed-password' }),
+        [2],
+      );
     });
 
     it('should return existing inactive user when email exists but user is inactive', async () => {
@@ -94,7 +112,7 @@ describe('CreateBasicUserUseCase', () => {
 
       expect(result).toEqual(existingInactiveUser);
       expect(mockPasswordHasher.hash).not.toHaveBeenCalled();
-      expect(mockUserRepository.save).not.toHaveBeenCalled();
+      expect(mockUserRepository.createWithRoles).not.toHaveBeenCalled();
     });
 
     it('should throw ALREADY_EXISTS when active user with email exists', async () => {
@@ -129,7 +147,7 @@ describe('CreateBasicUserUseCase', () => {
         }),
       );
 
-      expect(mockUserRepository.save).not.toHaveBeenCalled();
+      expect(mockUserRepository.createWithRoles).not.toHaveBeenCalled();
     });
 
     it('should throw ALREADY_EXISTS when phone already exists', async () => {
@@ -153,7 +171,7 @@ describe('CreateBasicUserUseCase', () => {
         }),
       );
 
-      expect(mockUserRepository.save).not.toHaveBeenCalled();
+      expect(mockUserRepository.createWithRoles).not.toHaveBeenCalled();
     });
   });
 });

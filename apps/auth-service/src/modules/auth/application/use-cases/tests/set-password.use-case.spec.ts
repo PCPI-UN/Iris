@@ -1,171 +1,92 @@
-import { SetPasswordUseCase } from '../set-password.use-case';
-import { ValidateTokenUseCase } from '../validate-token.use-case';
-import { UserRepositoryPort } from '../../../../users/domain/repositories/user.repository.port';
-import { PasswordHasherPort } from '../../../../../common/ports/password-hasher.port';
-import { UserTokenRepositoryPort } from '../../../../users/domain/repositories/user-token.repository.port';
-import { SetPasswordDto } from '../../../../auth/application/dto/set-password.dto';
-import { User, UserStatus } from '../../../../users/domain/entities/user.entity';
 import { RpcException } from '@nestjs/microservices';
 import { status } from '@grpc/grpc-js';
+import { SetPasswordUseCase } from '../set-password.use-case';
+import { ValidateTokenUseCase } from '../validate-token.use-case';
+import { UserRepositoryPort } from '@users/domain/repositories/user.repository.port';
+import { UserTokenRepositoryPort } from '@users/domain/repositories/user-token.repository.port';
+import { UserTokenType } from '@users/domain/entities/user-token.entity';
+import { User, UserStatus } from '@users/domain/entities/user.entity';
+import { PasswordHasherPort } from '@common/ports/password-hasher.port';
+import { TokenRepositoryPort } from '@auth/domain/repositories/token.repository.port';
 
 describe('SetPasswordUseCase', () => {
+  let validateToken: { execute: jest.Mock };
+  let userRepository: { findById: jest.Mock; save: jest.Mock };
+  let passwordHasher: { hash: jest.Mock };
+  let userTokenRepository: { markAsUsed: jest.Mock };
+  let tokenRepository: { deleteByUserId: jest.Mock };
   let useCase: SetPasswordUseCase;
-  let mockValidateTokenUseCase: jest.Mocked<ValidateTokenUseCase>;
-  let mockUserRepository: jest.Mocked<UserRepositoryPort>;
-  let mockPasswordHasher: jest.Mocked<PasswordHasherPort>;
-  let mockUserTokenRepository: jest.Mocked<UserTokenRepositoryPort>;
+
+  const pendingUser = () =>
+    new User(1, 'John', 'Doe', 'john@example.com', undefined, undefined, true, UserStatus.PENDING);
 
   beforeEach(() => {
-    mockValidateTokenUseCase = {
-      execute: jest.fn(),
-    } as unknown as jest.Mocked<ValidateTokenUseCase>;
-
-    mockUserRepository = {
-      findById: jest.fn(),
-      save: jest.fn(),
-      findByEmail: jest.fn(),
-      existsByEmail: jest.fn(),
-      existsByPhone: jest.fn(),
-      findMany: jest.fn(),
-      update: jest.fn(),
-    } as unknown as jest.Mocked<UserRepositoryPort>;
-
-    mockPasswordHasher = {
-      hash: jest.fn(),
-      compare: jest.fn(),
-    } as jest.Mocked<PasswordHasherPort>;
-
-    mockUserTokenRepository = {
-      delete: jest.fn(),
-      findByToken: jest.fn(),
-      save: jest.fn(),
-      findByUserId: jest.fn(),
-    } as unknown as jest.Mocked<UserTokenRepositoryPort>;
+    validateToken = { execute: jest.fn() };
+    userRepository = { findById: jest.fn(), save: jest.fn(async (user) => user) };
+    passwordHasher = { hash: jest.fn().mockResolvedValue('hashed-password') };
+    userTokenRepository = { markAsUsed: jest.fn() };
+    tokenRepository = { deleteByUserId: jest.fn() };
 
     useCase = new SetPasswordUseCase(
-      mockValidateTokenUseCase,
-      mockUserRepository,
-      mockPasswordHasher,
-      mockUserTokenRepository,
+      validateToken as unknown as ValidateTokenUseCase,
+      userRepository as unknown as UserRepositoryPort,
+      passwordHasher as unknown as PasswordHasherPort,
+      userTokenRepository as unknown as UserTokenRepositoryPort,
+      tokenRepository as unknown as TokenRepositoryPort,
     );
   });
 
-  describe('execute', () => {
-    it('should set password successfully and update user status to CONFIRMED', async () => {
-      const setPasswordDto: SetPasswordDto = {
-        token: 'valid-setup-token',
-        password: 'NewPassword123!',
-      };
+  it('sets the password of a new account, confirms it and marks the link as used', async () => {
+    validateToken.execute.mockResolvedValue({ valid: true, userId: 1, tokenType: UserTokenType.ACCOUNT_SETUP });
+    userRepository.findById.mockResolvedValue(pendingUser());
 
-      const mockUser = new User(
-        1,
-        'John',
-        'Doe',
-        'test@example.com',
-        'oldHashedPassword',
-        '123456789',
-        true,
-        UserStatus.PENDING,
-      );
-
-      mockValidateTokenUseCase.execute.mockResolvedValue({
-        valid: true,
-        userId: 1,
-      });
-      mockUserRepository.findById.mockResolvedValue(mockUser);
-      mockPasswordHasher.hash.mockResolvedValue('newHashedPassword');
-      mockUserRepository.save.mockResolvedValue(mockUser);
-      mockUserTokenRepository.delete.mockResolvedValue(undefined);
-
-      const result = await useCase.execute(setPasswordDto);
-
-      expect(result).toEqual({ success: true });
-      expect(mockValidateTokenUseCase.execute).toHaveBeenCalledWith('valid-setup-token');
-      expect(mockUserRepository.findById).toHaveBeenCalledWith(1);
-      expect(mockPasswordHasher.hash).toHaveBeenCalledWith('NewPassword123!');
-      expect(mockUserRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          password: 'newHashedPassword',
-          status: UserStatus.CONFIRMED,
-        }),
-      );
-      expect(mockUserTokenRepository.delete).toHaveBeenCalledWith('valid-setup-token');
+    await expect(useCase.execute({ token: 'setup-token', password: 'NewPassword123!' })).resolves.toEqual({
+      success: true,
     });
 
-    it('should throw NOT_FOUND when user does not exist', async () => {
-      const setPasswordDto: SetPasswordDto = {
-        token: 'valid-token',
-        password: 'NewPassword123!',
-      };
+    expect(passwordHasher.hash).toHaveBeenCalledWith('NewPassword123!');
+    expect(userRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ password: 'hashed-password', status: UserStatus.CONFIRMED }),
+    );
+    expect(userTokenRepository.markAsUsed).toHaveBeenCalledWith('setup-token');
+    // Setting up an account does not close sessions
+    expect(tokenRepository.deleteByUserId).not.toHaveBeenCalled();
+  });
 
-      mockValidateTokenUseCase.execute.mockResolvedValue({
-        valid: true,
-        userId: 999,
-      });
-      mockUserRepository.findById.mockResolvedValue(null);
+  it('on a password reset keeps the account status and closes the sessions of the user', async () => {
+    validateToken.execute.mockResolvedValue({ valid: true, userId: 1, tokenType: UserTokenType.RESET_PASSWORD });
+    userRepository.findById.mockResolvedValue(pendingUser());
 
-      await expect(useCase.execute(setPasswordDto)).rejects.toThrow(RpcException);
-      await expect(useCase.execute(setPasswordDto)).rejects.toThrow(
-        expect.objectContaining({
-          error: expect.objectContaining({
-            code: status.NOT_FOUND,
-            message: 'No se encontró el usuario',
-          }),
-        }),
-      );
+    await useCase.execute({ token: 'reset-token', password: 'NewPassword123!' });
 
-      expect(mockPasswordHasher.hash).not.toHaveBeenCalled();
-      expect(mockUserRepository.save).not.toHaveBeenCalled();
-    });
+    expect(userRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({ password: 'hashed-password', status: UserStatus.PENDING }),
+    );
+    expect(userTokenRepository.markAsUsed).toHaveBeenCalledWith('reset-token');
+    expect(tokenRepository.deleteByUserId).toHaveBeenCalledWith(1);
+  });
 
-    it('should throw error when token validation fails', async () => {
-      const setPasswordDto: SetPasswordDto = {
-        token: 'invalid-token',
-        password: 'NewPassword123!',
-      };
+  it('answers NOT_FOUND when the user of the link does not exist', async () => {
+    validateToken.execute.mockResolvedValue({ valid: true, userId: 999, tokenType: UserTokenType.ACCOUNT_SETUP });
+    userRepository.findById.mockResolvedValue(null);
 
-      mockValidateTokenUseCase.execute.mockRejectedValue(
-        new RpcException({
-          code: status.NOT_FOUND,
-          message: 'Token not found',
-        }),
-      );
+    await expect(useCase.execute({ token: 'setup-token', password: 'NewPassword123!' })).rejects.toThrow(
+      expect.objectContaining({
+        error: expect.objectContaining({ code: status.NOT_FOUND, message: 'No se encontró el usuario' }),
+      }),
+    );
+    expect(passwordHasher.hash).not.toHaveBeenCalled();
+    expect(userTokenRepository.markAsUsed).not.toHaveBeenCalled();
+  });
 
-      await expect(useCase.execute(setPasswordDto)).rejects.toThrow(RpcException);
+  it('changes nothing when the link is not valid', async () => {
+    validateToken.execute.mockRejectedValue(
+      new RpcException({ code: status.NOT_FOUND, message: 'El enlace no existe, expiró o ya se usó' }),
+    );
 
-      expect(mockUserRepository.findById).not.toHaveBeenCalled();
-      expect(mockPasswordHasher.hash).not.toHaveBeenCalled();
-    });
-
-    it('should delete the token after successful password set', async () => {
-      const setPasswordDto: SetPasswordDto = {
-        token: 'valid-setup-token',
-        password: 'NewPassword123!',
-      };
-
-      const mockUser = new User(
-        1,
-        'John',
-        'Doe',
-        'test@example.com',
-        'oldHashedPassword',
-        '123456789',
-        true,
-        UserStatus.PENDING,
-      );
-
-      mockValidateTokenUseCase.execute.mockResolvedValue({
-        valid: true,
-        userId: 1,
-      });
-      mockUserRepository.findById.mockResolvedValue(mockUser);
-      mockPasswordHasher.hash.mockResolvedValue('newHashedPassword');
-      mockUserRepository.save.mockResolvedValue(mockUser);
-      mockUserTokenRepository.delete.mockResolvedValue(undefined);
-
-      await useCase.execute(setPasswordDto);
-
-      expect(mockUserTokenRepository.delete).toHaveBeenCalledWith('valid-setup-token');
-    });
+    await expect(useCase.execute({ token: 'bad-token', password: 'NewPassword123!' })).rejects.toThrow(RpcException);
+    expect(userRepository.findById).not.toHaveBeenCalled();
+    expect(userRepository.save).not.toHaveBeenCalled();
+    expect(userTokenRepository.markAsUsed).not.toHaveBeenCalled();
   });
 });

@@ -57,7 +57,7 @@ describe('GetUserUseCase', () => {
         expect.objectContaining({
           error: expect.objectContaining({
             code: status.NOT_FOUND,
-            message: 'User with ID #999 not found',
+            message: 'No se encontró el usuario con ID #999',
           }),
         }),
       );
