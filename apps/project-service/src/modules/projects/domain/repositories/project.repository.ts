@@ -13,8 +13,6 @@ export interface ProjectRepository {
 
   findById(id: number): Promise<Project | null>;
   findManyByIds(ids: number[]): Promise<Project[]>;
-  /** id and name only, for listings that just show the project name */
-  findNamesByIds(ids: number[]): Promise<{ id: number; name: string }[]>;
   findProject(eventId: number, courseId: number, name: string): Promise<Project | null>;
 
   countAll(): Promise<number>;

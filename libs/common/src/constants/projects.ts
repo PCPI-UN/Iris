@@ -1,5 +1,5 @@
 /**
- * Most project ids project-service `GetProjectNamesByIds` accepts in one call. Callers
- * with more ids split them into several calls.
+ * Most project ids project-service `ListProjectsByIds` accepts in one call. Callers with
+ * more ids split them into several calls.
  */
-export const MAX_PROJECT_NAME_IDS = 500;
+export const MAX_LIST_PROJECTS_BY_IDS = 500;
