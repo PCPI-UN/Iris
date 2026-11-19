@@ -195,6 +195,16 @@ export class UpdateEventPayloadDTO {
   evaluationsOpened?: boolean;
 
   @ApiProperty({
+    description:
+      'Publishes the event results: participants can see their scores, feedback, ranking position and awards. Not sent: unchanged',
+    example: false,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  resultsPublished?: boolean;
+
+  @ApiProperty({
     description: 'New start date of the event (ISO 8601 format)',
     example: '2024-05-01T09:00:00Z',
     required: false,

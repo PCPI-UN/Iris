@@ -1,4 +1,5 @@
 import * as ExcelJS from 'exceljs';
+import { solidFill, thinBorder } from '../../../common/excel/excel-styles';
 import { JUROR_IMPORT_SHEET } from './juror-import-format';
 
 /** Data of the event, as GetJurorImportTemplate returns it */
@@ -76,18 +77,7 @@ const SLOT_COLUMNS: { header: string; width: number }[] = [
   { header: 'Correo jurado', width: 30 },
 ];
 
-const border: Partial<ExcelJS.Borders> = {
-  top: { style: 'thin', color: { argb: GRID } },
-  left: { style: 'thin', color: { argb: GRID } },
-  bottom: { style: 'thin', color: { argb: GRID } },
-  right: { style: 'thin', color: { argb: GRID } },
-};
-
-const fill = (argb: string): ExcelJS.Fill => ({
-  type: 'pattern',
-  pattern: 'solid',
-  fgColor: { argb },
-});
+const border = thinBorder(GRID);
 
 /** Text without accents and in lowercase, the same way the hidden column does it */
 const normalize = (expr: string) =>
@@ -139,7 +129,7 @@ function styleHeader(row: ExcelJS.Row) {
   row.height = 30;
   row.eachCell((cell, n) => {
     cell.font = { ...FONT, bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.fill = fill(
+    cell.fill = solidFill(
       n > 6 && n <= 6 + JUROR_SLOTS * 3
         ? OLIVE
         : n === LAST_COLUMN
@@ -202,7 +192,7 @@ export async function buildJurorImportTemplate(
     ws.mergeCells(r, 1, r, 6);
     const cell = ws.getCell(r, 1);
     cell.value = text;
-    cell.fill = fill(argb);
+    cell.fill = solidFill(argb);
   });
 
   const headers = [
@@ -245,9 +235,9 @@ export async function buildJurorImportTemplate(
       const cell = row.getCell(c);
       const input = c > 6 && c <= 6 + JUROR_SLOTS * 3;
       cell.border = border;
-      if (c <= 6 || c === LAST_COLUMN - 1) cell.fill = fill(AUTO_FILL);
-      else if (input) cell.fill = fill(INPUT_FILL);
-      else if (c === LAST_COLUMN) cell.fill = fill(NOTES_FILL);
+      if (c <= 6 || c === LAST_COLUMN - 1) cell.fill = solidFill(AUTO_FILL);
+      else if (input) cell.fill = solidFill(INPUT_FILL);
+      else if (c === LAST_COLUMN) cell.fill = solidFill(NOTES_FILL);
       cell.font =
         c === LAST_COLUMN ? { ...FONT, size: 9, color: { argb: OLIVE } } : FONT;
       cell.alignment =

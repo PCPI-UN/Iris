@@ -56,6 +56,10 @@ export class UpdateEventDTO {
   evaluationsOpened?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  resultsPublished?: boolean;
+
+  @IsOptional()
   @IsISO8601()
   startDate?: string;
 

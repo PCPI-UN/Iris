@@ -70,6 +70,11 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
     access: 'session',
     why: "the caller's own dashboard; the user comes from the session",
   },
+  // modules/dashboard/student-results.controller.ts
+  'GET /events/:eventId/my-project/results': {
+    access: 'session',
+    why: "results of the caller's own project in the event, only once the admin publishes them",
+  },
   // modules/evaluations/evaluations.controller.ts
   'GET /evaluations/courses/:courseId/top-projects': {
     permission: ['read:grades'],
@@ -199,6 +204,8 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'GET /projects/by-event/:eventId/with-jurors': { access: 'public' },
   'PATCH /projects/documents/:id': { access: 'pending' },
   'PATCH /projects/reassign-juror': { access: 'pending' },
+  // modules/reports/reports.controller.ts
+  'GET /events/:eventId/reports/evaluation': { permission: ['read:grades'] },
   // modules/tiebreaks/tiebreaks.controller.ts
   'GET /tiebreaks': { permission: ['read:grades'] },
   'POST /tiebreaks': { permission: ['manage:events'] },

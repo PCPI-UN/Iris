@@ -22,15 +22,13 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { RequirePermission } from '../../../common/decorators/require-permission.decorator';
+import { XLSX_CONTENT_TYPE, xlsxFile } from '../../../common/excel/xlsx-file';
 import { JurorImportsService } from './juror-imports.service';
 import {
   JUROR_IMPORT_MAX_BYTES,
   JUROR_IMPORT_MAX_ROWS,
   JUROR_IMPORT_SHEET,
 } from './juror-import-format';
-
-const XLSX_CONTENT_TYPE =
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 @ApiTags('juror-imports')
 @ApiSecurity('JWT-auth')
@@ -102,10 +100,6 @@ export class JurorImportsController {
     @Param('eventId', ParseIntPipe) eventId: number,
   ): Promise<StreamableFile> {
     const { fileName, file } = await this.jurorImportsService.template(eventId);
-    return new StreamableFile(file, {
-      type: XLSX_CONTENT_TYPE,
-      disposition: `attachment; filename="${fileName}"`,
-      length: file.length,
-    });
+    return xlsxFile(file, fileName);
   }
 }

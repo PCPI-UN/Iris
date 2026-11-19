@@ -1,10 +1,26 @@
 import { EmailTemplate } from '@app/common/generated/notification';
 
+/**
+ * Idempotency key of an invitation email. The expiry is part of it so that a
+ * resend (new expiry) sends a new email, while a repeated call does not.
+ */
+export const invitationEmailKey = (invitationId: string, expiresAt: Date) =>
+  `invitation:${invitationId}:${expiresAt.getTime()}`;
+
+export type EmailStatus = 'PENDING' | 'SENT' | 'FAILED';
+
 export abstract class NotificationServicePort {
+  /**
+   * Delivery status of emails by idempotency key. Keys without a recorded
+   * delivery are absent from the map. A failed batch is logged and its keys are left out.
+   */
+  abstract getEmailStatuses(keys: string[]): Promise<Map<string, EmailStatus>>;
+
   abstract sendEmail(params: {
     to: string;
     template: EmailTemplate;
     params: Record<string, any>;
+    idempotencyKey?: string;
   }): Promise<{ success: boolean }>;
 
   /**
@@ -16,6 +32,7 @@ export abstract class NotificationServicePort {
     lastName?: string;
     invitationLink: string;
     roles: string;
+    idempotencyKey?: string;
   }): Promise<{ success: boolean }>;
 
   /**
@@ -29,6 +46,7 @@ export abstract class NotificationServicePort {
     eventName: string;
     eventDescription: string;
     roles: string;
+    idempotencyKey?: string;
   }): Promise<{ success: boolean }>;
 
   /**
@@ -53,5 +71,6 @@ export abstract class NotificationServicePort {
     invitationLink: string;
     projectName: string;
     eventName: string;
+    idempotencyKey?: string;
   }): Promise<{ success: boolean }>;
 }

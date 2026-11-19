@@ -11,6 +11,7 @@ import {
 import { Evaluation } from '@evaluations/domain/entities/evaluation.entity';
 import { EvaluationDetail } from '@evaluations/domain/entities/evaluation-detail.entity';
 import { roundGrade } from '../../../../common/utils/grade.utils';
+import { ResultEvaluation } from '../../domain/services/project-result';
 
 @Injectable()
 export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
@@ -232,6 +233,38 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
             result.score,
             result.weight,
         ));
+    }
+
+    async findProjectEvaluationsForResult(projectId: number): Promise<ResultEvaluation[]> {
+        const evaluations = await this.prisma.db.evaluation.findMany({
+            where: { projectId },
+            include: {
+                scores: {
+                    include: {
+                        criterion: {
+                            select: {
+                                id: true,
+                                name: true,
+                                component: { select: { name: true } },
+                            },
+                        },
+                    },
+                },
+            },
+            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        });
+
+        return evaluations.map((evaluation) => ({
+            grade: evaluation.grade,
+            comments: evaluation.comments,
+            details: evaluation.scores.map((detail) => ({
+                criterionId: detail.criterion.id,
+                criterionName: detail.criterion.name,
+                componentName: detail.criterion.component?.name ?? null,
+                score: detail.score,
+                weight: detail.weight,
+            })),
+        }));
     }
 
     async getProjectStats(projectId: number): Promise<ProjectStats> {

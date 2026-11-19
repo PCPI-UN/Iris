@@ -9,7 +9,7 @@ import {
   Query,
   ParseIntPipe,
   ForbiddenException,
-  Res,
+  StreamableFile,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -66,35 +66,18 @@ import {
   GetRankingReportDto,
   RankingReportFormat,
 } from './dto/ranking-report/get-ranking-report.dto';
-import { Response } from 'express';
 import { RankingReportResult } from './events.service';
+import { XLSX_CONTENT_TYPE, xlsxFile } from '../../common/excel/xlsx-file';
+import {
+  generateRankingExcelBuffer,
+  rankingFileName,
+} from './ranking-report.workbook';
 
 @ApiTags('events')
 @ApiSecurity('JWT-auth')
 @Controller('events')
 export class EventsController {
   constructor(private readonly eventsService: EventService) {}
-
-  private normalizeFilePart(value: string): string {
-    const normalized = value
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_+|_+$/g, '');
-
-    return normalized || 'general';
-  }
-
-  private buildRankingFileName(
-    report: RankingReportResult,
-    scope: 'admin' | 'public',
-  ): string {
-    const categoryName =
-      report.items[0]?.category || (report.categoryId ? `categoria_${report.categoryId}` : 'general');
-
-    return `ranking_${this.normalizeFilePart(categoryName)}_${this.normalizeFilePart(report.eventName)}_${scope}.xlsx`;
-  }
 
   // =====================
   // EVENT LISTING ENDPOINTS
@@ -918,7 +901,7 @@ export class EventsController {
           },
         },
       },
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+      [XLSX_CONTENT_TYPE]: {
         schema: {
           type: 'string',
           format: 'binary',
@@ -946,31 +929,17 @@ export class EventsController {
   async getAdminRankingReport(
     @Param('eventId', ParseIntPipe) eventId: number,
     @Query() query: GetRankingReportDto,
-    @Res() response: Response,
-  ) {
+  ): Promise<RankingReportResult | StreamableFile> {
     const report = await this.eventsService.generateRankingReport(
       eventId,
       query,
       'admin',
     );
-
-    if (query.format === RankingReportFormat.EXCEL) {
-      const buffer = await this.eventsService.generateRankingExcelBuffer(report);
-      const fileName = this.buildRankingFileName(report, 'admin');
-
-      response.setHeader(
-        'Content-Type',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      );
-      response.setHeader(
-        'Content-Disposition',
-        `attachment; filename="${fileName}"`,
-      );
-      response.send(buffer);
-      return;
-    }
-
-    response.json(report);
+    if (query.format !== RankingReportFormat.EXCEL) return report;
+    return xlsxFile(
+      await generateRankingExcelBuffer(report),
+      rankingFileName(report, 'admin'),
+    );
   }
 
   @Public()
@@ -1078,7 +1047,7 @@ export class EventsController {
           },
         },
       },
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+      [XLSX_CONTENT_TYPE]: {
         schema: {
           type: 'string',
           format: 'binary',
@@ -1108,31 +1077,17 @@ export class EventsController {
   async getPublicRankingReport(
     @Param('eventId', ParseIntPipe) eventId: number,
     @Query() query: GetRankingReportDto,
-    @Res() response: Response,
-  ) {
+  ): Promise<RankingReportResult | StreamableFile> {
     const report = await this.eventsService.generateRankingReport(
       eventId,
       query,
       'public',
     );
-
-    if (query.format === RankingReportFormat.EXCEL) {
-      const buffer = await this.eventsService.generateRankingExcelBuffer(report);
-      const fileName = this.buildRankingFileName(report, 'public');
-
-      response.setHeader(
-        'Content-Type',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      );
-      response.setHeader(
-        'Content-Disposition',
-        `attachment; filename="${fileName}"`,
-      );
-      response.send(buffer);
-      return;
-    }
-
-    response.json(report);
+    if (query.format !== RankingReportFormat.EXCEL) return report;
+    return xlsxFile(
+      await generateRankingExcelBuffer(report),
+      rankingFileName(report, 'public'),
+    );
   }
 
   @Get(':id/my-project')
