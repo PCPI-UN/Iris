@@ -21,7 +21,7 @@ export class GetProjectInScopeUC {
   async execute(input: GetProjectInScopeDTO): Promise<ProjectInScope> {
     const scope = await this.resolveScope.execute(input.userId);
     const project = scope ? await this.repo.findInScope(scope, input.projectId) : null;
-    if (!project) throw new NotFoundError('Project not found');
+    if (!project) throw new NotFoundError(`No se encontró el proyecto con ID ${input.projectId}`);
     const [withNames] = await this.attachNames.execute([project]);
     return withNames;
   }

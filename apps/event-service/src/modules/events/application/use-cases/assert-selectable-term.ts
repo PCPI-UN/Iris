@@ -11,10 +11,10 @@ export async function assertSelectableTerm(terms: TermRepository, termId: number
   if (termId === NO_TERM_ID) {
     throw new RpcException({
       code: status.INVALID_ARGUMENT,
-      message: 'Validation failed: termId must be a real academic term',
+      message: 'Validación fallida: termId debe ser un periodo académico real',
     });
   }
   if (!(await terms.findById(termId))) {
-    throw new RpcException({ code: status.NOT_FOUND, message: `Term ${termId} not found` });
+    throw new RpcException({ code: status.NOT_FOUND, message: `No se encontró el periodo académico con ID ${termId}` });
   }
 }

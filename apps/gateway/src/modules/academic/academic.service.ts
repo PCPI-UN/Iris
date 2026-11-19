@@ -210,7 +210,7 @@ export class AcademicService {
     const event = inScope.includes(eventId)
       ? await this.eventsService.getEventById(eventId)
       : undefined;
-    if (!event?.active) throw new NotFoundException(`Event ${eventId} not found`);
+    if (!event?.active) throw new NotFoundException(`No se encontró el evento con ID ${eventId}`);
     return event;
   }
 }

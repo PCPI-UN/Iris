@@ -13,6 +13,6 @@ export class CreateTermDto {
     example: '10',
   })
   @IsString()
-  @Matches(/^\d{2}$/, { message: 'period must be a two-digit code, such as 10 or 20' })
+  @Matches(/^\d{2}$/, { message: 'period debe ser un código de dos dígitos, como 10 o 20' })
   period: string;
 }

@@ -14,7 +14,7 @@ export class CreateTermUC {
     if (await this.terms.findByYearAndPeriod(input.year, period)) {
       throw new RpcException({
         code: status.ALREADY_EXISTS,
-        message: `Term ${input.year}${period} already exists`,
+        message: `Ya existe el periodo académico ${input.year}${period}`,
       });
     }
     return this.terms.create({ year: input.year, period });
