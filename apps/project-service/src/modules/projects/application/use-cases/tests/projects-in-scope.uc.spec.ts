@@ -4,22 +4,22 @@ import { GetProjectInScopeUC } from '../get-project-in-scope.uc';
 import { ListEventIdsInScopeUC } from '../list-event-ids-in-scope.uc';
 import { AttachParticipantNamesUC } from '../attach-participant-names.uc';
 import { NotFoundError } from '../../../domain/errors';
-import { ACADEMIC_READER_ROLE_IDS } from '../../../domain/read-scope';
-
-const TUTOR_SCOPE = { all: false, userId: 5, asTutor: true, asProfessor: false, asDirector: false };
+const TUTOR_SCOPE = { all: false, userId: 5, tutored: true, ofCourses: false, ofDepartment: false };
 
 describe('ResolveProjectReadScopeUC', () => {
-  it('asks auth-service for the academic roles of the user only', async () => {
-    const auth = { findUsersByRoles: jest.fn().mockResolvedValue([{ id: 5, roleIds: [10] }]) };
+  it('builds the scope from the permissions auth-service gives for the user', async () => {
+    const auth = {
+      getUserPermissions: jest.fn().mockResolvedValue(['read:academic_projects', 'read_tutored:academic_projects']),
+    };
 
     const scope = await new ResolveProjectReadScopeUC(auth as any).execute(5);
 
-    expect(auth.findUsersByRoles).toHaveBeenCalledWith({ roleIds: ACADEMIC_READER_ROLE_IDS, userIds: [5] });
+    expect(auth.getUserPermissions).toHaveBeenCalledWith(5);
     expect(scope).toEqual(TUTOR_SCOPE);
   });
 
-  it('returns null when the user holds none of those roles (auth returns no user)', async () => {
-    const auth = { findUsersByRoles: jest.fn().mockResolvedValue([]) };
+  it('returns null when no permission of the user grants projects', async () => {
+    const auth = { getUserPermissions: jest.fn().mockResolvedValue(['read:academic_projects']) };
 
     await expect(new ResolveProjectReadScopeUC(auth as any).execute(5)).resolves.toBeNull();
   });

@@ -19,7 +19,7 @@ const report = (overrides: Partial<GradesReport> = {}): GradesReport => ({
   projects: [
     {
       projectId: 1, projectCode: 'C1', projectName: 'EcoVision', participantNames: ['Ana Paz', 'Luis Ruiz'],
-      academicCourse: { id: 2, nrc: '1001', term: '202610', name: 'PF Sistemas', departmentName: 'Sistemas' },
+      academicCourse: { id: 2, nrc: '1001', termId: 3, term: '202610', name: 'PF Sistemas', departmentName: 'Sistemas' },
       gradeStatus: 'PRELIMINARY', assignedJurors: 3, completedEvaluations: 2, pendingEvaluations: 1,
       finalScore: null, gradeHidden: true,
     },

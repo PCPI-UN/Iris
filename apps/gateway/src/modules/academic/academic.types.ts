@@ -8,7 +8,10 @@ export type ProjectReviewState =
 export interface AcademicCourseSummary {
   id: number;
   nrc: string;
-  term: string;
+  /** event-service term */
+  termId: number;
+  /** Term code (year + period, such as 202610); null if event-service does not list the term */
+  term: string | null;
   name: string;
   departmentName: string;
 }
@@ -22,6 +25,8 @@ export interface AcademicEvent {
   active: boolean;
   evaluationsOpened: boolean;
   resultsPublished: boolean;
+  /** Each project needs a course section (NRC); false for events that are not course work */
+  requiresCourse: boolean;
 }
 
 /** A student of a project: confirmed (has an account in the project) or still pending */

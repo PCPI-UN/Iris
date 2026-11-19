@@ -163,7 +163,7 @@ export const toProtoProjectComplete = (p: any) => ({
 export const toProtoAcademicCourse = (c: AcademicCourseView) => ({
   id: c.id,
   nrc: c.nrc,
-  term: c.term,
+  termId: c.termId,
   name: c.name,
   professorUserId: c.professorUserId,
   departmentId: c.departmentId,

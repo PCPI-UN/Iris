@@ -1,31 +1,33 @@
 import { resolveReadScope } from '../read-scope';
 
 describe('resolveReadScope', () => {
-  it.each([
-    ['Admin', 1],
-    ['FacultyAdmin', 6],
-    ['Dean', 7],
-  ])('%s reads every project', (_name, roleId) => {
-    expect(resolveReadScope(5, [roleId])).toEqual({ all: true });
+  it('read_all reads every project', () => {
+    expect(resolveReadScope(5, ['read:academic_projects', 'read_all:academic_projects'])).toEqual({ all: true });
   });
 
-  it('a read-all role wins over the academic roles the user also holds', () => {
-    expect(resolveReadScope(5, [10, 7])).toEqual({ all: true });
+  it('read_all wins over the other scope permissions the user also holds', () => {
+    expect(resolveReadScope(5, ['read_tutored:academic_projects', 'read_all:academic_projects'])).toEqual({ all: true });
   });
 
   it.each([
-    ['Tutor', [10], { asTutor: true, asProfessor: false, asDirector: false }],
-    ['Professor', [9], { asTutor: false, asProfessor: true, asDirector: false }],
-    ['DepartmentDirector', [8], { asTutor: false, asProfessor: false, asDirector: true }],
-    ['Professor and Tutor', [9, 10], { asTutor: true, asProfessor: true, asDirector: false }],
-  ])('%s reads the projects of their relations', (_name, roleIds, relations) => {
-    expect(resolveReadScope(5, roleIds)).toEqual({ all: false, userId: 5, ...relations });
+    ['read_tutored', ['read_tutored:academic_projects'], { tutored: true, ofCourses: false, ofDepartment: false }],
+    ['read_course', ['read_course:academic_projects'], { tutored: false, ofCourses: true, ofDepartment: false }],
+    ['read_department', ['read_department:academic_projects'], { tutored: false, ofCourses: false, ofDepartment: true }],
+    [
+      'read_course and read_tutored',
+      ['read_course:academic_projects', 'read_tutored:academic_projects'],
+      { tutored: true, ofCourses: true, ofDepartment: false },
+    ],
+  ])('%s reads the projects of those relations', (_name, permissions, relations) => {
+    expect(resolveReadScope(5, permissions)).toEqual({ all: false, userId: 5, ...relations });
   });
 
   it.each([
-    ['no role', []],
-    ['User, EventManager and Juror', [3, 2, 4]],
-  ])('%s reads nothing', (_name, roleIds) => {
-    expect(resolveReadScope(5, roleIds)).toBeNull();
+    ['no permission', []],
+    // Opens the gateway endpoints, but grants no project by itself
+    ['only read:academic_projects', ['read:academic_projects']],
+    ['unrelated permissions', ['read:grades', 'read:events']],
+  ])('%s reads nothing', (_name, permissions) => {
+    expect(resolveReadScope(5, permissions)).toBeNull();
   });
 });

@@ -29,7 +29,8 @@ Single HTTP entry point of the platform. It authenticates the browser session, c
 | `tiebreaks` | Manual tiebreak order | `evaluation` |
 | `invitations` | Invitations, juror invitations, acceptance | `invitation`, `auth`, `event`, `project` |
 | `dashboard` | Admin summary figures; student dashboard (`GET /students/me/dashboard`) and results of the student's project (`GET /events/:eventId/my-project/results`), own data only | `event`, `project`, `evaluation` (through the other modules) |
-| `academic` | Read-only views of the academic roles (`/academic/*`): projects, their events, registrations and grades (JSON or Excel) of the caller's scope. `project-service` decides the scope; grades of unpublished events are only sent to callers with `read:grades` | `project`, `event`, `evaluation` (through the other modules) |
+| `academic` | Read-only views of the academic roles (`/academic/*`): projects, their events, registrations and grades (JSON or Excel) of the caller's scope. `project-service` decides the scope from the caller's scope permissions; grades of unpublished events are only sent to callers with `read:grades`. `/registrations` and `/grades` answer 404 for an event that is not in `/academic/events` (deleted, or without projects of the caller). The course section of a project carries its term code (such as `202610`), taken from `event-service` | `project`, `event`, `evaluation` (through the other modules) |
+| `terms` | Academic terms (`GET /terms`, `POST /terms`): every event belongs to one, and the NRC typed when submitting a project is looked up in it when the event requires a course section (`requiresCourse`) | `event` (through the events module) |
 
 Cross-cutting code lives in `src/common`: guards, decorators (`@Public`, `@RequirePermission`, `@GetUser`), the gRPC-to-HTTP exception filter and the cache.
 

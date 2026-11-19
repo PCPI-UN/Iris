@@ -10,7 +10,11 @@ export interface ProjectRepository {
     description?: string;
     eventNumber?: string;
     state: ProjectState;           
+    academicCourseId: number;
   }): Promise<Project>;
+
+  /** Id of the course section with that NRC in the term, or null when there is none. */
+  findAcademicCourseId(termId: number, nrc: string): Promise<number | null>;
 
   findById(id: number): Promise<Project | null>;
   findManyByIds(ids: number[]): Promise<Project[]>;

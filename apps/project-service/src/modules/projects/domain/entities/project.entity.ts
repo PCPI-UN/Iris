@@ -29,6 +29,17 @@ export const JUROR_ROLE_ID = 4;
 export const PROFESSOR_ROLE_ID = 9;
 export const TUTOR_ROLE_ID = 10;
 
+/** event-service term that holds the events created before terms existed */
+export const NO_TERM_ID = -1;
+/** Course section that holds the projects created before course sections existed ("we do not know") */
+export const NO_ACADEMIC_COURSE_ID = -1;
+/** Course section of the projects of an event that does not require one ("it has no course") */
+export const NOT_APPLICABLE_ACADEMIC_COURSE_ID = 0;
+
+/** The fill course sections (-1 and 0), which are not real NRCs */
+export const isFillAcademicCourse = (id: number) =>
+  id === NO_ACADEMIC_COURSE_ID || id === NOT_APPLICABLE_ACADEMIC_COURSE_ID;
+
 /** A project of an event with the users assigned to it as jurors */
 export interface ProjectWithJurorIds extends Project {
   jurorUserIds: number[];
@@ -106,7 +117,8 @@ export interface PendingProjectTutorInput {
 export interface AcademicCourseView {
   id: number;
   nrc: string;
-  term: string;
+  /** event-service term */
+  termId: number;
   name: string;
   professorUserId: number;
   departmentId: number;
@@ -117,7 +129,8 @@ export interface AcademicCourseView {
 export interface ProjectInScope extends Project {
   createdAt: Date;
   updatedAt: Date;
-  academicCourseId: number | null;
+  academicCourseId: number;
+  /** Null for the fill course sections: -1 (created before course sections existed) and 0 (event without course) */
   academicCourse: AcademicCourseView | null;
   /** Confirmed participants, with the name and email of their account when it still exists. */
   participants: (ProjectParticipant & { firstName?: string; lastName?: string | null; email?: string })[];

@@ -123,7 +123,7 @@ describe('Project tutors in the gateway service', () => {
     expect(review.project).not.toHaveProperty('tutors');
   });
 
-  it('sends the tutors of the submission to project-service', async () => {
+  it('sends the tutors and the NRC of the submission to project-service', async () => {
     const { service, grpc } = buildService();
     const create = jest.fn(() => of({ project: { id: 9 } }));
     Object.assign(grpc, { createProjectWithPendingParticipants: create });
@@ -134,6 +134,7 @@ describe('Project tutors in the gateway service', () => {
         eventId: '1',
         eventType: 'Competition',
         courseId: '2',
+        nrc: '1001',
         name: 'P',
         tutors: JSON.stringify({
           userIds: [5],
@@ -145,6 +146,7 @@ describe('Project tutors in the gateway service', () => {
 
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
+        nrc: '1001',
         tutorUserIds: [5],
         pendingTutors: [{ firstName: 'Ana', email: 'ana@uni.edu' }],
       }),

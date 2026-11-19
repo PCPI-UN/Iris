@@ -33,6 +33,16 @@ erDiagram
         string[] organizers "nullable"
         float latitude "nullable"
         float longitude "nullable"
+        int term_id FK
+        boolean requires_course
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    terms {
+        int id PK
+        int year UK
+        string period UK
         timestamptz created_at
         timestamptz updated_at
     }
@@ -109,6 +119,7 @@ erDiagram
         timestamptz updated_at
     }
 
+    terms ||--o{ event : "term of"
     event ||--o{ event_members : "has members"
     event ||--o{ categories : "has"
     event ||--o{ event_inscriptions_details : "has"
@@ -118,7 +129,7 @@ erDiagram
     category_awards ||--o{ award_winners : "granted as"
 ```
 
-`event.access_code` is unique. `ranking_event.event_id` is both a foreign key and unique, which makes the relation with `event` one-to-one.
+`event.access_code` is unique. `terms` has a composite unique constraint on (`year`, `period`). `ranking_event.event_id` is both a foreign key and unique, which makes the relation with `event` one-to-one.
 
 ## Enums
 
@@ -157,10 +168,28 @@ erDiagram
 | `organizers` | `VARCHAR(255)[]` | yes | |
 | `latitude` | `DOUBLE PRECISION` | yes | |
 | `longitude` | `DOUBLE PRECISION` | yes | |
+| `term_id` | `INTEGER` | no | FK → `terms.id`; indexed. Academic term of the event; -1 for the events created before terms existed |
+| `requires_course` | `BOOLEAN` | no | no default; set when the event is created and editable. `true`: each project needs a course section (NRC) of the term, such as a final projects fair; `false`: not course work, such as a hackathon, and `project-service` gives its projects course section 0 |
 | `created_at` | `TIMESTAMPTZ` | no | `now()` |
 | `updated_at` | `TIMESTAMPTZ` | no | maintained by Prisma (`@updatedAt`) |
 
-Relations: 1:N `event_members`, `categories`, `event_inscriptions_details`, `event_recaps`; 1:1 `ranking_event`.
+Relations: N:1 `terms`; 1:N `event_members`, `categories`, `event_inscriptions_details`, `event_recaps`; 1:1 `ranking_event`.
+
+### `terms` (`Term`)
+
+Academic terms: a year and a period code (2026 + `"10"` is the term 202610). The NRC of a course section repeats across terms, so `project-service` looks up the NRC typed at submission in the term of the event.
+
+| Column | Type | Null | Default / constraint |
+| --- | --- | --- | --- |
+| `id` | `SERIAL` | no | PK |
+| `year` | `INTEGER` | no | unique together with `period` |
+| `period` | `VARCHAR(10)` | no | unique together with `year`; two digits through the API |
+| `created_at` | `TIMESTAMPTZ` | no | `now()` |
+| `updated_at` | `TIMESTAMPTZ` | no | `@updatedAt` |
+
+Row -1 ("no term", year -1, period `-1`) holds the events created before terms existed. `ListTerms` leaves it out, and an event cannot be created or edited with it.
+
+Relations: 1:N `event`.
 
 ### `event_inscriptions_details` (`EventInscriptionDetail`)
 
@@ -275,6 +304,7 @@ The `positions` check exists only in the SQL migration; Prisma cannot express it
 | `category_awards.category_id` | `categories.id` | `RESTRICT` |
 | `award_winners.award_id` | `category_awards.id` | `RESTRICT` |
 | `ranking_event.event_id` | `event.id` | `RESTRICT` |
+| `event.term_id` | `terms.id` | `RESTRICT` |
 
 All foreign keys use `ON UPDATE CASCADE`.
 
@@ -287,7 +317,9 @@ Columns that point to other services have no foreign key: `event.created_by_user
 - The status of an event is not stored. It is derived from `start_date`, `end_date` and `inscription_deadline`.
 - Dates are stored in UTC. The service interprets incoming dates as Colombia time (UTC-5).
 - Deleting an event is a soft delete (`event.active = false`). Categories are deleted for real, and the foreign key from `category_awards` blocks the delete while awards exist.
-- Besides primary keys, the only indexes are the unique ones on `event.access_code` and `ranking_event.event_id`. Foreign key columns have no index.
+- Besides primary keys, the indexes are the unique ones on `event.access_code`, `ranking_event.event_id` and `terms (year, period)`, and the one on `event.term_id`. The other foreign key columns have no index.
+- `event.term_id` was added with the fill row -1 of `terms`: the existing events took it and then the column became `NOT NULL`. The explicit id leaves the sequence untouched.
+- `event.requires_course` was added as `true` for the existing events, so no NRC is dropped silently: a new submission to one of them is rejected until the event gets a term or is marked as not requiring a course section. The default was dropped afterwards, so new events set it explicitly.
 - `inscription_cost`, `category_awards.value` and `award_winners.grade` are floating point, while `event_inscriptions_details.value` is an integer.
 - `collaborators` and `organizers` are plain `VARCHAR(255)[]` arrays, not related tables.
 - `collaborators` and `organizers` are nullable in the database: Prisma does not add `NOT NULL` to list columns. Prisma rejects an explicit `null`, stores `NULL` when the field is omitted, and returns `NULL` as an empty list.

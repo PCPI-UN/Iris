@@ -5,6 +5,7 @@ import {
   ProjectComplete,
   ProjectState,
 } from '@app/common/generated/project';
+import { TermProto } from '@app/common/generated/event';
 import { ProjectsService } from '../projects/projects.service';
 import { EventService } from '../events/events.service';
 import { EvaluationsService } from '../evaluations/evaluations.service';
@@ -32,10 +33,12 @@ const REVIEW_STATES: ProjectReviewState[] = [
 /**
  * Read-only endpoints of the academic roles (CU-86e3vmz0m).
  *
- * Which projects a caller sees is decided by project-service from their roles: Admin,
- * FacultyAdmin and Dean see every project; Tutor, Professor and DepartmentDirector only
- * the ones they tutor, teach (course section) or direct (department). A project outside
- * the scope is a 404, the same as a missing one.
+ * Which projects a caller sees is decided by project-service from their scope
+ * permissions: read_all (Admin, FacultyAdmin, Dean) sees every project; read_tutored
+ * (Tutor), read_course (Professor) and read_department (DepartmentDirector) only the
+ * ones they tutor, teach (course section) or direct (department). A project outside the
+ * scope is a 404, the same as a missing one; so is an event of /registrations or /grades
+ * that is deleted or has no project of the caller's scope (it is not in /academic/events).
  *
  * Grades: a caller with `read:grades` (Admin, FacultyAdmin, Dean) sees them at any
  * time; anyone else only once the admin publishes the event results. The rule is
@@ -62,23 +65,32 @@ export class AcademicService {
       currentPage: query.currentPage ?? 1,
       itemsPerPage: query.itemsPerPage ?? 10,
     });
-    return withoutOneofMarkers(page);
+    const codes = await this.termCodes();
+    return withoutOneofMarkers({
+      ...page,
+      items: withTermCodes(page.items ?? [], codes),
+    });
   }
 
   async getProject(
     userId: number,
     projectId: number,
   ): Promise<ProjectComplete> {
-    return withoutOneofMarkers(
-      await this.projectsService.getProjectInScope(userId, projectId),
+    const project = await this.projectsService.getProjectInScope(
+      userId,
+      projectId,
     );
+    const [withTerm] = withTermCodes([project], await this.termCodes());
+    return withoutOneofMarkers(withTerm);
   }
 
-  /** Events where the projects of the caller's scope take part, newest first */
+  /** Events where the projects of the caller's scope take part, newest first; deleted ones are left out */
   async listEvents(userId: number): Promise<AcademicEvent[]> {
     const ids = await this.projectsService.listEventIdsInScope(userId);
+    // ListEventsByIds also returns soft deleted events (active = false), on purpose
     const events = await this.eventsService.listEventsByIds(ids);
     return events
+      .filter((event) => event.active)
       .map((event) => ({
         id: event.id,
         name: event.name,
@@ -88,6 +100,7 @@ export class AcademicService {
         active: event.active,
         evaluationsOpened: event.evaluationsOpened,
         resultsPublished: event.resultsPublished,
+        requiresCourse: event.requiresCourse,
       }))
       .sort((a, b) => String(b.startDate).localeCompare(String(a.startDate)));
   }
@@ -97,11 +110,11 @@ export class AcademicService {
     userId: number,
     eventId: number,
   ): Promise<RegistrationsReport> {
-    const event = await this.requireEvent(eventId);
-    const projects = await this.projectsService.listAllProjectsInScope({
-      userId,
-      eventId,
-    });
+    const event = await this.requireEventInScope(userId, eventId);
+    const projects = withTermCodes(
+      await this.projectsService.listAllProjectsInScope({ userId, eventId }),
+      await this.termCodes(),
+    );
 
     const rows = projects.map(toRegistrationProject);
     const byState = Object.fromEntries(
@@ -131,12 +144,15 @@ export class AcademicService {
    * caller may see it.
    */
   async getGrades(user: AppUser, eventId: number): Promise<GradesReport> {
-    const event = await this.requireEvent(eventId);
-    const projects = await this.projectsService.listAllProjectsInScope({
-      userId: user.id,
-      eventId,
-      state: ProjectState.APPROVED,
-    });
+    const event = await this.requireEventInScope(user.id, eventId);
+    const projects = withTermCodes(
+      await this.projectsService.listAllProjectsInScope({
+        userId: user.id,
+        eventId,
+        state: ProjectState.APPROVED,
+      }),
+      await this.termCodes(),
+    );
     const averages = await this.evaluationsService.getAverageGrades(
       projects.map((p) => p.id),
     );
@@ -178,11 +194,54 @@ export class AcademicService {
     };
   }
 
-  private async requireEvent(eventId: number) {
-    const event = await this.eventsService.getEventById(eventId);
-    if (!event) throw new NotFoundException(`Event ${eventId} not found`);
+  /** Term code (year + period, such as 202610) by term id */
+  private async termCodes(): Promise<Map<number, string>> {
+    const terms = await this.eventsService.listTerms();
+    return new Map(terms.map((term) => [term.id, termCode(term)]));
+  }
+
+  /**
+   * The event, if it is one of /academic/events: not deleted and with at least one project
+   * of the caller's scope. Otherwise a 404, the same as a missing event, as
+   * /academic/projects/:id does with a project outside the scope.
+   */
+  private async requireEventInScope(userId: number, eventId: number) {
+    const inScope = await this.projectsService.listEventIdsInScope(userId);
+    const event = inScope.includes(eventId)
+      ? await this.eventsService.getEventById(eventId)
+      : undefined;
+    if (!event?.active) throw new NotFoundException(`Event ${eventId} not found`);
     return event;
   }
+}
+
+/** Term code as the university writes it: 2026 + "10" is 202610 */
+export function termCode(term: Pick<TermProto, 'year' | 'period'>): string {
+  return `${term.year}${term.period}`;
+}
+
+/** Course section of a project with the code of its term */
+type AcademicCourseWithTerm = AcademicCourse & { term?: string | null };
+
+/**
+ * Adds the term code to the course section of each project: project-service only knows
+ * the term id, and the terms live in event-service.
+ */
+export function withTermCodes<T extends ProjectComplete>(
+  projects: T[],
+  codes: Map<number, string>,
+): T[] {
+  return projects.map((project) =>
+    project.academicCourse
+      ? {
+          ...project,
+          academicCourse: {
+            ...project.academicCourse,
+            term: codes.get(project.academicCourse.termId) ?? null,
+          } as AcademicCourseWithTerm,
+        }
+      : project,
+  );
 }
 
 /**
@@ -245,7 +304,8 @@ function toCourseSummary(
   return {
     id: course.id,
     nrc: course.nrc,
-    term: course.term,
+    termId: course.termId,
+    term: (course as AcademicCourseWithTerm).term ?? null,
     name: course.name,
     departmentName: course.departmentName,
   };
@@ -327,7 +387,7 @@ export function studentNames(project: ProjectComplete): string[] {
 /** By course section (term, then NRC), projects without one last; then by name */
 export function byCourseThenName(a: GradeRow, b: GradeRow): number {
   const courseKey = (row: GradeRow) =>
-    row.academicCourse ? `${row.academicCourse.term} ${row.academicCourse.nrc}` : null;
+    row.academicCourse ? `${row.academicCourse.term ?? ''} ${row.academicCourse.nrc}` : null;
   const courseA = courseKey(a);
   const courseB = courseKey(b);
   if (courseA !== courseB) {

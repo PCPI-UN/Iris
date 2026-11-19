@@ -41,6 +41,11 @@ import { PrismaAwardWinnerRepository } from '@events/infrastructure/prisma/prism
 import { ListCategoriesByIdsUC } from '@events/application/use-cases/list-categories-by-ids.uc';
 import { CategoryRepository } from '@events/domain/repositories/category.repository';
 import { PrismaCategoryRepository } from '@events/infrastructure/prisma/prisma-category.repository';
+import { TermsController } from '@events/interface/grpc/terms.controller';
+import { TermRepository } from '@events/domain/repositories/term.repository';
+import { PrismaTermRepository } from '@events/infrastructure/prisma/prisma-term.repository';
+import { ListTermsUC } from '@events/application/use-cases/list-terms.uc';
+import { CreateTermUC } from '@events/application/use-cases/create-term.uc';
 
 
 @Module({
@@ -57,7 +62,7 @@ import { PrismaCategoryRepository } from '@events/infrastructure/prisma/prisma-c
       },
     ]),
   ],
-  controllers: [EventsController, EventMemberController, EventCatalogController, RankingEventController],
+  controllers: [EventsController, EventMemberController, EventCatalogController, RankingEventController, TermsController],
   providers: [
     PrismaService,
     EventCatalogService,
@@ -95,6 +100,13 @@ import { PrismaCategoryRepository } from '@events/infrastructure/prisma/prisma-c
       useClass: PrismaCategoryRepository,
     },
     ListCategoriesByIdsUC,
+    // Academic terms
+    {
+      provide: TermRepository,
+      useClass: PrismaTermRepository,
+    },
+    ListTermsUC,
+    CreateTermUC,
     // Ranking event
     {
       provide: RankingEventRepository,

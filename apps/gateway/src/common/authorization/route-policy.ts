@@ -212,6 +212,9 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'PATCH /projects/reassign-juror': { access: 'pending' },
   // modules/reports/reports.controller.ts
   'GET /events/:eventId/reports/evaluation': { permission: ['read:grades'] },
+  // modules/terms/terms.controller.ts
+  'GET /terms': { permission: ['read:events'] },
+  'POST /terms': { permission: ['manage:events'] },
   // modules/tiebreaks/tiebreaks.controller.ts
   'GET /tiebreaks': { permission: ['read:grades'] },
   'POST /tiebreaks': { permission: ['manage:events'] },

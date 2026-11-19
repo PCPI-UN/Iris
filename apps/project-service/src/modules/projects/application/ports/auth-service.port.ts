@@ -23,6 +23,8 @@ export interface AuthServicePort {
   findUsersByIds(ids: number[]): Promise<AuthUser[]>;
   /** Active users holding at least one of the roles; userIds restricts the result to those ids. */
   findUsersByRoles(input: { roleIds: number[]; userIds?: number[] }): Promise<RoleHolder[]>;
+  /** Flattened platform permissions ("action:resource") of the user's active roles. */
+  getUserPermissions(userId: number): Promise<string[]>;
   /** Adds the platform roles to the user, keeping the ones already held. */
   assignPlatformRoles(userId: number, roleIds: number[]): Promise<void>;
 }

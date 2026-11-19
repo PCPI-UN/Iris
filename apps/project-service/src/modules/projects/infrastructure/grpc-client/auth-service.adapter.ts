@@ -45,6 +45,10 @@ export class AuthServiceAdapter implements AuthServicePort {
     }));
   }
 
+  async getUserPermissions(userId: number): Promise<string[]> {
+    return this.grpc.getUserPermissions(userId);
+  }
+
   async assignPlatformRoles(userId: number, roleIds: number[]): Promise<void> {
     await this.grpc.assignPlatformRoles(userId, roleIds);
   }

@@ -33,6 +33,12 @@ export class AuthGrpcClient implements OnModuleInit {
     return res.users ?? [];
   }
 
+  async getUserPermissions(userId: number): Promise<string[]> {
+    const res = await firstValueFrom(this.svc.getUserPermissions({ userId }));
+    // proto3 leaves an empty repeated field out of the message
+    return res.permissions ?? [];
+  }
+
   async assignPlatformRoles(userId: number, roleIds: number[]): Promise<void> {
     await firstValueFrom(this.svc.assignPlatformRoles({ userId, roleIds }));
   }

@@ -143,6 +143,7 @@ export class ProjectsController {
         description: req.description,
         eventNumber: req.eventNumber,
         state: protoToState(req.state),
+        nrc: req.nrc,
       });
       return { project: toProtoProject(project) };
     } catch (err) {
@@ -406,6 +407,7 @@ export class ProjectsController {
         description: req.description,
         eventNumber: req.eventNumber, // Optional - set during confirmation
         state: 'UNDER_REVIEW',
+        nrc: req.nrc,
       });
       console.log('Project created with ID:', project.id);
       try {

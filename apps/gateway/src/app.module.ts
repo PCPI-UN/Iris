@@ -9,6 +9,7 @@ import { TieBreaksModule } from './modules/tiebreaks/tiebreaks.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { AcademicModule } from './modules/academic/academic.module';
+import { TermsModule } from './modules/terms/terms.module';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -35,6 +36,7 @@ import { HealthController } from './health.controller';
     DashboardModule,
     ReportsModule,
     AcademicModule,
+    TermsModule,
   ],
   controllers: [CacheManagementController, HealthController],
   providers: [

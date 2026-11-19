@@ -300,6 +300,27 @@ export class UpdateEventPayloadDTO {
   minimumTeamSize?: number;
 
   @ApiProperty({
+    description: 'Academic term of the event (GET /terms); not sent: unchanged',
+    required: false,
+    example: 3,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  termId?: number;
+
+  @ApiProperty({
+    description:
+      'Whether each project must belong to a course section (NRC); not sent: unchanged. ' +
+      'Projects already submitted keep their course section',
+    required: false,
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  requiresCourse?: boolean;
+
+  @ApiProperty({
     description: 'Updated information about allies or partners',
     required: false,
   })

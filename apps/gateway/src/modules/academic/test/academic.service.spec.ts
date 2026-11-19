@@ -20,7 +20,7 @@ const user = (roles: string[], permissions: string[] = []) =>
 const PROFESSOR = user(['Professor'], ['read:academic_projects']);
 const DEAN = user(['Dean'], ['read:academic_projects', 'read:grades']);
 
-const course = { id: 2, nrc: '1001', term: '202610', name: 'PF Sistemas', professorUserId: 5, departmentId: 1, departmentName: 'Sistemas' };
+const course = { id: 2, nrc: '1001', termId: 3, name: 'PF Sistemas', professorUserId: 5, departmentId: 1, departmentName: 'Sistemas' };
 
 const project = (id: number, extra: Record<string, unknown> = {}) => ({
   id,
@@ -46,15 +46,17 @@ describe('AcademicService', () => {
     projectsService = {
       listProjectsInScope: jest.fn().mockResolvedValue({ items: [] }),
       getProjectInScope: jest.fn().mockResolvedValue(project(1)),
-      listEventIdsInScope: jest.fn().mockResolvedValue([4, 8]),
+      listEventIdsInScope: jest.fn().mockResolvedValue([4, 8, 9]),
       // 1: two of three jurors evaluated; 2: nobody evaluated yet
       listAllProjectsInScope: jest.fn().mockResolvedValue([project(1), project(2)]),
     };
     eventsService = {
-      getEventById: jest.fn().mockResolvedValue({ id: 4, name: 'Feria 2026', resultsPublished: false }),
+      listTerms: jest.fn().mockResolvedValue([{ id: 3, year: 2026, period: '10' }]),
+      getEventById: jest.fn().mockResolvedValue({ id: 4, name: 'Feria 2026', resultsPublished: false, active: true }),
       listEventsByIds: jest.fn().mockResolvedValue([
         { id: 4, name: 'Old', startDate: '2025-05-01', resultsPublished: true, active: true },
         { id: 8, name: 'New', startDate: '2026-05-01', resultsPublished: false, active: true },
+        { id: 9, name: 'Deleted', startDate: '2026-06-01', resultsPublished: false, active: false },
       ]),
     };
     evaluationsService = {
@@ -97,7 +99,7 @@ describe('AcademicService', () => {
     });
 
     it('once published every caller sees official grades', async () => {
-      eventsService.getEventById.mockResolvedValue({ id: 4, name: 'Feria 2026', resultsPublished: true });
+      eventsService.getEventById.mockResolvedValue({ id: 4, name: 'Feria 2026', resultsPublished: true, active: true });
 
       const report = await service.getGrades(PROFESSOR, 4);
 
@@ -121,11 +123,37 @@ describe('AcademicService', () => {
     });
   });
 
-  it('listEvents returns the events of the scope, newest first', async () => {
+  it('listEvents returns the events of the scope, newest first, without the deleted ones', async () => {
     const events = await service.listEvents(5);
 
-    expect(eventsService.listEventsByIds).toHaveBeenCalledWith([4, 8]);
+    expect(eventsService.listEventsByIds).toHaveBeenCalledWith([4, 8, 9]);
     expect(events.map((e) => e.id)).toEqual([8, 4]);
+  });
+
+  describe('event of /registrations and /grades', () => {
+    const calls = (s: AcademicService) => [
+      () => s.getRegistrations(5, 4),
+      () => s.getGrades(PROFESSOR, 4),
+    ];
+
+    it('an event without projects of the caller is a 404, like /projects/:id outside the scope', async () => {
+      projectsService.listEventIdsInScope.mockResolvedValue([8]);
+
+      for (const call of calls(service)) {
+        await expect(call()).rejects.toBeInstanceOf(NotFoundException);
+      }
+      expect(eventsService.getEventById).not.toHaveBeenCalled();
+      expect(projectsService.listAllProjectsInScope).not.toHaveBeenCalled();
+    });
+
+    it('a deleted event is a 404, as it is not in /academic/events', async () => {
+      eventsService.getEventById.mockResolvedValue({ id: 4, name: 'Feria 2026', active: false });
+
+      for (const call of calls(service)) {
+        await expect(call()).rejects.toBeInstanceOf(NotFoundException);
+      }
+      expect(projectsService.listAllProjectsInScope).not.toHaveBeenCalled();
+    });
   });
 
   it('getRegistrations counts projects by state and students', async () => {
@@ -143,6 +171,19 @@ describe('AcademicService', () => {
       confirmedStudents: 1,
       pendingStudents: 1,
     });
+    expect(report.projects[0].academicCourse).toMatchObject({ termId: 3, term: '202610' });
+  });
+
+  it('listProjects and getProject add the term code to the course section', async () => {
+    projectsService.listProjectsInScope.mockResolvedValue({
+      items: [project(1), project(2, { academicCourse: undefined }), project(3, { academicCourse: { ...course, termId: 99 } })],
+    });
+
+    const page = await service.listProjects(5, {});
+    expect(page.items.map((p: any) => p.academicCourse?.term)).toEqual(['202610', undefined, null]);
+
+    const one: any = await service.getProject(5, 1);
+    expect(one.academicCourse).toMatchObject({ termId: 3, term: '202610' });
   });
 });
 
@@ -163,7 +204,8 @@ describe('toRegistrationProject', () => {
     );
 
     expect(row).toMatchObject({ state: 'REQUEST_CHANGES', reason: 'Falta el póster', tutors: ['Eva Ruiz'] });
-    expect(row.academicCourse).toEqual({ id: 2, nrc: '1001', term: '202610', name: 'PF Sistemas', departmentName: 'Sistemas' });
+    // The term code is added by the service (withTermCodes); on its own the course has none
+    expect(row.academicCourse).toEqual({ id: 2, nrc: '1001', termId: 3, term: null, name: 'PF Sistemas', departmentName: 'Sistemas' });
     expect(row.students).toEqual([
       { status: 'CONFIRMED', userId: 7, firstName: 'Ana', lastName: 'Paz', email: 'ana@x.com', studentCode: 'S1', semester: '8', career: 'Sistemas' },
       { status: 'INVITED', userId: null, firstName: 'Luis', lastName: null, email: 'luis@x.com', studentCode: 'S2', semester: '1', career: null },

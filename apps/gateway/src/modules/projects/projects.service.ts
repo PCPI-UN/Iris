@@ -249,6 +249,7 @@ export class ProjectsService implements OnModuleInit {
           eventId,
           eventType,
           courseId,
+          nrc: body.nrc,
           name: body.name,
           description: body.description,
           projectCode: body.projectCode,
@@ -335,6 +336,7 @@ export class ProjectsService implements OnModuleInit {
         eventId: dto.eventId,
         eventType: dto.eventType,
         courseId: dto.courseId,
+        nrc: dto.nrc,
         name: dto.name,
         description: dto.description,
         projectCode: dto.projectCode,
@@ -532,7 +534,7 @@ export class ProjectsService implements OnModuleInit {
 
   /**
    * Academic reads: project-service resolves the projects the user may read from their
-   * roles (tutored, of their course sections or department, or all of them).
+   * scope permissions (tutored, of their course sections or department, or all of them).
    */
   async listProjectsInScope(
     request: ListProjectsInScopeRequest,

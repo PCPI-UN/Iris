@@ -15,7 +15,8 @@ Owns the projects submitted to an event: their review lifecycle, their documents
 | Keep pending participants (captured at submission) and confirmed participants (linked to a user) | Manage user accounts or event membership: that belongs to `auth-service` and `event-service` |
 | Assign jurors to projects using the event membership key (user, event, role) | Own the evaluation scale: `evaluation-service` resolves it from the project's `eventId` through `event-service` |
 | Request one invitation per participant when a project is submitted | Send invitations or emails itself: it calls `invitation-service` and `notification-service` |
-| Keep the academic structure (departments and course sections by NRC and term) that scopes what Professors and Department Directors can read; loaded by scripts for now | |
+| Keep the academic structure (departments and course sections by NRC and term) that scopes what Professors and Department Directors can read; loaded by scripts for now | Own the academic terms: they live in `event-service`, and a course section keeps only the term id |
+| Link every project to a course section: the NRC typed at submission is looked up in the term of the event, or course section 0 when the event does not require one | |
 
 ## Modules
 
@@ -82,32 +83,50 @@ sequenceDiagram
 
 ## Academic read scope
 
-`ListProjectsInScope`, `GetProjectInScope` and `ListEventIdsInScope` serve the read-only `/academic/*` endpoints of the gateway. The service asks `auth-service` for the caller's active roles and reads:
+`ListProjectsInScope`, `GetProjectInScope` and `ListEventIdsInScope` serve the read-only `/academic/*` endpoints of the gateway. The gateway only lets in callers with `read:academic_projects`; the projects each one reads come from the scope permissions that `auth-service` returns for the caller (`GetUserPermissions`, active roles only), not from anything the gateway sends:
 
-| Role | Projects |
+| Permission | Projects | Granted to |
+| --- | --- | --- |
+| `read_all:academic_projects` | All | `Admin`, `FacultyAdmin`, `Dean` |
+| `read_tutored:academic_projects` | The ones in `project_tutors` with the user | `Tutor` |
+| `read_course:academic_projects` | The ones of the course sections (`academic_courses`) the user teaches | `Professor` |
+| `read_department:academic_projects` | The ones of the course sections of the department the user directs | `DepartmentDirector` |
+
+- A user with several of them reads the union. No role id is fixed in the code: giving or removing a scope to a role is a row in `auth-service` `_role_permissions`.
+- `Admin` holds `read_all` explicitly: the Admin bypass of the gateway guard does not reach this service.
+- A project outside the scope answers `NOT_FOUND`, like a missing one.
+- The projects in a fill course section (see [schema.md](./schema.md)), -1 (created before course sections existed) or 0 (event that does not require one), are only seen by their tutors and `read_all`, and are returned without `academicCourse`.
+
+### Course section of a new project
+
+The event says whether its projects need a course section (`event-service` `requires_course`, set when the event is created). `CreateProject` and `CreateProjectWithPendingParticipants` read it from `event-service`:
+
+| Event | Course section of the project |
 | --- | --- |
-| `Admin`, `FacultyAdmin`, `Dean` | All |
-| `Tutor` | The ones in `project_tutors` with the user |
-| `Professor` | The ones of the course sections (`academic_courses`) the user teaches |
-| `DepartmentDirector` | The ones of the course sections of the department the user directs |
+| Requires one (a final projects fair) | The `nrc` sent is looked up in the term of the event by (term, NRC), since the same NRC repeats across terms. A missing NRC, one that does not exist in that term, the fill rows 0 and -1, and an event that still has no term (term -1) are rejected (`INVALID_ARGUMENT`) |
+| Does not require one (a hackathon) | Course section 0 ("No aplica"), assigned by the service; an `nrc` sent is ignored |
+| Created before course sections existed | Course section -1, set by the migration |
 
-A user with several roles reads the union. A project outside the scope answers `NOT_FOUND`, like a missing one. A project without a course section is only visible to its tutors and to the roles that read everything.
+`academic_course_id` stays `NOT NULL`. The rule "0 only for an event that does not require a course section" is checked in `create-project.uc.ts`, not by a constraint, because the event lives in another database. An event that does not say whether it requires one is treated as requiring it.
 
 ### Loading departments and course sections
 
-There is no screen for this yet. `scripts/academic-structure/load-academic-structure.ts` loads departments (with their director), course sections by term and NRC (with their professor and department) and the course section of each project from a JSON file; `scripts/academic-structure/example.json` shows the format. Users are given by email.
+There is no screen for this yet. `scripts/academic-structure/load-academic-structure.ts` loads departments (with their director), course sections by term and NRC (with their professor and department) and the course section of each project from a JSON file; `scripts/academic-structure/example.json` shows the format. Users are given by email and terms as `year` and `period` (2026 + `"10"` is 202610).
 
 ```
 # bash
-AUTH_DATABASE_URL=<auth db url> PROJECT_DATABASE_URL=<project db url> pnpm exec ts-node scripts/academic-structure/load-academic-structure.ts <file.json> --dry-run
+AUTH_DATABASE_URL=<auth db url> EVENT_DATABASE_URL=<event db url> PROJECT_DATABASE_URL=<project db url> pnpm exec ts-node scripts/academic-structure/load-academic-structure.ts <file.json> --dry-run
 # PowerShell
-$env:AUTH_DATABASE_URL="<auth db url>"; $env:PROJECT_DATABASE_URL="<project db url>"
+$env:AUTH_DATABASE_URL="<auth db url>"; $env:EVENT_DATABASE_URL="<event db url>"; $env:PROJECT_DATABASE_URL="<project db url>"
 pnpm exec ts-node scripts/academic-structure/load-academic-structure.ts <file.json> --dry-run
 ```
 
-- It checks the whole file first (unknown emails, projects or departments, repeated rows, a user directing two departments); with any error nothing is written. Users without the matching role (`Professor`, `DepartmentDirector`) only raise a warning, because they will not see anything until the role is granted.
+- It checks the whole file first (unknown emails, projects, departments or terms, repeated rows, a user directing two departments); with any error nothing is written. Users without the matching role (`Professor`, `DepartmentDirector`) only raise a warning, because they will not see anything until the role is granted.
+- A term must exist in `event-service` before it is used (`POST /terms`). A project is linked only to a course section of the term of its event; for an old event, set its term first (`PATCH /events/:id` with `termId`).
+- A department listed without `directorEmail` keeps the director it has; `"directorEmail": null` leaves it without director. This lets a later file list a department only to add course sections to it.
+- The fill rows (department -1 "Sin departamento", course sections -1 "Sin NRC" and 0 "No aplica") cannot be named or changed from the file. A project of an event that does not require a course section cannot be linked to one: it keeps course section 0.
 - Without `--dry-run` it writes everything in one transaction. Departments are matched by name and course sections by (term, NRC); existing ones take the values of the file. Nothing is deleted, and running the same file again changes nothing.
-- It only reads `auth-service`; roles are granted from the user administration (`PUT /users/:id/roles`).
+- It only reads `auth-service` and `event-service`; roles are granted from the user administration (`PUT /users/:id/roles`).
 
 ## Related
 

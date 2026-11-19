@@ -4,7 +4,7 @@ import { normalizeEmail } from '@app/common/utils/email.util';
 import { ProjectRepository } from '../../domain/repositories/project.repository';
 import { ProjectReadScope } from '../../domain/read-scope';
 import { PendingProjectParticipant, PendingProjectTutor, PendingProjectTutorInput, Project, TypedDocument } from '../../domain/entities/project.entity';
-import { ProjectDocument, ProjectState, JurorKey, ProjectParticipant, UserParticipation, ProjectWithJurorIds, JUROR_ROLE_ID, ProjectInScope } from '../../domain/entities/project.entity';
+import { ProjectDocument, ProjectState, JurorKey, ProjectParticipant, UserParticipation, ProjectWithJurorIds, JUROR_ROLE_ID, ProjectInScope, isFillAcademicCourse } from '../../domain/entities/project.entity';
 
 
 type CreateProjectInput = {
@@ -15,6 +15,7 @@ type CreateProjectInput = {
   description?: string;
   eventNumber?: string;
   state: 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'REQUEST_CHANGES';
+  academicCourseId: number;
 };
 
 type AddPendingParticipantInput = {
@@ -39,14 +40,14 @@ const IN_SCOPE_INCLUDE = {
 
 /**
  * Prisma filter of the projects inside a read scope; undefined means every project.
- * The relations a role grants are OR-ed, so a user with several roles reads the union.
+ * The relations granted by the user's permissions are OR-ed, so a user with several reads the union.
  */
 export function scopeWhere(scope: ProjectReadScope): Record<string, unknown> | undefined {
   if (scope.all) return undefined;
   const or: Record<string, unknown>[] = [];
-  if (scope.asTutor) or.push({ tutors: { some: { userId: scope.userId } } });
-  if (scope.asProfessor) or.push({ academicCourse: { is: { professorUserId: scope.userId } } });
-  if (scope.asDirector) {
+  if (scope.tutored) or.push({ tutors: { some: { userId: scope.userId } } });
+  if (scope.ofCourses) or.push({ academicCourse: { is: { professorUserId: scope.userId } } });
+  if (scope.ofDepartment) {
     or.push({ academicCourse: { is: { department: { is: { directorUserId: scope.userId } } } } });
   }
   // A scope with no relation reads nothing; resolveReadScope never builds one, but stay closed
@@ -58,11 +59,12 @@ function toProjectInScope(row: any): ProjectInScope {
   return {
     ...project,
     assignedJurorCount: _count?.jurorsAssigned ?? 0,
-    academicCourse: academicCourse
+    // Course sections -1 and 0 are fill rows, not real NRCs
+    academicCourse: academicCourse && !isFillAcademicCourse(academicCourse.id)
       ? {
           id: academicCourse.id,
           nrc: academicCourse.nrc,
-          term: academicCourse.term,
+          termId: academicCourse.termId,
           name: academicCourse.name,
           professorUserId: academicCourse.professorUserId,
           departmentId: academicCourse.departmentId,
@@ -88,8 +90,17 @@ export class PrismaProjectRepository implements ProjectRepository {
         description: data.description ?? null,
         eventNumber: data.eventNumber ?? null,
         state: data.state,
+        academicCourseId: data.academicCourseId,
       },
     }) as unknown as Project;
+  }
+
+  async findAcademicCourseId(termId: number, nrc: string): Promise<number | null> {
+    const course = await this.prisma.academicCourse.findUnique({
+      where: { termId_nrc: { termId, nrc } },
+      select: { id: true },
+    });
+    return course?.id ?? null;
   }
 
   async findById(id: number): Promise<Project | null> {

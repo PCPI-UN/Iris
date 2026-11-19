@@ -31,8 +31,8 @@ import { GradesReport } from './academic.types';
 /**
  * Read-only endpoints of the academic roles (CU-86e3vmz0m). All of them require
  * `read:academic_projects`; project-service limits the projects to the caller's scope
- * (Admin, FacultyAdmin, Dean: all; Tutor: tutored; Professor: their course sections;
- * DepartmentDirector: their department). Nothing here writes.
+ * permissions (read_all: all; read_tutored: tutored; read_course: their course sections;
+ * read_department: their department). Nothing here writes.
  */
 @ApiTags('academic')
 @ApiSecurity('JWT-auth')

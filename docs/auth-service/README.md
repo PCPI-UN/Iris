@@ -11,7 +11,7 @@ Owns user accounts, platform roles, permissions and authentication tokens. It is
 | Auth service does | Auth service does not |
 | --- | --- |
 | Store users, platform role assignments, roles and permissions | Decide whether a caller may invoke an RPC: permissions are checked in the gateway |
-| Enforce the administrator rules when creating, editing, deactivating users or changing their roles (see below) | Scope what academic profiles see (course, department, tutored projects): `project-service` resolves it from the roles returned here |
+| Enforce the administrator rules when creating, editing, deactivating users or changing their roles (see below) | Scope what academic profiles see (course, department, tutored projects): `project-service` resolves it from the permissions returned here |
 | Hash passwords and issue access and refresh JWTs | Talk to Azure Entra ID: the gateway runs the OAuth flow and passes the Microsoft token to this service |
 | Issue and validate one-time tokens (account setup, password reset) | Send email itself: it calls `notification-service` |
 | Return a user's platform roles and permissions | Manage event-level membership: that belongs to `event-service` |
@@ -39,13 +39,13 @@ The role and permission catalogue lives in the migrations of this service, not i
 | 4 | `Juror` | EVENT | Juror of an event (through event membership) | Evaluates assigned projects |
 | 5 | `Participant` | EVENT | Participant of an event (through event membership) | Submits and edits their project |
 | 6 | `FacultyAdmin` | PLATFORM | Faculty (decanatura) administrator | Every administrative operation except managing administrators (`manage:admins`) |
-| 7 | `Dean` | PLATFORM | Dean | Read-only access to everything, including grades before they are published (`read:events`, `read:grades`, `read:users`, `read:invitations`, `read:academic_projects`) |
-| 8 | `DepartmentDirector` | PLATFORM | Department director | `User` plus `read:academic_projects`: reads the projects of the course sections of their department |
-| 9 | `Professor` | PLATFORM | Professor of a final project course | `User` plus `read:academic_projects`: reads the projects of their course sections (NRC) |
-| 10 | `Tutor` | PLATFORM | Project tutor | `User` plus `read:academic_projects`: reads the projects they tutor |
+| 7 | `Dean` | PLATFORM | Dean | Read-only access to everything, including grades before they are published (`read:events`, `read:grades`, `read:users`, `read:invitations`, `read:academic_projects`, `read_all:academic_projects`) |
+| 8 | `DepartmentDirector` | PLATFORM | Department director | `User` plus `read:academic_projects` and `read_department:academic_projects`: reads the projects of the course sections of their department |
+| 9 | `Professor` | PLATFORM | Professor of a final project course | `User` plus `read:academic_projects` and `read_course:academic_projects`: reads the projects of their course sections (NRC) |
+| 10 | `Tutor` | PLATFORM | Project tutor | `User` plus `read:academic_projects` and `read_tutored:academic_projects`: reads the projects they tutor |
 
 - `read:events` lets a role read events, rubrics and configuration; `read:grades` adds grades, rankings and tie-breaks. Writing requires `manage:events`.
-- `read:academic_projects` opens the read-only academic endpoints (projects, registrations and grades). Which projects each caller sees is decided by `project-service`: `Admin`, `FacultyAdmin` and `Dean` see all of them; `Tutor`, `Professor` and `DepartmentDirector` only the ones in their scope, and without `read:grades` they see no grade before the event results are published.
+- `read:academic_projects` opens the read-only academic endpoints (projects, registrations and grades). Which projects each caller sees is decided by `project-service` from four scope permissions, the union of the ones the user holds: `read_all:academic_projects` (every project: `Admin`, `FacultyAdmin`, `Dean`), `read_tutored:academic_projects` (tutored projects: `Tutor`), `read_course:academic_projects` (projects of their course sections: `Professor`) and `read_department:academic_projects` (projects of their department: `DepartmentDirector`). Giving or removing a scope to a role is a row in `_role_permissions`, with no code change. `Admin` holds `read_all` explicitly, because the Admin bypass of the gateway guard does not reach `project-service`. Without `read:grades`, a caller sees no grade before the event results are published.
 - Event roles are granted through event membership. `CreatePlatformUser` and `SetUserPlatformRoles` reject them as platform roles.
 - `IsPlatformStaff` (every event in "my events") is true for `Admin` and for any role with `read:events`.
 
