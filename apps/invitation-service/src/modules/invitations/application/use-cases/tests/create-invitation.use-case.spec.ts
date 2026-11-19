@@ -282,6 +282,21 @@ describe('CreateInvitationUseCase', () => {
         notificationService.sendProjectTutorInvitationEmail,
       ).toHaveBeenCalledWith(expect.objectContaining({ projectName: 'Robot' }));
     });
+
+    // Known bug: the NOT_FOUND thrown inside the try is wrapped again by its catch, which reads
+    // error.code (an RpcException keeps it in getError()), so the caller gets INTERNAL.
+    // When it is fixed this test starts failing: remove `.failing`.
+    it.failing(
+      'event that does not exist: NOT_FOUND and nothing is saved',
+      async () => {
+        eventService.getEvent.mockResolvedValue(null);
+
+        await expect(useCase.execute(dto())).rejects.toMatchObject({
+          error: expect.objectContaining({ code: status.NOT_FOUND }),
+        });
+        expect(invitationRepository.save).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('repeated invitations', () => {
