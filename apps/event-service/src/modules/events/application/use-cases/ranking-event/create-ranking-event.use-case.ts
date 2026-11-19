@@ -12,7 +12,7 @@ export class CreateRankingEventUseCase {
     if (existing) {
       throw new RpcException({
         code: 6,
-        message: `A ranking configuration already exists for event ${input.eventId}`,
+        message: `Ya existe una configuración de ranking para el evento ${input.eventId}`,
       });
     }
 

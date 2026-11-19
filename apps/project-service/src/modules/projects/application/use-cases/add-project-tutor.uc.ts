@@ -11,13 +11,13 @@ export class AddProjectTutorUC {
   constructor(@Inject('ProjectRepository') private readonly repo: ProjectRepository) {}
 
   async execute(input: AddProjectTutorDTO): Promise<{ success: boolean }> {
-    if (!input.projectId || input.projectId <= 0) throw new ValidationError('Invalid projectId');
-    if (!input.userId || input.userId <= 0) throw new ValidationError('Invalid userId');
+    if (!input.projectId || input.projectId <= 0) throw new ValidationError('projectId no es válido');
+    if (!input.userId || input.userId <= 0) throw new ValidationError('userId no es válido');
     const email = normalizeEmail(input.email ?? '');
-    if (!isEmail(email)) throw new ValidationError('Invalid email format');
+    if (!isEmail(email)) throw new ValidationError('El formato del correo no es válido');
 
     const project = await this.repo.findById(input.projectId);
-    if (!project) throw new NotFoundError('Project not found');
+    if (!project) throw new NotFoundError('No se encontró el proyecto');
 
     const pendings = await this.repo.listPendingTutors(input.projectId);
     const invited = pendings.some((pending) => pending.email === email && pending.status !== 'JOINED');
@@ -25,7 +25,7 @@ export class AddProjectTutorUC {
       // A retried acceptance finds the tutor already linked; a removed tutor finds nothing
       const linked = await this.repo.listTutorUserIds(input.projectId);
       if (linked.includes(input.userId)) return { success: true };
-      throw new ValidationError('The project has no pending tutor with this email');
+      throw new ValidationError('El proyecto no tiene un tutor pendiente con este correo');
     }
 
     await this.repo.addTutor(input.projectId, input.userId);

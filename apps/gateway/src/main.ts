@@ -1,7 +1,9 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as cookieParser from 'cookie-parser';
-import { ValidationPipe } from '@nestjs/common';
+import { BadRequestException, ValidationPipe } from '@nestjs/common';
+import { ValidationError } from 'class-validator';
+import { validationErrorMessages } from '@app/common/i18n/validation-messages';
 import { GrpcExceptionFilter } from './common/filters/grpc-exception.filter';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { HttpCacheInterceptor } from './common/cache/http-cache.interceptor';
@@ -18,7 +20,15 @@ async function bootstrap() {
   }); 
   app.use(cookieParser());
 
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      // class-validator's default messages in Spanish (IRIS-V3-UX-01)
+      exceptionFactory: (errors: ValidationError[]) =>
+        new BadRequestException(validationErrorMessages(errors)),
+    }),
+  );
   app.useGlobalFilters(new GrpcExceptionFilter());
 
   // NOTE: Temporaly commented because it's not completely ready yet!

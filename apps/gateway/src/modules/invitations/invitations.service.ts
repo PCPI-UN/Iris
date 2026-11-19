@@ -125,7 +125,7 @@ export class InvitationsService implements OnModuleInit {
     if (!jurorRole) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: 'Juror role not found in the system',
+        message: 'No se encontró el rol de jurado en el sistema',
       });
     }
 

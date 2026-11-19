@@ -21,21 +21,21 @@ export class ValidateTokenUseCase {
     if (!userToken) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: 'Token not found, expired or already used',
+        message: 'El enlace no existe, expiró o ya se usó',
       });
     }
 
     if (userToken.usedAt) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: 'Token not found, expired or already used',
+        message: 'El enlace no existe, expiró o ya se usó',
       });
     }
 
     if (userToken.expiresAt < new Date()) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: 'Token not found, expired or already used',
+        message: 'El enlace no existe, expiró o ya se usó',
       });
     }
 

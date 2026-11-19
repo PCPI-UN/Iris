@@ -163,7 +163,7 @@ describe('EvaluateProjectUseCase', () => {
 
         await expect(
             useCase.execute({ projectId: 1, userId: 1, scores: [{ criterionId: 1, score: 4 }] }),
-        ).rejects.toThrow('Unsupported evaluation type: UNKNOWN');
+        ).rejects.toThrow('Tipo de evaluación no soportado: UNKNOWN');
     });
 
     it('should calculate grade correctly with real-world rubric data (15 criterions, 3 components)', async () => {
@@ -241,7 +241,7 @@ describe('EvaluateProjectUseCase', () => {
             useCase.execute({ projectId: 1, userId: 1, scores: [{ criterionId: 1, score: 4 }] }),
         ).rejects.toThrow(
             expect.objectContaining({
-                message: expect.stringContaining('already evaluated')
+                message: expect.stringContaining('ya evaluó')
             })
         );
     });
@@ -253,7 +253,7 @@ describe('EvaluateProjectUseCase', () => {
             useCase.execute({ projectId: 1, userId: 1, scores: [{ criterionId: 999, score: 4 }] }),
         ).rejects.toThrow(
             expect.objectContaining({
-                message: expect.stringContaining('Criterion 999 not found')
+                message: expect.stringContaining('El criterio 999 no está')
             })
         );
     });

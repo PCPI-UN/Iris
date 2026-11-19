@@ -53,7 +53,7 @@ export class GetStudentParticipationStatsUC {
     input: GetStudentParticipationStatsDTO,
   ): Promise<StudentDashboardData> {
     if (!Number.isInteger(input.userId) || input.userId < 1) {
-      throw new ValidationError('userId must be a positive integer');
+      throw new ValidationError('userId debe ser un entero positivo');
     }
 
     const [projects, participations] = await Promise.all([

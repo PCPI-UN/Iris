@@ -19,7 +19,7 @@ export class CreateTieBreakUseCase {
         if (existing.length > 0) {
             throw new RpcException({
                 code: status.ALREADY_EXISTS,
-                message: `A tiebreak for project ${dto.projectId} in event ${dto.eventId} and category ${dto.categoryId} already exists`,
+                message: `Ya existe un desempate para el proyecto ${dto.projectId} en el evento ${dto.eventId} y la categoría ${dto.categoryId}`,
             });
         }
 

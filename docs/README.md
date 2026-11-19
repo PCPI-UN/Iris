@@ -6,6 +6,10 @@ This directory contains service-level documentation for the PCPI microservice ar
 
 - [CI/CD Pipeline & Coolify Deployments](./cicd.md)
 
+## Language
+
+- [Glossary (Spanish terms)](./glossary.md): the Spanish word for each concept in API messages and emails
+
 ## Services
 
 - [Gateway](./gateway/README.md)

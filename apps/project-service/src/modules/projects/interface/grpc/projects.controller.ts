@@ -384,7 +384,7 @@ export class ProjectsController {
       if (hasConflict) {
         throw new RpcException({
           code: status.ALREADY_EXISTS,
-          message: `Conflicting active submissions found for emails: ${conflictEmails.join(', ')}`,
+          message: `Estos correos ya tienen un proyecto activo en conflicto: ${conflictEmails.join(', ')}`,
         });
       }
     }

@@ -17,7 +17,7 @@ export class FindEventMemberByUserAndEventUseCase {
     if (!event) {
       throw new RpcException({
         code: 5,
-        message: `Event with ID ${input.eventId} not found`,
+        message: `No se encontró el evento con ID ${input.eventId}`,
       });
     }
 

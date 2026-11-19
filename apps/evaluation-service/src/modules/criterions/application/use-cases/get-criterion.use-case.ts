@@ -25,7 +25,7 @@ export class GetCriterionUseCase {
     if (!criterion) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: `Criterion with ID ${id} not found`,
+        message: `No se encontró el criterio con ID ${id}`,
       });
     }
 

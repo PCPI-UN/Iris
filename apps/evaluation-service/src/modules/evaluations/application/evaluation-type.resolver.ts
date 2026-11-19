@@ -34,8 +34,8 @@ export function resolveEvaluationType(evaluationType: unknown): EvaluationType {
 
   throw new RpcException({
     code: status.INVALID_ARGUMENT,
-    // Same message as before the resolver was shared; the value is a name or a number
+    // El valor puede ser un nombre o un número
     // eslint-disable-next-line @typescript-eslint/no-base-to-string
-    message: `Unsupported evaluation type: ${String(evaluationType)}`,
+    message: `Tipo de evaluación no soportado: ${String(evaluationType)}`,
   });
 }
