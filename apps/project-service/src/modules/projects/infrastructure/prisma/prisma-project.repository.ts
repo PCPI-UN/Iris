@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../../common/prisma/prisma.service';
 import { normalizeEmail } from '@app/common/utils/email.util';
 import { ProjectRepository } from '../../domain/repositories/project.repository';
@@ -42,9 +43,9 @@ const IN_SCOPE_INCLUDE = {
  * Prisma filter of the projects inside a read scope; undefined means every project.
  * The relations granted by the user's permissions are OR-ed, so a user with several reads the union.
  */
-export function scopeWhere(scope: ProjectReadScope): Record<string, unknown> | undefined {
+export function scopeWhere(scope: ProjectReadScope): Prisma.ProjectWhereInput | undefined {
   if (scope.all) return undefined;
-  const or: Record<string, unknown>[] = [];
+  const or: Prisma.ProjectWhereInput[] = [];
   if (scope.tutored) or.push({ tutors: { some: { userId: scope.userId } } });
   if (scope.ofCourses) or.push({ academicCourse: { is: { professorUserId: scope.userId } } });
   if (scope.ofDepartment) {
@@ -609,7 +610,7 @@ export class PrismaProjectRepository implements ProjectRepository {
     scope: ProjectReadScope,
     opts: { eventId?: number; state?: ProjectState; academicCourseId?: number; q?: string; currentPage: number; itemsPerPage: number },
   ): Promise<{ items: ProjectInScope[]; total: number }> {
-    const filters: Record<string, unknown>[] = [];
+    const filters: Prisma.ProjectWhereInput[] = [];
     const inScope = scopeWhere(scope);
     if (inScope) filters.push(inScope);
     if (opts.eventId) filters.push({ eventId: opts.eventId });

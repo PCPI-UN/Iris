@@ -16,7 +16,8 @@ service EventService {
   rpc GetEventStatuses (GetEventStatusesRequest) returns (GetEventStatusesResponse) {}
   rpc GetDashboardStats (GetEventDashboardStatsRequest) returns (GetEventDashboardStatsResponse) {}
   rpc GetEventsForAR (GetEventsForARRequest) returns (GetEventsForARResponse);
-  // Events by id, soft deleted ones included (active = false); used by the student dashboard
+  // Events by id, newest first (by start date), soft deleted ones included (active = false);
+  // used by the student dashboard and the academic read endpoints
   rpc ListEventsByIds (ListEventsByIdsRequest) returns (ListEventsByIdsResponse) {}
 
   // ---- ACADEMIC TERMS ----

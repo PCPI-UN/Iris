@@ -54,9 +54,10 @@ describe('AcademicService', () => {
       listTerms: jest.fn().mockResolvedValue([{ id: 3, year: 2026, period: '10' }]),
       getEventById: jest.fn().mockResolvedValue({ id: 4, name: 'Feria 2026', resultsPublished: false, active: true }),
       listEventsByIds: jest.fn().mockResolvedValue([
-        { id: 4, name: 'Old', startDate: '2025-05-01', resultsPublished: true, active: true },
-        { id: 8, name: 'New', startDate: '2026-05-01', resultsPublished: false, active: true },
+        // newest first, as event-service returns them
         { id: 9, name: 'Deleted', startDate: '2026-06-01', resultsPublished: false, active: false },
+        { id: 8, name: 'New', startDate: '2026-05-01', resultsPublished: false, active: true },
+        { id: 4, name: 'Old', startDate: '2025-05-01', resultsPublished: true, active: true },
       ]),
     };
     evaluationsService = {
@@ -123,7 +124,7 @@ describe('AcademicService', () => {
     });
   });
 
-  it('listEvents returns the events of the scope, newest first, without the deleted ones', async () => {
+  it('listEvents keeps the order of event-service and leaves out the deleted events', async () => {
     const events = await service.listEvents(5);
 
     expect(eventsService.listEventsByIds).toHaveBeenCalledWith([4, 8, 9]);
@@ -285,6 +286,15 @@ describe('byCourseThenName', () => {
 
     expect(rows.sort(byCourseThenName).map((r) => `${r.projectName}:${r.academicCourse?.nrc ?? '-'}`)).toEqual([
       'Gama:1001', 'Alfa:2001', 'Beta:2001', 'Alfa:-', 'Zeta:-',
+    ]);
+  });
+
+  it('orders the NRC as a number within a term, and the terms by code', async () => {
+    const at = (term: string, nrc: string) => ({ projectName: 'P', academicCourse: { term, nrc } }) as any;
+    const rows = [at('202620', '1001'), at('202610', '10234'), at('202610', '9876')];
+
+    expect(rows.sort(byCourseThenName).map((r) => `${r.academicCourse.term} ${r.academicCourse.nrc}`)).toEqual([
+      '202610 9876', '202610 10234', '202620 1001',
     ]);
   });
 });

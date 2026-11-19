@@ -232,6 +232,7 @@ export class PrismaEventRepository extends EventRepository {
 
     const rows = await this.prisma.event.findMany({
       where: { id: { in: ids } },
+      orderBy: [{ startDate: 'desc' }, { id: 'desc' }],
     });
 
     return rows.map(toDomainEvent);

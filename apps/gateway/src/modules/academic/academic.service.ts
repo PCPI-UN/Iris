@@ -87,7 +87,7 @@ export class AcademicService {
   /** Events where the projects of the caller's scope take part, newest first; deleted ones are left out */
   async listEvents(userId: number): Promise<AcademicEvent[]> {
     const ids = await this.projectsService.listEventIdsInScope(userId);
-    // ListEventsByIds also returns soft deleted events (active = false), on purpose
+    // ListEventsByIds returns them newest first, soft deleted ones (active = false) included
     const events = await this.eventsService.listEventsByIds(ids);
     return events
       .filter((event) => event.active)
@@ -101,8 +101,7 @@ export class AcademicService {
         evaluationsOpened: event.evaluationsOpened,
         resultsPublished: event.resultsPublished,
         requiresCourse: event.requiresCourse,
-      }))
-      .sort((a, b) => String(b.startDate).localeCompare(String(a.startDate)));
+      }));
   }
 
   /** Projects of the caller's scope in the event, with their review state and students */
@@ -384,16 +383,20 @@ export function studentNames(project: ProjectComplete): string[] {
     .filter((name) => name.length > 0);
 }
 
-/** By course section (term, then NRC), projects without one last; then by name */
+/**
+ * By course section (term code, then NRC as a number: 9876 before 10234), projects without
+ * one last; then by name
+ */
 export function byCourseThenName(a: GradeRow, b: GradeRow): number {
-  const courseKey = (row: GradeRow) =>
-    row.academicCourse ? `${row.academicCourse.term ?? ''} ${row.academicCourse.nrc}` : null;
-  const courseA = courseKey(a);
-  const courseB = courseKey(b);
-  if (courseA !== courseB) {
-    if (courseA === null) return 1;
-    if (courseB === null) return -1;
-    return courseA < courseB ? -1 : 1;
+  const courseA = a.academicCourse;
+  const courseB = b.academicCourse;
+  if (!courseA || !courseB) {
+    if (courseA !== courseB) return courseA ? -1 : 1;
+  } else {
+    const byCourse =
+      (courseA.term ?? '').localeCompare(courseB.term ?? '') ||
+      courseA.nrc.localeCompare(courseB.nrc, 'es', { numeric: true });
+    if (byCourse !== 0) return byCourse;
   }
   return a.projectName.localeCompare(b.projectName, 'es');
 }
