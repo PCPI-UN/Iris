@@ -13,7 +13,9 @@ type Paths = Record<string, string[]>;
 
 const rootDir = __dirname;
 
-const readCompilerOptions = (file: string): { baseUrl?: string; paths?: Paths } =>
+const readCompilerOptions = (
+  file: string,
+): { baseUrl?: string; paths?: Paths } =>
   ts.readConfigFile(file, ts.sys.readFile).config?.compilerOptions ?? {};
 
 const specOptions = readCompilerOptions(join(rootDir, 'tsconfig.spec.json'));
@@ -41,7 +43,10 @@ const project = (displayName: string, roots: string[], paths: Paths) => ({
   testMatch: roots.map((root) => `<rootDir>/${root}/**/*.spec.ts`),
   transform: {
     // An object replaces the compilerOptions of tsconfig.json for this project
-    '^.+\\.(t|j)s$': ['ts-jest', { tsconfig: { ...specOptions, baseUrl: rootDir, paths } }],
+    '^.+\\.(t|j)s$': [
+      'ts-jest',
+      { tsconfig: { ...specOptions, baseUrl: rootDir, paths } },
+    ],
   },
   moduleNameMapper: pathsToModuleNameMapper(paths, { prefix: '<rootDir>/' }),
 });
@@ -54,7 +59,9 @@ export default {
   collectCoverageFrom: ['**/*.(t|j)s'],
   coverageDirectory: './coverage',
   projects: [
-    ...services.map((service) => project(service, [`apps/${service}`], servicePaths(service))),
+    ...services.map((service) =>
+      project(service, [`apps/${service}`], servicePaths(service)),
+    ),
     project('libs', ['libs', 'scripts'], rootPaths),
   ],
 };

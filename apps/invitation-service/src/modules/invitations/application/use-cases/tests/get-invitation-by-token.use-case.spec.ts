@@ -18,7 +18,11 @@ describe('GetInvitationByTokenUseCase', () => {
 
   const DAY = 24 * 60 * 60 * 1000;
   const invitation = (
-    overrides: { status?: InvitationStatus; expiresAt?: Date; invitedUserId?: number | null } = {},
+    overrides: {
+      status?: InvitationStatus;
+      expiresAt?: Date;
+      invitedUserId?: number | null;
+    } = {},
   ) =>
     new Invitation(
       'inv-1',
@@ -29,18 +33,27 @@ describe('GetInvitationByTokenUseCase', () => {
       overrides.status ?? InvitationStatus.PENDING,
       overrides.expiresAt ?? new Date(Date.now() + DAY),
       1,
-      overrides.invitedUserId === undefined ? 7 : (overrides.invitedUserId as number),
+      overrides.invitedUserId === undefined
+        ? 7
+        : (overrides.invitedUserId as number),
       new Date(),
       new Date(),
     );
 
   const rpcError = (code: number, message: string) =>
-    expect.objectContaining({ error: expect.objectContaining({ code, message }) });
+    expect.objectContaining({
+      error: expect.objectContaining({ code, message }),
+    });
 
   beforeEach(() => {
     invitationRepository = { findByToken: jest.fn() };
     invitationRoleRepository = {
-      findByInvitationId: jest.fn().mockResolvedValue([new InvitationRole('inv-1', 4), new InvitationRole('inv-1', 5)]),
+      findByInvitationId: jest
+        .fn()
+        .mockResolvedValue([
+          new InvitationRole('inv-1', 4),
+          new InvitationRole('inv-1', 5),
+        ]),
     };
     authService = {
       getUser: jest.fn().mockResolvedValue({
@@ -71,7 +84,9 @@ describe('GetInvitationByTokenUseCase', () => {
     });
     expect(invitationRepository.findByToken).toHaveBeenCalledWith('token-123');
     expect(authService.getUser).toHaveBeenCalledWith(7);
-    expect(invitationRoleRepository.findByInvitationId).toHaveBeenCalledWith('inv-1');
+    expect(invitationRoleRepository.findByInvitationId).toHaveBeenCalledWith(
+      'inv-1',
+    );
   });
 
   it.each([
@@ -88,10 +103,15 @@ describe('GetInvitationByTokenUseCase', () => {
   });
 
   it('answers FAILED_PRECONDITION when the invitation has no invited user', async () => {
-    invitationRepository.findByToken.mockResolvedValue(invitation({ invitedUserId: null }));
+    invitationRepository.findByToken.mockResolvedValue(
+      invitation({ invitedUserId: null }),
+    );
 
     await expect(useCase.execute({ token: 'token-123' })).rejects.toEqual(
-      rpcError(status.FAILED_PRECONDITION, 'La invitación no tiene un usuario válido.'),
+      rpcError(
+        status.FAILED_PRECONDITION,
+        'La invitación no tiene un usuario válido.',
+      ),
     );
     expect(authService.getUser).not.toHaveBeenCalled();
   });

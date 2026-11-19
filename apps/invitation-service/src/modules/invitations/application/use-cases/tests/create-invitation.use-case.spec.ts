@@ -23,7 +23,10 @@ describe('CreateInvitationUseCase', () => {
     findPendingByEmailAndTargetType: jest.Mock;
     save: jest.Mock;
   };
-  let invitationRoleRepository: { findByInvitationId: jest.Mock; save: jest.Mock };
+  let invitationRoleRepository: {
+    findByInvitationId: jest.Mock;
+    save: jest.Mock;
+  };
   let authService: {
     getUserByEmail: jest.Mock;
     createBasicUser: jest.Mock;
@@ -39,10 +42,24 @@ describe('CreateInvitationUseCase', () => {
     sendProjectTutorInvitationEmail: jest.Mock;
   };
 
-  const existingUser = { id: 7, email: 'ana@uninorte.edu.co', firstName: 'Ana', lastName: 'Pérez', status: 'CONFIRMED' };
-  const newUser = { id: 9, email: 'luis@uninorte.edu.co', firstName: 'luis', lastName: undefined, status: 'PENDING' };
+  const existingUser = {
+    id: 7,
+    email: 'ana@uninorte.edu.co',
+    firstName: 'Ana',
+    lastName: 'Pérez',
+    status: 'CONFIRMED',
+  };
+  const newUser = {
+    id: 9,
+    email: 'luis@uninorte.edu.co',
+    firstName: 'luis',
+    lastName: undefined,
+    status: 'PENDING',
+  };
 
-  const dto = (overrides: Partial<CreateInvitationDto> = {}): CreateInvitationDto => ({
+  const dto = (
+    overrides: Partial<CreateInvitationDto> = {},
+  ): CreateInvitationDto => ({
     email: 'ana@uninorte.edu.co',
     eventType: 'Exposition',
     targetType: InvitationTargetType.EVENT,
@@ -67,14 +84,30 @@ describe('CreateInvitationUseCase', () => {
       createBasicUser: jest.fn().mockResolvedValue(newUser),
       generateAccountSetupToken: jest
         .fn()
-        .mockResolvedValue({ token: 'setup-token', expiresAt: new Date('2026-12-01T00:00:00Z') }),
-      getRolesByIds: jest.fn().mockResolvedValue({ roles: [{ id: 6, name: 'FacultyAdmin' }, { id: 7, name: 'Dean' }] }),
+        .mockResolvedValue({
+          token: 'setup-token',
+          expiresAt: new Date('2026-12-01T00:00:00Z'),
+        }),
+      getRolesByIds: jest.fn().mockResolvedValue({
+        roles: [
+          { id: 6, name: 'FacultyAdmin' },
+          { id: 7, name: 'Dean' },
+        ],
+      }),
     };
     eventService = {
-      getEvent: jest.fn().mockResolvedValue({ id: 3, name: 'Feria', description: 'Feria de proyectos' }),
+      getEvent: jest
+        .fn()
+        .mockResolvedValue({
+          id: 3,
+          name: 'Feria',
+          description: 'Feria de proyectos',
+        }),
     };
     projectService = {
-      getProject: jest.fn().mockResolvedValue({ id: 12, name: 'Robot', eventId: 3 }),
+      getProject: jest
+        .fn()
+        .mockResolvedValue({ id: 12, name: 'Robot', eventId: 3 }),
     };
     notificationService = {
       sendPlatformInvitationEmail: jest.fn(),
@@ -83,7 +116,9 @@ describe('CreateInvitationUseCase', () => {
       sendProjectTutorInvitationEmail: jest.fn(),
     };
     const configService = {
-      get: jest.fn((key: string, fallback?: unknown) => (key === 'FRONTEND_URL' ? FRONTEND_URL : fallback)),
+      get: jest.fn((key: string, fallback?: unknown) =>
+        key === 'FRONTEND_URL' ? FRONTEND_URL : fallback,
+      ),
     } as unknown as ConfigService;
 
     useCase = new CreateInvitationUseCase(
@@ -110,7 +145,9 @@ describe('CreateInvitationUseCase', () => {
         status: InvitationStatus.PENDING,
       });
       expect(invitation.token).not.toBe('setup-token');
-      expect(invitationRoles).toEqual([expect.objectContaining({ invitationId: invitation.id, roleId: 4 })]);
+      expect(invitationRoles).toEqual([
+        expect.objectContaining({ invitationId: invitation.id, roleId: 4 }),
+      ]);
       // Event invitations go to jurors
       expect(notificationService.sendJurorInvitationEmail).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -131,7 +168,9 @@ describe('CreateInvitationUseCase', () => {
     });
 
     it('creates the account and uses its account setup token, with a link to set the password', async () => {
-      const { invitation } = await useCase.execute(dto({ email: 'luis@uninorte.edu.co' }));
+      const { invitation } = await useCase.execute(
+        dto({ email: 'luis@uninorte.edu.co' }),
+      );
 
       expect(authService.createBasicUser).toHaveBeenCalledWith({
         email: 'luis@uninorte.edu.co',
@@ -139,14 +178,25 @@ describe('CreateInvitationUseCase', () => {
         lastName: undefined,
       });
       expect(authService.generateAccountSetupToken).toHaveBeenCalledWith(9);
-      expect(invitation).toMatchObject({ token: 'setup-token', expiresAt: new Date('2026-12-01T00:00:00Z') });
+      expect(invitation).toMatchObject({
+        token: 'setup-token',
+        expiresAt: new Date('2026-12-01T00:00:00Z'),
+      });
       expect(notificationService.sendJurorInvitationEmail).toHaveBeenCalledWith(
-        expect.objectContaining({ invitationLink: `${FRONTEND_URL}/auth/chg-password?token=setup-token` }),
+        expect.objectContaining({
+          invitationLink: `${FRONTEND_URL}/auth/chg-password?token=setup-token`,
+        }),
       );
     });
 
     it('creates the account with the names that were sent', async () => {
-      await useCase.execute(dto({ email: 'luis@uninorte.edu.co', firstName: 'Luis', lastName: 'Gómez' }));
+      await useCase.execute(
+        dto({
+          email: 'luis@uninorte.edu.co',
+          firstName: 'Luis',
+          lastName: 'Gómez',
+        }),
+      );
 
       expect(authService.createBasicUser).toHaveBeenCalledWith({
         email: 'luis@uninorte.edu.co',
@@ -156,9 +206,13 @@ describe('CreateInvitationUseCase', () => {
     });
 
     it('does not create an account when auth-service fails for another reason', async () => {
-      authService.getUserByEmail.mockRejectedValue({ code: status.UNAVAILABLE });
+      authService.getUserByEmail.mockRejectedValue({
+        code: status.UNAVAILABLE,
+      });
 
-      await expect(useCase.execute(dto())).rejects.toEqual({ code: status.UNAVAILABLE });
+      await expect(useCase.execute(dto())).rejects.toEqual({
+        code: status.UNAVAILABLE,
+      });
       expect(authService.createBasicUser).not.toHaveBeenCalled();
       expect(invitationRepository.save).not.toHaveBeenCalled();
     });
@@ -166,51 +220,75 @@ describe('CreateInvitationUseCase', () => {
 
   describe('target types', () => {
     it('platform: sends the names of the roles', async () => {
-      await useCase.execute(dto({ targetType: InvitationTargetType.PLATFORM, targetId: 0, roleIds: [6, 7] }));
+      await useCase.execute(
+        dto({
+          targetType: InvitationTargetType.PLATFORM,
+          targetId: 0,
+          roleIds: [6, 7],
+        }),
+      );
 
       expect(eventService.getEvent).not.toHaveBeenCalled();
       expect(authService.getRolesByIds).toHaveBeenCalledWith([6, 7]);
-      expect(notificationService.sendPlatformInvitationEmail).toHaveBeenCalledWith(
+      expect(
+        notificationService.sendPlatformInvitationEmail,
+      ).toHaveBeenCalledWith(
         expect.objectContaining({ roles: 'FacultyAdmin, Dean' }),
       );
     });
 
     it('platform without roles: no roles lookup and no invitation roles', async () => {
       const { invitationRoles } = await useCase.execute(
-        dto({ targetType: InvitationTargetType.PLATFORM, targetId: 0, roleIds: [] }),
+        dto({
+          targetType: InvitationTargetType.PLATFORM,
+          targetId: 0,
+          roleIds: [],
+        }),
       );
 
       expect(authService.getRolesByIds).not.toHaveBeenCalled();
       expect(invitationRoleRepository.save).not.toHaveBeenCalled();
       expect(invitationRoles).toEqual([]);
-      expect(notificationService.sendPlatformInvitationEmail).toHaveBeenCalledWith(
-        expect.objectContaining({ roles: '' }),
-      );
+      expect(
+        notificationService.sendPlatformInvitationEmail,
+      ).toHaveBeenCalledWith(expect.objectContaining({ roles: '' }));
     });
 
     it('project: looks up the project and its event for the email', async () => {
-      await useCase.execute(dto({ targetType: InvitationTargetType.PROJECT, targetId: 12 }));
+      await useCase.execute(
+        dto({ targetType: InvitationTargetType.PROJECT, targetId: 12 }),
+      );
 
       expect(projectService.getProject).toHaveBeenCalledWith(12);
       expect(eventService.getEvent).toHaveBeenCalledWith(3);
-      expect(notificationService.sendProjectSubmittedInvitationEmail).toHaveBeenCalledWith(
-        expect.objectContaining({ projectName: 'Robot', eventName: 'Feria', eventType: 'Exposition' }),
+      expect(
+        notificationService.sendProjectSubmittedInvitationEmail,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectName: 'Robot',
+          eventName: 'Feria',
+          eventType: 'Exposition',
+        }),
       );
     });
 
     it('project tutor: looks up the project only', async () => {
-      await useCase.execute(dto({ targetType: InvitationTargetType.PROJECT_TUTOR, targetId: 12 }));
+      await useCase.execute(
+        dto({ targetType: InvitationTargetType.PROJECT_TUTOR, targetId: 12 }),
+      );
 
       expect(eventService.getEvent).not.toHaveBeenCalled();
-      expect(notificationService.sendProjectTutorInvitationEmail).toHaveBeenCalledWith(
-        expect.objectContaining({ projectName: 'Robot' }),
-      );
+      expect(
+        notificationService.sendProjectTutorInvitationEmail,
+      ).toHaveBeenCalledWith(expect.objectContaining({ projectName: 'Robot' }));
     });
   });
 
   describe('repeated invitations', () => {
     it('rejects an email that already accepted an invitation to the same target', async () => {
-      invitationRepository.findAcceptedByEmailAndTargetType.mockResolvedValue({ id: 'accepted' });
+      invitationRepository.findAcceptedByEmailAndTargetType.mockResolvedValue({
+        id: 'accepted',
+      });
 
       await expect(useCase.execute(dto())).rejects.toMatchObject({
         error: expect.objectContaining({
@@ -223,15 +301,21 @@ describe('CreateInvitationUseCase', () => {
 
     it('returns the pending invitation with its roles instead of creating another one', async () => {
       const pending = { id: 'pending' };
-      invitationRepository.findPendingByEmailAndTargetType.mockResolvedValue(pending);
-      invitationRoleRepository.findByInvitationId.mockResolvedValue([{ invitationId: 'pending', roleId: 4 }]);
+      invitationRepository.findPendingByEmailAndTargetType.mockResolvedValue(
+        pending,
+      );
+      invitationRoleRepository.findByInvitationId.mockResolvedValue([
+        { invitationId: 'pending', roleId: 4 },
+      ]);
 
       await expect(useCase.execute(dto())).resolves.toEqual({
         invitation: pending,
         invitationRoles: [{ invitationId: 'pending', roleId: 4 }],
       });
       expect(invitationRepository.save).not.toHaveBeenCalled();
-      expect(notificationService.sendJurorInvitationEmail).not.toHaveBeenCalled();
+      expect(
+        notificationService.sendJurorInvitationEmail,
+      ).not.toHaveBeenCalled();
     });
   });
 });

@@ -2,7 +2,10 @@ import { CreateBasicUserUseCase } from '../create-basic-user.use-case';
 import { UserRepositoryPort } from '../../../../users/domain/repositories/user.repository.port';
 import { PasswordHasherPort } from '../../../../../common/ports/password-hasher.port';
 import { CreateBasicUserDto } from '../../../../users/application/dto/create-basic-user.dto';
-import { User, UserStatus } from '../../../../users/domain/entities/user.entity';
+import {
+  User,
+  UserStatus,
+} from '../../../../users/domain/entities/user.entity';
 import { RpcException } from '@nestjs/microservices';
 import { status } from '@grpc/grpc-js';
 import { GetRolesUseCase } from '../../../../roles/application/use-cases/get-roles.use-case';
@@ -75,13 +78,20 @@ describe('CreateBasicUserUseCase', () => {
       const result = await useCase.execute(createDto);
 
       expect(result).toEqual(createdUser);
-      expect(mockUserRepository.existsByEmail).toHaveBeenCalledWith('john@example.com');
-      expect(mockUserRepository.existsByPhone).toHaveBeenCalledWith('1234567890');
+      expect(mockUserRepository.existsByEmail).toHaveBeenCalledWith(
+        'john@example.com',
+      );
+      expect(mockUserRepository.existsByPhone).toHaveBeenCalledWith(
+        '1234567890',
+      );
       expect(mockPasswordHasher.hash).toHaveBeenCalledWith(
         expect.stringMatching(/^[a-f0-9]{32}$/), // Random hex password
       );
       expect(mockUserRepository.createWithRoles).toHaveBeenCalledWith(
-        expect.objectContaining({ email: 'john@example.com', password: 'hashed-password' }),
+        expect.objectContaining({
+          email: 'john@example.com',
+          password: 'hashed-password',
+        }),
         [2],
       );
     });

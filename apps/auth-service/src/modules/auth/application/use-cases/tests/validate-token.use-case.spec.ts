@@ -1,6 +1,9 @@
 import { ValidateTokenUseCase } from '../validate-token.use-case';
 import { UserTokenRepositoryPort } from '../../../../users/domain/repositories/user-token.repository.port';
-import { UserToken, UserTokenType } from '../../../../users/domain/entities/user-token.entity';
+import {
+  UserToken,
+  UserTokenType,
+} from '../../../../users/domain/entities/user-token.entity';
 import { RpcException } from '@nestjs/microservices';
 import { status } from '@grpc/grpc-js';
 

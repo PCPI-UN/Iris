@@ -18,11 +18,23 @@ describe('SetPasswordUseCase', () => {
   let useCase: SetPasswordUseCase;
 
   const pendingUser = () =>
-    new User(1, 'John', 'Doe', 'john@example.com', undefined, undefined, true, UserStatus.PENDING);
+    new User(
+      1,
+      'John',
+      'Doe',
+      'john@example.com',
+      undefined,
+      undefined,
+      true,
+      UserStatus.PENDING,
+    );
 
   beforeEach(() => {
     validateToken = { execute: jest.fn() };
-    userRepository = { findById: jest.fn(), save: jest.fn(async (user) => user) };
+    userRepository = {
+      findById: jest.fn(),
+      save: jest.fn(async (user) => user),
+    };
     passwordHasher = { hash: jest.fn().mockResolvedValue('hashed-password') };
     userTokenRepository = { markAsUsed: jest.fn() };
     tokenRepository = { deleteByUserId: jest.fn() };
@@ -37,16 +49,25 @@ describe('SetPasswordUseCase', () => {
   });
 
   it('sets the password of a new account, confirms it and marks the link as used', async () => {
-    validateToken.execute.mockResolvedValue({ valid: true, userId: 1, tokenType: UserTokenType.ACCOUNT_SETUP });
+    validateToken.execute.mockResolvedValue({
+      valid: true,
+      userId: 1,
+      tokenType: UserTokenType.ACCOUNT_SETUP,
+    });
     userRepository.findById.mockResolvedValue(pendingUser());
 
-    await expect(useCase.execute({ token: 'setup-token', password: 'NewPassword123!' })).resolves.toEqual({
+    await expect(
+      useCase.execute({ token: 'setup-token', password: 'NewPassword123!' }),
+    ).resolves.toEqual({
       success: true,
     });
 
     expect(passwordHasher.hash).toHaveBeenCalledWith('NewPassword123!');
     expect(userRepository.save).toHaveBeenCalledWith(
-      expect.objectContaining({ password: 'hashed-password', status: UserStatus.CONFIRMED }),
+      expect.objectContaining({
+        password: 'hashed-password',
+        status: UserStatus.CONFIRMED,
+      }),
     );
     expect(userTokenRepository.markAsUsed).toHaveBeenCalledWith('setup-token');
     // Setting up an account does not close sessions
@@ -54,25 +75,44 @@ describe('SetPasswordUseCase', () => {
   });
 
   it('on a password reset keeps the account status and closes the sessions of the user', async () => {
-    validateToken.execute.mockResolvedValue({ valid: true, userId: 1, tokenType: UserTokenType.RESET_PASSWORD });
+    validateToken.execute.mockResolvedValue({
+      valid: true,
+      userId: 1,
+      tokenType: UserTokenType.RESET_PASSWORD,
+    });
     userRepository.findById.mockResolvedValue(pendingUser());
 
-    await useCase.execute({ token: 'reset-token', password: 'NewPassword123!' });
+    await useCase.execute({
+      token: 'reset-token',
+      password: 'NewPassword123!',
+    });
 
     expect(userRepository.save).toHaveBeenCalledWith(
-      expect.objectContaining({ password: 'hashed-password', status: UserStatus.PENDING }),
+      expect.objectContaining({
+        password: 'hashed-password',
+        status: UserStatus.PENDING,
+      }),
     );
     expect(userTokenRepository.markAsUsed).toHaveBeenCalledWith('reset-token');
     expect(tokenRepository.deleteByUserId).toHaveBeenCalledWith(1);
   });
 
   it('answers NOT_FOUND when the user of the link does not exist', async () => {
-    validateToken.execute.mockResolvedValue({ valid: true, userId: 999, tokenType: UserTokenType.ACCOUNT_SETUP });
+    validateToken.execute.mockResolvedValue({
+      valid: true,
+      userId: 999,
+      tokenType: UserTokenType.ACCOUNT_SETUP,
+    });
     userRepository.findById.mockResolvedValue(null);
 
-    await expect(useCase.execute({ token: 'setup-token', password: 'NewPassword123!' })).rejects.toThrow(
+    await expect(
+      useCase.execute({ token: 'setup-token', password: 'NewPassword123!' }),
+    ).rejects.toThrow(
       expect.objectContaining({
-        error: expect.objectContaining({ code: status.NOT_FOUND, message: 'No se encontró el usuario' }),
+        error: expect.objectContaining({
+          code: status.NOT_FOUND,
+          message: 'No se encontró el usuario',
+        }),
       }),
     );
     expect(passwordHasher.hash).not.toHaveBeenCalled();
@@ -81,10 +121,15 @@ describe('SetPasswordUseCase', () => {
 
   it('changes nothing when the link is not valid', async () => {
     validateToken.execute.mockRejectedValue(
-      new RpcException({ code: status.NOT_FOUND, message: 'El enlace no existe, expiró o ya se usó' }),
+      new RpcException({
+        code: status.NOT_FOUND,
+        message: 'El enlace no existe, expiró o ya se usó',
+      }),
     );
 
-    await expect(useCase.execute({ token: 'bad-token', password: 'NewPassword123!' })).rejects.toThrow(RpcException);
+    await expect(
+      useCase.execute({ token: 'bad-token', password: 'NewPassword123!' }),
+    ).rejects.toThrow(RpcException);
     expect(userRepository.findById).not.toHaveBeenCalled();
     expect(userRepository.save).not.toHaveBeenCalled();
     expect(userTokenRepository.markAsUsed).not.toHaveBeenCalled();
