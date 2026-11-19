@@ -1,12 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../common/prisma/prisma.service';
-import { AwardWinnerRepository } from '../../domain/repositories/award-winner.repository';
+import {
+  AwardWinnerRepository,
+  WinnersEventRowsPage,
+} from '../../domain/repositories/award-winner.repository';
 import { ProjectAward } from '../../domain/entities/project-award.entity';
 import {
-  PublishedWinner,
-  PublishedWinnersEvent,
-  PublishedWinnersEventsPage,
-} from '../../domain/entities/published-winner.entity';
+  WinnerRow,
+  WinnersEventRow,
+} from '../../domain/entities/winner-row.entity';
 
 // An event enters the public winners view only when the admin published its results
 // (the same flag the student dashboard uses for awards), its ranking is public and it has
@@ -74,7 +76,7 @@ export class PrismaAwardWinnerRepository extends AwardWinnerRepository {
   async findEventsWithPublishedWinners(
     page: number,
     limit: number,
-  ): Promise<PublishedWinnersEventsPage> {
+  ): Promise<WinnersEventRowsPage> {
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.event.findMany({
         where: PUBLISHED_WINNERS_EVENT_WHERE,
@@ -96,7 +98,7 @@ export class PrismaAwardWinnerRepository extends AwardWinnerRepository {
       total,
       events: rows.map(
         (row) =>
-          new PublishedWinnersEvent(
+          new WinnersEventRow(
             row.id,
             row.name,
             row.startDate,
@@ -107,7 +109,7 @@ export class PrismaAwardWinnerRepository extends AwardWinnerRepository {
     };
   }
 
-  async findWinnersByEventIds(eventIds: number[]): Promise<PublishedWinner[]> {
+  async findWinnersByEventIds(eventIds: number[]): Promise<WinnerRow[]> {
     if (!eventIds.length) return [];
 
     const rows = await this.prisma.awardWinnerEvent.findMany({
@@ -138,7 +140,7 @@ export class PrismaAwardWinnerRepository extends AwardWinnerRepository {
 
     return rows.map(
       (row) =>
-        new PublishedWinner(
+        new WinnerRow(
           row.id,
           row.projectId,
           row.grade,

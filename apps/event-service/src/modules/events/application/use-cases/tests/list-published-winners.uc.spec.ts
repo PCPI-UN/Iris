@@ -1,19 +1,19 @@
 import { ListPublishedWinnersUC } from '../list-published-winners.uc';
 import { AwardWinnerRepository } from '../../../domain/repositories/award-winner.repository';
 import {
-  PublishedWinner,
-  PublishedWinnersEvent,
-} from '../../../domain/entities/published-winner.entity';
+  WinnerRow,
+  WinnersEventRow,
+} from '../../../domain/entities/winner-row.entity';
 
 describe('ListPublishedWinnersUC', () => {
-  const newest = new PublishedWinnersEvent(
+  const newest = new WinnersEventRow(
     9,
     'Feria 2026',
     new Date('2026-10-01T00:00:00Z'),
     new Date('2026-10-03T00:00:00Z'),
     true,
   );
-  const older = new PublishedWinnersEvent(
+  const older = new WinnersEventRow(
     4,
     'Feria 2025',
     new Date('2025-10-01T00:00:00Z'),
@@ -23,11 +23,11 @@ describe('ListPublishedWinnersUC', () => {
 
   // Repository order: category, award position, winner id
   const winners = [
-    new PublishedWinner(1, 100, 95, 10, 'Primer lugar', 1, 7, 'Software', 9),
-    new PublishedWinner(2, 101, 90, 11, 'Segundo lugar', 2, 7, 'Software', 9),
-    new PublishedWinner(3, 102, 90, 11, 'Segundo lugar', 2, 7, 'Software', 9),
-    new PublishedWinner(4, 103, 88.456, 12, 'Primer lugar', 1, 8, 'Hardware', 9),
-    new PublishedWinner(5, 200, 97, 20, 'Primer lugar', 1, 3, 'Software', 4),
+    new WinnerRow(1, 100, 95, 10, 'Primer lugar', 1, 7, 'Software', 9),
+    new WinnerRow(2, 101, 90, 11, 'Segundo lugar', 2, 7, 'Software', 9),
+    new WinnerRow(3, 102, 90, 11, 'Segundo lugar', 2, 7, 'Software', 9),
+    new WinnerRow(4, 103, 88.456, 12, 'Primer lugar', 1, 8, 'Hardware', 9),
+    new WinnerRow(5, 200, 97, 20, 'Primer lugar', 1, 3, 'Software', 4),
   ];
 
   const buildRepo = (events = [newest, older], total = events.length) => ({

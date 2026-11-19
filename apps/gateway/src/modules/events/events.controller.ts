@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiQuery,
@@ -67,6 +68,7 @@ import {
   RankingReportFormat,
 } from './dto/ranking-report/get-ranking-report.dto';
 import { ListPublishedWinnersDTO } from './dto/winners/list-published-winners.dto';
+import { WinnersPageResponse } from './dto/winners/winners-page.response';
 import { RankingReportResult } from './events.service';
 import { XLSX_CONTENT_TYPE, xlsxFile } from '../../common/excel/xlsx-file';
 import {
@@ -140,7 +142,7 @@ export class EventsController {
   }
 
   /**
-   * PUBLIC ENDPOINT - Winners of every event with a published ranking
+   * PUBLIC ENDPOINT - Winners of every event with published results and a public ranking
    * No authentication required. Declared before `public/:id` so "winners" is not read as an id.
    */
   @Public()
@@ -148,11 +150,11 @@ export class EventsController {
   @ApiOperation({
     summary: 'List winners of all events',
     description:
-      'Winners and co-winners of every event whose ranking is public, grouped by event, category and award, newest event first. Grades are null unless the event ranking shows them. No authentication required.',
+      'Winners and co-winners of every event with published results and a public ranking, grouped by event, category and award, newest event first. Grades are null unless the event ranking shows them. No authentication required.',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Returns the winners per event with pagination',
+  @ApiOkResponse({
+    type: WinnersPageResponse,
+    description: 'Winners per event with pagination',
   })
   async listPublishedWinners(@Query() query: ListPublishedWinnersDTO) {
     return this.eventsService.listPublishedWinners(query);

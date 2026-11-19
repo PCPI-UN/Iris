@@ -143,10 +143,8 @@ import {
   GetEventsForARResponse,
 } from '@app/common/generated/event';
 import { CreateRankingEventDTO } from './dto/ranking-event/create-ranking-event.dto';
-import {
-  ListPublishedWinnersDTO,
-  ListPublishedWinnersResult,
-} from './dto/winners/list-published-winners.dto';
+import { ListPublishedWinnersDTO } from './dto/winners/list-published-winners.dto';
+import { WinnersPageResponse } from './dto/winners/winners-page.response';
 import { DEFAULT_PUBLISHED_WINNERS_LIMIT } from '@app/common/constants/published-winners';
 import { UpdateRankingEventDTO } from './dto/ranking-event/update-ranking-event.dto';
 import {
@@ -1305,7 +1303,7 @@ export class EventService implements OnModuleInit {
    */
   async listPublishedWinners(
     dto: ListPublishedWinnersDTO,
-  ): Promise<ListPublishedWinnersResult> {
+  ): Promise<WinnersPageResponse> {
     const response = await firstValueFrom(
       this.eventService.listPublishedWinners({
         page: dto.page,

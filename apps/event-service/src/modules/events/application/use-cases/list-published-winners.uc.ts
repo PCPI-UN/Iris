@@ -1,23 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { AwardWinnerRepository } from '../../domain/repositories/award-winner.repository';
+import { WinnerRow } from '../../domain/entities/winner-row.entity';
 import {
-  AwardWinners,
-  CategoryWinners,
-  EventWinners,
-  PublishedWinner,
-} from '../../domain/entities/published-winner.entity';
+  WinnersPage,
+  WinnersPageAward,
+  WinnersPageCategory,
+} from '../types/winners-page.types';
 import { ListPublishedWinnersDTO } from '../dto/list-published-winners.dto';
 import { DEFAULT_PUBLISHED_WINNERS_LIMIT } from '@app/common/constants/published-winners';
 import { roundGrade } from '@app/common/utils/grade-rounding';
 
 const DEFAULT_PAGE = 1;
-
-export interface PublishedWinnersPage {
-  events: EventWinners[];
-  total: number;
-  page: number;
-  limit: number;
-}
 
 /**
  * Permanent winners view across events (CU-86e3wzr5x): winners and co-winners of every
@@ -30,7 +23,7 @@ export interface PublishedWinnersPage {
 export class ListPublishedWinnersUC {
   constructor(private readonly repo: AwardWinnerRepository) {}
 
-  async execute(input: ListPublishedWinnersDTO): Promise<PublishedWinnersPage> {
+  async execute(input: ListPublishedWinnersDTO): Promise<WinnersPage> {
     const page = input.page || DEFAULT_PAGE;
     const limit = input.limit || DEFAULT_PUBLISHED_WINNERS_LIMIT;
 
@@ -43,7 +36,7 @@ export class ListPublishedWinnersUC {
     const winners = await this.repo.findWinnersByEventIds(
       events.map((event) => event.id),
     );
-    const winnersByEvent = new Map<number, PublishedWinner[]>();
+    const winnersByEvent = new Map<number, WinnerRow[]>();
     for (const winner of winners) {
       const list = winnersByEvent.get(winner.eventId) ?? [];
       list.push(winner);
@@ -69,11 +62,11 @@ export class ListPublishedWinnersUC {
 
   /** Keeps the repository order (category, award position, winner id). */
   private groupByCategory(
-    winners: PublishedWinner[],
+    winners: WinnerRow[],
     gradeVisible: boolean,
-  ): CategoryWinners[] {
-    const categories = new Map<number, CategoryWinners>();
-    const awards = new Map<number, AwardWinners>();
+  ): WinnersPageCategory[] {
+    const categories = new Map<number, WinnersPageCategory>();
+    const awards = new Map<number, WinnersPageAward>();
 
     for (const winner of winners) {
       let category = categories.get(winner.categoryId);

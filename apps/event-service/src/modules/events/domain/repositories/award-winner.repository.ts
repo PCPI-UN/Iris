@@ -1,8 +1,10 @@
 import { ProjectAward } from '../entities/project-award.entity';
-import {
-  PublishedWinner,
-  PublishedWinnersEventsPage,
-} from '../entities/published-winner.entity';
+import { WinnerRow, WinnersEventRow } from '../entities/winner-row.entity';
+
+export interface WinnersEventRowsPage {
+  events: WinnersEventRow[];
+  total: number;
+}
 
 export abstract class AwardWinnerRepository {
   /**
@@ -20,11 +22,11 @@ export abstract class AwardWinnerRepository {
   abstract findEventsWithPublishedWinners(
     page: number,
     limit: number,
-  ): Promise<PublishedWinnersEventsPage>;
+  ): Promise<WinnersEventRowsPage>;
 
   /**
    * Winners in active categories of the given events, ordered by category, award
    * position and winner id.
    */
-  abstract findWinnersByEventIds(eventIds: number[]): Promise<PublishedWinner[]>;
+  abstract findWinnersByEventIds(eventIds: number[]): Promise<WinnerRow[]>;
 }

@@ -2,11 +2,10 @@ import {
   ListPublishedWinnersResponse,
   PublishedEventWinnersProto,
 } from '@app/common/generated/event';
-import { EventWinners } from '../../domain/entities/published-winner.entity';
-import { PublishedWinnersPage } from '../use-cases/list-published-winners.uc';
+import { WinnersPage, WinnersPageEvent } from '../types/winners-page.types';
 
 export class PublishedWinnersMapper {
-  static toEventProto(event: EventWinners): PublishedEventWinnersProto {
+  static toEventProto(event: WinnersPageEvent): PublishedEventWinnersProto {
     return {
       eventId: event.eventId,
       name: event.name,
@@ -31,7 +30,7 @@ export class PublishedWinnersMapper {
     };
   }
 
-  static toListResponse(page: PublishedWinnersPage): ListPublishedWinnersResponse {
+  static toListResponse(page: WinnersPage): ListPublishedWinnersResponse {
     return {
       events: page.events.map((event) => this.toEventProto(event)),
       meta: {
