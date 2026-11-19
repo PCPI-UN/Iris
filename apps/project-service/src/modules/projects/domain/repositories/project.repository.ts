@@ -1,5 +1,32 @@
 import { ProjectReadScope } from '../read-scope';
-import {TypedDocument, JurorKey, Project, UserParticipation, ProjectDocument, ProjectState, ProjectParticipant, StudentStatus, PendingProjectParticipant, PendingProjectTutor, PendingProjectTutorInput, Status, ProjectWithJurorIds, ProjectInScope } from '../entities/project.entity';
+import {TypedDocument, JurorKey, Project, UserParticipation, ProjectDocument, ProjectState, ProjectParticipant, StudentStatus, PendingProjectParticipant, PendingProjectTutor, PendingProjectTutorInput, Status, ProjectWithJurorIds } from '../entities/project.entity';
+
+/** Course section (NRC within a term) a project belongs to, with its department. */
+export interface AcademicCourseView {
+  id: number;
+  nrc: string;
+  /** event-service term */
+  termId: number;
+  name: string;
+  professorUserId: number;
+  departmentId: number;
+  departmentName: string;
+}
+
+/** A project as returned by the academic read endpoints. */
+export interface ProjectInScope extends Project {
+  createdAt: Date;
+  updatedAt: Date;
+  academicCourseId: number;
+  /** Null for the fill course sections: -1 (created before course sections existed) and 0 (event without course) */
+  academicCourse: AcademicCourseView | null;
+  /** Confirmed participants, with the name and email of their account when it still exists. */
+  participants: (ProjectParticipant & { firstName?: string; lastName?: string | null; email?: string })[];
+  pendingParticipants: PendingProjectParticipant[];
+  documents: ProjectDocument[];
+  /** Jurors assigned to evaluate the project. */
+  assignedJurorCount: number;
+}
 
 export interface ProjectRepository {
   create(input: {

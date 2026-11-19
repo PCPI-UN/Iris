@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ProjectRepository } from '../../domain/repositories/project.repository';
-import { ProjectInScope } from '../../domain/entities/project.entity';
+import { ProjectInScope } from '../../domain/repositories/project.repository';
 import { NotFoundError } from '../../domain/errors';
 import { GetProjectInScopeDTO } from '../dto/projects-in-scope.dto';
 import { ResolveProjectReadScopeUC } from './resolve-project-read-scope.uc';

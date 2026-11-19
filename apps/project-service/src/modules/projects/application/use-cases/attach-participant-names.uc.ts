@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { ProjectInScope } from '../../domain/entities/project.entity';
+import { ProjectInScope } from '../../domain/repositories/project.repository';
 import { AUTH_SERVICE_PORT, AuthServicePort } from '../ports/auth-service.port';
 
 /**

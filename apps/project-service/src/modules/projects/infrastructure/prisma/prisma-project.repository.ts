@@ -2,10 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../../common/prisma/prisma.service';
 import { normalizeEmail } from '@app/common/utils/email.util';
-import { ProjectRepository } from '../../domain/repositories/project.repository';
+import { ProjectRepository, ProjectInScope } from '../../domain/repositories/project.repository';
 import { ProjectReadScope } from '../../domain/read-scope';
 import { PendingProjectParticipant, PendingProjectTutor, PendingProjectTutorInput, Project, TypedDocument } from '../../domain/entities/project.entity';
-import { ProjectDocument, ProjectState, JurorKey, ProjectParticipant, UserParticipation, ProjectWithJurorIds, JUROR_ROLE_ID, ProjectInScope, isFillAcademicCourse } from '../../domain/entities/project.entity';
+import { ProjectDocument, ProjectState, JurorKey, ProjectParticipant, UserParticipation, ProjectWithJurorIds, JUROR_ROLE_ID, isFillAcademicCourse } from '../../domain/entities/project.entity';
 
 
 type CreateProjectInput = {

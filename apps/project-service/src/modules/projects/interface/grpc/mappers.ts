@@ -1,4 +1,5 @@
-import { TypedDocument ,ProjectState, ProjectDocument, Project, JurorKey, Status, ProjectTutorView, AcademicCourseView } from '../../domain/entities/project.entity';
+import { TypedDocument ,ProjectState, ProjectDocument, Project, JurorKey, Status, ProjectTutorView } from '../../domain/entities/project.entity';
+import { AcademicCourseView } from '../../domain/repositories/project.repository';
 import {
   JurorImportOutcome as ProtoJurorImportOutcome,
   JurorImportUserStatus as ProtoJurorImportUserStatus,
