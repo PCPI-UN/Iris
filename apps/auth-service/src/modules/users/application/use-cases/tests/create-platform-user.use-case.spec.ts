@@ -44,7 +44,7 @@ describe('CreatePlatformUserUseCase', () => {
     ['FacultyAdmin', ROLES.FacultyAdmin.id],
   ])('does not let a faculty admin create an %s', async (_name, roleId) => {
     await expect(useCase.execute(request([roleId], 2))).rejects.toEqual(
-      rpcError(status.PERMISSION_DENIED, 'Only the principal administrator'),
+      rpcError(status.PERMISSION_DENIED, 'Solo el administrador principal'),
     );
     expect(userRepository.createWithRoles).not.toHaveBeenCalled();
   });
@@ -57,7 +57,7 @@ describe('CreatePlatformUserUseCase', () => {
 
   it('rejects event roles as platform roles', async () => {
     await expect(useCase.execute(request([ROLES.Juror.id], 1))).rejects.toEqual(
-      rpcError(status.INVALID_ARGUMENT, 'event roles'),
+      rpcError(status.INVALID_ARGUMENT, 'son roles de evento'),
     );
   });
 
@@ -68,7 +68,7 @@ describe('CreatePlatformUserUseCase', () => {
 
   it('requires the user performing the operation', async () => {
     await expect(useCase.execute(request([ROLES.Professor.id], 0))).rejects.toEqual(
-      rpcError(status.PERMISSION_DENIED, 'required'),
+      rpcError(status.PERMISSION_DENIED, 'Se requiere el usuario'),
     );
   });
 

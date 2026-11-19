@@ -1,13 +1,18 @@
 import { UpdateUserUseCase } from '../update-user.use-case';
 import { UserRepositoryPort } from '../../../../users/domain/repositories/user.repository.port';
 import { UpdateUserDto } from '../../../../users/application/dto/update-user.dto';
-import { User, UserStatus } from '../../../../users/domain/entities/user.entity';
+import {
+  User,
+  UserStatus,
+} from '../../../../users/domain/entities/user.entity';
 import { RpcException } from '@nestjs/microservices';
 import { status } from '@grpc/grpc-js';
+import { AccountAdministrationPolicy } from '../../../../roles/application/services/account-administration.policy';
 
 describe('UpdateUserUseCase', () => {
   let useCase: UpdateUserUseCase;
   let mockUserRepository: jest.Mocked<UserRepositoryPort>;
+  let mockPolicy: { loadActor: jest.Mock; assertCanManageAccount: jest.Mock };
 
   beforeEach(() => {
     mockUserRepository = {
@@ -22,7 +27,15 @@ describe('UpdateUserUseCase', () => {
       deactivate: jest.fn(),
     } as unknown as jest.Mocked<UserRepositoryPort>;
 
-    useCase = new UpdateUserUseCase(mockUserRepository);
+    mockPolicy = {
+      loadActor: jest.fn().mockResolvedValue({ id: 50 }),
+      assertCanManageAccount: jest.fn().mockResolvedValue(undefined),
+    };
+
+    useCase = new UpdateUserUseCase(
+      mockUserRepository,
+      mockPolicy as unknown as AccountAdministrationPolicy,
+    );
   });
 
   describe('execute', () => {
@@ -64,7 +77,9 @@ describe('UpdateUserUseCase', () => {
 
       expect(result).toEqual(updatedUser);
       expect(mockUserRepository.findById).toHaveBeenCalledWith(1);
-      expect(mockUserRepository.existsByPhone).toHaveBeenCalledWith('9999999999');
+      expect(mockUserRepository.existsByPhone).toHaveBeenCalledWith(
+        '9999999999',
+      );
       expect(mockUserRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({
           firstName: 'UpdatedJohn',
@@ -87,7 +102,7 @@ describe('UpdateUserUseCase', () => {
         expect.objectContaining({
           error: expect.objectContaining({
             code: status.NOT_FOUND,
-            message: 'User with ID #999 not found',
+            message: 'No se encontró el usuario con ID #999',
           }),
         }),
       );
@@ -152,6 +167,55 @@ describe('UpdateUserUseCase', () => {
       await useCase.execute(updateDto);
 
       expect(mockUserRepository.existsByPhone).not.toHaveBeenCalled();
+    });
+
+    it('checks the administration policy when an administrator edits the account', async () => {
+      mockUserRepository.findById.mockResolvedValue(
+        new User(
+          1,
+          'John',
+          'Doe',
+          'john@example.com',
+          'x',
+          '1234567890',
+          true,
+          UserStatus.CONFIRMED,
+        ),
+      );
+      mockPolicy.assertCanManageAccount.mockRejectedValue(
+        new RpcException({ code: status.PERMISSION_DENIED, message: 'denied' }),
+      );
+
+      await expect(
+        useCase.execute({ id: 1, firstName: 'Otro', actorUserId: 50 }),
+      ).rejects.toThrow(RpcException);
+
+      expect(mockPolicy.loadActor).toHaveBeenCalledWith(50);
+      expect(mockPolicy.assertCanManageAccount).toHaveBeenCalledWith(
+        { id: 50 },
+        1,
+      );
+      expect(mockUserRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('does not check the policy on internal calls without an actor', async () => {
+      mockUserRepository.findById.mockResolvedValue(
+        new User(
+          1,
+          'John',
+          'Doe',
+          'john@example.com',
+          'x',
+          '1234567890',
+          true,
+          UserStatus.CONFIRMED,
+        ),
+      );
+      mockUserRepository.save.mockImplementation(async (user) => user);
+
+      await useCase.execute({ id: 1, firstName: 'Otro' });
+
+      expect(mockPolicy.loadActor).not.toHaveBeenCalled();
     });
   });
 });
