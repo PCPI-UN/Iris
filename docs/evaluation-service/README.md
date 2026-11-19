@@ -49,16 +49,34 @@ Rules:
 - The scale of an event cannot change once the event has evaluations. Assigning the same scale again is accepted and changes nothing.
 - These checks and the scale changes run under the exclusive rubric lock of the affected events, and an evaluation reads the scale under the shared lock (see [Changing a rubric in use](#changing-a-rubric-in-use)), so an evaluation never sees a scale halfway through a change.
 
-`AssignEventGradingScale` takes a catalog scale (`scaleId`); a new scale is created first with `CreateGradingScale` (`POST /grading-scales`). Without `scaleId`, the event gets the system scale of its deprecated `evaluationType`, which `event-service` sets to `FINAL_PROJECTS` by default. Creating and editing an event in the gateway accept only `gradingScaleId`. The gateway assigns the scale when an event is created. If any step of the creation fails (the scale, the category or the inscription details), it deletes the event, removes its assignment with `UnassignEventGradingScale` so the scale can still be deleted, and returns the error of the failed step. An edit assigns the scale only when it sends `gradingScaleId`, before the event fields; if the event update then fails, the gateway assigns the previous scale again. `UnassignEventGradingScale` refuses an event that has evaluations and succeeds when the event has no assignment. `GET /events/:id` and the create and edit responses include the event's `gradingScale`.
+`AssignEventGradingScale` takes a catalog scale (`scaleId`); a new scale is created first with `CreateGradingScale` (`POST /grading-scales`). Without `scaleId`, the event gets the default system scale, "Proyectos finales". Creating and editing an event in the gateway accept only `gradingScaleId`; `evaluationType` is no longer accepted. The gateway assigns the scale when an event is created. If any step of the creation fails (the scale, the category or the inscription details), it deletes the event, removes its assignment with `UnassignEventGradingScale` so the scale can still be deleted, and returns the error of the failed step. An edit assigns the scale only when it sends `gradingScaleId`, before the event fields; if the event update then fails, the gateway assigns the previous scale again. `UnassignEventGradingScale` refuses an event that has evaluations and succeeds when the event has no assignment. `GET /events/:id` and the create and edit responses include the event's `gradingScale`.
 
 ### Events created before the catalog
 
-`evaluationType` is deprecated but still accepted. The events live in `event-service`'s database, so the migration cannot link them to a scale. Two mechanisms do it, both giving the system scale of the event's `evaluationType`:
+Every reader of an event's scale goes through `EventGradingScaleResolver`, which only reads `event_grading_scale`. An event without a row answers `FAILED_PRECONDITION` ("Event N has no grading scale assigned"); nothing assigns a scale on the fly.
 
-- At startup, `GradingScaleBackfillService` pages through `ListEvents` of `event-service` in the background and inserts the missing `event_grading_scale` rows. It retries 5 times, 15 seconds apart, if `event-service` is not reachable. Set `GRADING_SCALE_BACKFILL=false` to turn it off.
-- `EventGradingScaleResolver`, used by every reader of the scale, assigns and saves the same scale the first time an event without one is used.
+The events created before the catalog get their scale once per environment, before this version is deployed. The events live in `event_service` and the assignments in `evaluation_service`, so it takes two queries:
 
-An existing assignment is never overwritten by either of them.
+1. In `event_service`, list each event with the system scale of its `evaluation_type` (no value means "Proyectos finales"):
+
+   ```sql
+   SELECT string_agg(
+            format('(%s, %L)', id, COALESCE(evaluation_type::text, 'FINAL_PROJECTS')),
+            ', ' ORDER BY id)
+   FROM event;
+   ```
+
+2. In `evaluation_service`, paste that list in place of `<rows>`. Events that already have a scale are left as they are:
+
+   ```sql
+   INSERT INTO event_grading_scale (event_id, scale_id)
+   SELECT v.event_id, s.id
+   FROM (VALUES <rows>) AS v(event_id, code)
+   JOIN grading_scales s ON s.code = v.code
+   ON CONFLICT (event_id) DO NOTHING;
+   ```
+
+The `event.evaluation_type` column is dropped once every environment has run this.
 
 ## Rubric and grade
 

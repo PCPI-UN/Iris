@@ -6,7 +6,6 @@ import { ProjectServicePort } from '../../../infrastructure/ports/project.servic
 import { EventServicePort } from '../../../infrastructure/ports/event.service.port';
 import { AuthServicePort } from '../../../infrastructure/ports/auth.service.port';
 import { CriterionRepositoryPort } from '../../../../criterions/domain/repositories/criterion.repository.port';
-import { EvaluationType } from '@app/common/generated/event';
 import { EventGradingScaleResolver } from '../../../../grading-scales/application/event-grading-scale.resolver';
 import {
     buildResolver,
@@ -65,12 +64,11 @@ describe('EvaluateProjectUseCase - rubric rules', () => {
         ...[13, 14, 15].map((id) => criterion(id, ORAL)),
     ];
 
-    const openEvent = (evaluationType: EvaluationType) => ({
+    const openEvent = () => ({
         id: 1,
         evaluationsOpened: true,
         startDate: new Date(Date.now() - 10000).toISOString(),
         endDate: new Date(Date.now() + 10000).toISOString(),
-        evaluationType,
     });
 
     const scoreAll = (rubric: Array<{ id: number }>, score: number) =>
@@ -83,6 +81,7 @@ describe('EvaluateProjectUseCase - rubric rules', () => {
 
     beforeEach(async () => {
         scaleRepository = new InMemoryGradingScaleRepository();
+        scaleRepository.eventScales.set(1, 1); // Proyectos finales
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 EvaluateProjectUseCase,
@@ -102,7 +101,7 @@ describe('EvaluateProjectUseCase - rubric rules', () => {
         mockAuthService.getRoles.mockResolvedValue([{ id: 1, name: 'Juror' }]);
         mockProjectService.getProject.mockResolvedValue({ id: 1, eventId: 1, courseId: 10 });
         mockProjectService.isJurorAssigned.mockResolvedValue(true);
-        mockEventService.getEvent.mockResolvedValue(openEvent(EvaluationType.FINAL_PROJECTS));
+        mockEventService.getEvent.mockResolvedValue(openEvent());
         mockEvaluationRepository.existsByProjectAndEvaluator.mockResolvedValue(false);
         mockEvaluationRepository.save.mockImplementation((evaluation) =>
             Promise.resolve({ ...evaluation, id: 1 }),
@@ -177,7 +176,7 @@ describe('EvaluateProjectUseCase - rubric rules', () => {
         });
 
         it('gives 5 to a perfect ZERO_TO_FIVE evaluation', async () => {
-            mockEventService.getEvent.mockResolvedValue(openEvent(EvaluationType.ZERO_TO_FIVE));
+            scaleRepository.eventScales.set(1, 2); // Cero a cinco
 
             const result = await useCase.execute({ projectId: 1, userId: 1, scores: scoreAll(posterRubric, 4) });
 
@@ -185,7 +184,7 @@ describe('EvaluateProjectUseCase - rubric rules', () => {
         });
 
         it('maps the ZERO_TO_FIVE "Insuficiente" level to 2, as in the rubric', async () => {
-            mockEventService.getEvent.mockResolvedValue(openEvent(EvaluationType.ZERO_TO_FIVE));
+            scaleRepository.eventScales.set(1, 2); // Cero a cinco
 
             const result = await useCase.execute({ projectId: 1, userId: 1, scores: scoreAll(posterRubric, 1) });
 

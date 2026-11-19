@@ -5,7 +5,6 @@ import { ProjectServicePort } from '../../../infrastructure/ports/project.servic
 import { EventServicePort } from '../../../infrastructure/ports/event.service.port';
 import { AuthServicePort } from '../../../infrastructure/ports/auth.service.port';
 import { CriterionRepositoryPort } from '../../../../criterions/domain/repositories/criterion.repository.port';
-import { EvaluationType } from '@app/common/generated/event';
 import { EventGradingScaleResolver } from '../../../../grading-scales/application/event-grading-scale.resolver';
 import {
     buildResolver,
@@ -43,12 +42,11 @@ describe('EvaluateProjectUseCase', () => {
         getRoles: jest.fn(),
     };
 
-    const openEvent = (evaluationType: unknown = EvaluationType.FINAL_PROJECTS) => ({
+    const openEvent = () => ({
         id: 1,
         evaluationsOpened: true,
         startDate: new Date(Date.now() - 10000).toISOString(),
         endDate: new Date(Date.now() + 10000).toISOString(),
-        evaluationType,
     });
 
     // Poster rubric: components Escrita 0.3 (5 criteria), Diseño 0.4 (7), Oral 0.3 (3), relative weight 1 each
@@ -73,6 +71,7 @@ describe('EvaluateProjectUseCase', () => {
 
     beforeEach(async () => {
         scaleRepository = new InMemoryGradingScaleRepository();
+        scaleRepository.eventScales.set(1, 1); // Proyectos finales
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 EvaluateProjectUseCase,
@@ -166,30 +165,20 @@ describe('EvaluateProjectUseCase', () => {
         ).rejects.toThrow('must be a level of the grading scale "Proyectos finales": 1, 2, 3, 4');
     });
 
-    it('gives an event without a scale the system scale of its deprecated evaluation type and keeps it', async () => {
-        mockEventService.getEvent.mockResolvedValue(openEvent(EvaluationType.ZERO_TO_HUNDRED));
+    it('rejects the evaluation of an event without a grading scale and saves nothing', async () => {
+        scaleRepository.eventScales.delete(1);
         withRubric([{ id: 1, weight: 1 }]);
 
-        const result = await useCase.execute({ projectId: 1, userId: 1, scores: [{ criterionId: 1, score: 4 }] });
-
-        expect(result.evaluation.grade).toBe(100);
-        expect(scaleRepository.eventScales.get(1)).toBe(3);
+        await expect(
+            useCase.execute({ projectId: 1, userId: 1, scores: [{ criterionId: 1, score: 4 }] }),
+        ).rejects.toThrow('Event 1 has no grading scale assigned');
+        expect(mockEvaluationRepository.save).not.toHaveBeenCalled();
     });
 
-    it('falls back to "Proyectos finales" for an unknown deprecated evaluation type', async () => {
-        mockEventService.getEvent.mockResolvedValue(openEvent('UNKNOWN'));
-        withRubric([{ id: 1, weight: 1 }]);
-
-        const result = await useCase.execute({ projectId: 1, userId: 1, scores: [{ criterionId: 1, score: 4 }] });
-
-        expect(result.evaluation.grade).toBe(90);
-    });
-
-    it('grades with the scale assigned to the event, not with its deprecated evaluation type', async () => {
+    it('grades with the scale assigned to the event', async () => {
         // 10/20/30/40 scale with every criterion at level 4 gives 40 (acceptance criterion of IRIS-V3-EVAL-03)
         scaleRepository.scales.set(50, customScale(50, [10, 20, 30, 40]));
         scaleRepository.eventScales.set(1, 50);
-        mockEventService.getEvent.mockResolvedValue(openEvent(EvaluationType.ZERO_TO_FIVE));
 
         const result = await useCase.execute({
             projectId: 1,

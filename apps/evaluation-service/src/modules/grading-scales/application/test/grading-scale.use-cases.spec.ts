@@ -1,5 +1,4 @@
 import { status } from '@grpc/grpc-js';
-import { EvaluationType } from '@app/common/generated/event';
 import { CriterionRepositoryPort } from '../../../criterions/domain/repositories/criterion.repository.port';
 import { AssignEventGradingScaleUseCase } from '../use-cases/assign-event-grading-scale.use-case';
 import { CreateGradingScaleUseCase } from '../use-cases/create-grading-scale.use-case';
@@ -9,11 +8,9 @@ import { GetGradingScaleUseCase } from '../use-cases/get-grading-scale.use-case'
 import { ListGradingScalesUseCase } from '../use-cases/list-grading-scales.use-case';
 import { UpdateGradingScaleUseCase } from '../use-cases/update-grading-scale.use-case';
 import { UnassignEventGradingScaleUseCase } from '../use-cases/unassign-event-grading-scale.use-case';
-import { GradingScaleBackfillService } from '../grading-scale-backfill.service';
 import {
     buildResolver,
     customScale,
-    eventDirectory,
     InMemoryGradingScaleRepository,
 } from '../../testing/grading-scales.fixture';
 
@@ -27,17 +24,15 @@ const rpcError = (code: number, message: string) =>
 
 describe('Grading scale use cases', () => {
     let repository: InMemoryGradingScaleRepository;
-    let getEvent: jest.Mock;
     const withRubricLock = jest.fn((_eventIds: number[], _mode: string, work: () => Promise<unknown>) => work());
     const criterionRepository = { withRubricLock } as unknown as CriterionRepositoryPort;
 
     beforeEach(() => {
         jest.clearAllMocks();
         repository = new InMemoryGradingScaleRepository();
-        getEvent = jest.fn().mockResolvedValue({ id: 7, evaluationType: EvaluationType.FINAL_PROJECTS });
     });
 
-    const assign = () => new AssignEventGradingScaleUseCase(repository, criterionRepository, buildResolver(repository, getEvent));
+    const assign = () => new AssignEventGradingScaleUseCase(repository, criterionRepository, buildResolver(repository));
 
     describe('list and get', () => {
         it('lists the 3 system scales, all locked', async () => {
@@ -194,14 +189,6 @@ describe('Grading scale use cases', () => {
             expect(scale.name).toBe('Proyectos finales');
         });
 
-        it('assigns the system scale of the deprecated evaluation type when no scale is given', async () => {
-            getEvent.mockResolvedValue({ id: 7, evaluationType: EvaluationType.ZERO_TO_FIVE });
-
-            const { scale } = await assign().execute({ eventId: 7 });
-
-            expect(scale.code).toBe('ZERO_TO_FIVE');
-        });
-
         it('returns NOT_FOUND for an unknown scale id', async () => {
             await expect(assign().execute({ eventId: 7, scaleId: 999 })).rejects.toEqual(
                 rpcError(status.NOT_FOUND, 'Grading scale 999 not found'),
@@ -233,59 +220,21 @@ describe('Grading scale use cases', () => {
     });
 
     describe('scale of an event', () => {
-        it('returns the assigned scale without asking event-service', async () => {
+        const getEventScale = () => new GetEventGradingScaleUseCase(repository, buildResolver(repository));
+
+        it('returns the assigned scale', async () => {
             repository.eventScales.set(7, 2);
 
-            const { scale } = await new GetEventGradingScaleUseCase(repository, buildResolver(repository, getEvent)).execute(7);
+            const { scale } = await getEventScale().execute(7);
 
             expect(scale.name).toBe('Cero a cinco');
-            expect(getEvent).not.toHaveBeenCalled();
         });
 
-        it('gives an event without a scale the system scale of its evaluation type and saves it', async () => {
-            getEvent.mockResolvedValue({ id: 7, evaluationType: EvaluationType.ZERO_TO_HUNDRED });
-
-            const { scale } = await new GetEventGradingScaleUseCase(repository, buildResolver(repository, getEvent)).execute(7);
-
-            expect(scale.code).toBe('ZERO_TO_HUNDRED');
-            expect(repository.eventScales.get(7)).toBe(3);
-        });
-
-        it('returns NOT_FOUND when the event does not exist', async () => {
-            getEvent.mockResolvedValue(null);
-
-            await expect(
-                new GetEventGradingScaleUseCase(repository, buildResolver(repository, getEvent)).execute(7),
-            ).rejects.toEqual(rpcError(status.NOT_FOUND, 'Event 7 not found'));
-        });
-    });
-
-    describe('backfill', () => {
-        it('gives every existing event the system scale of its evaluation type and keeps existing assignments', async () => {
-            repository.eventScales.set(3, 1);
-            const pages = [
-                {
-                    totalPages: 2,
-                    events: [
-                        { id: 1, evaluationType: EvaluationType.ZERO_TO_FIVE },
-                        { id: 2, evaluationType: EvaluationType.ZERO_TO_HUNDRED },
-                    ],
-                },
-                {
-                    totalPages: 2,
-                    events: [
-                        { id: 3, evaluationType: EvaluationType.ZERO_TO_FIVE },
-                        { id: 4, evaluationType: EvaluationType.FINAL_PROJECTS },
-                        { id: 5, evaluationType: EvaluationType.EVALUATION_TYPE_UNSPECIFIED },
-                    ],
-                },
-            ];
-            const backfill = new GradingScaleBackfillService(repository, eventDirectory(getEvent, pages));
-
-            await expect(backfill.run()).resolves.toBe(4);
-
-            expect(Object.fromEntries(repository.eventScales)).toEqual({ 1: 2, 2: 3, 3: 1, 4: 1, 5: 1 });
-            await expect(backfill.run()).resolves.toBe(0);
+        it('fails explicitly for an event without a scale and assigns nothing', async () => {
+            await expect(getEventScale().execute(7)).rejects.toEqual(
+                rpcError(status.FAILED_PRECONDITION, 'Event 7 has no grading scale assigned'),
+            );
+            expect(repository.eventScales.has(7)).toBe(false);
         });
     });
 });

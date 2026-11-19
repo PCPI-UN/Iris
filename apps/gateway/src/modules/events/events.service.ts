@@ -241,7 +241,7 @@ export class EventService implements OnModuleInit {
 
   /**
    * Assigns the grading scale of an event in evaluation-service: a catalog scale (gradingScaleId) or,
-   * without one, the system scale of its deprecated evaluationType.
+   * without one, the default system scale "Proyectos finales".
    */
   private assignGradingScale(
     eventId: number,

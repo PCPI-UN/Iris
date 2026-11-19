@@ -100,7 +100,7 @@ export class EvaluateProjectUseCase {
         const { savedEvaluation, evaluationDetails } = await this.criterionRepository.withRubricLock(
             [memberEventId],
             'shared',
-            () => this.gradeAndSave(request, project.courseId, memberEventId, memberRoleId, event.evaluationType),
+            () => this.gradeAndSave(request, project.courseId, memberEventId, memberRoleId),
         );
 
         // 7. Return evaluation with scores in the expected format
@@ -122,7 +122,6 @@ export class EvaluateProjectUseCase {
         courseId: number,
         memberEventId: number,
         memberRoleId: number,
-        legacyEvaluationType: unknown,
     ): Promise<{ savedEvaluation: Evaluation; evaluationDetails: EvaluationDetail[] }> {
         const { projectId, userId: memberUserId, scores, comments } = request;
 
@@ -193,7 +192,7 @@ export class EvaluateProjectUseCase {
 
         // The juror picks a level per criterion; the event's grading scale gives its points. It is read under
         // the rubric lock, so the scale cannot change while this evaluation is graded.
-        const gradingScale = await this.gradingScaleResolver.resolve(memberEventId, legacyEvaluationType);
+        const gradingScale = await this.gradingScaleResolver.resolve(memberEventId);
         const scorer = new ScaleScorer(gradingScale);
 
         for (const scoreItem of scores) {

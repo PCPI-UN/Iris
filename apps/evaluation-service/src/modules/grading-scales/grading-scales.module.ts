@@ -3,9 +3,7 @@ import { PrismaModule } from '../../common/prisma/prisma.module';
 import { CriterionsModule } from '../criterions/criterions.module';
 import { GradingScaleRepositoryPort } from './domain/grading-scale.repository.port';
 import { PrismaGradingScaleRepository } from './infrastructure/prisma-grading-scale.repository';
-import { EventDirectoryPort, GrpcEventDirectory } from './infrastructure/event-directory';
 import { EventGradingScaleResolver } from './application/event-grading-scale.resolver';
-import { GradingScaleBackfillService } from './application/grading-scale-backfill.service';
 import { CreateGradingScaleUseCase } from './application/use-cases/create-grading-scale.use-case';
 import { ListGradingScalesUseCase } from './application/use-cases/list-grading-scales.use-case';
 import { GetGradingScaleUseCase } from './application/use-cases/get-grading-scale.use-case';
@@ -21,9 +19,7 @@ import { GradingScalesController } from './interface/grpc/grading-scales.control
     controllers: [GradingScalesController],
     providers: [
         { provide: GradingScaleRepositoryPort, useClass: PrismaGradingScaleRepository },
-        { provide: EventDirectoryPort, useClass: GrpcEventDirectory },
         EventGradingScaleResolver,
-        GradingScaleBackfillService,
         CreateGradingScaleUseCase,
         ListGradingScalesUseCase,
         GetGradingScaleUseCase,

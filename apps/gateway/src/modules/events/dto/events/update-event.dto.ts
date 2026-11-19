@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { EvaluationType, EventType } from '@app/common/generated/event';
+import { EventType } from '@app/common/generated/event';
 import {
   IsArray,
   IsInt,
@@ -17,7 +17,6 @@ import {
   ValidateNested,
 } from 'class-validator';
 import {
-  transformEvaluationType,
   transformEventType,
 } from './event-type-transformer';
 
@@ -259,18 +258,6 @@ export class UpdateEventPayloadDTO {
   @IsOptional()
   @IsString()
   locationDetails?: string;
-
-  @ApiProperty({
-    description: 'Deprecated: use gradingScaleId. Kept for compatibility',
-    deprecated: true,
-    enum: EvaluationType,
-    required: false,
-    example: 'FINAL_PROJECTS',
-  })
-  @IsOptional()
-  @Transform(transformEvaluationType)
-  @IsEnum(EvaluationType)
-  evaluationType?: EvaluationType;
 
   @ApiProperty({
     description:

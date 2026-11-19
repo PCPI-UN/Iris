@@ -4,7 +4,6 @@ import { EvaluationRepositoryPort } from '../../../domain/repositories/evaluatio
 import { Evaluation } from '../../../domain/entities/evaluation.entity';
 import { EvaluationDetail } from '../../../domain/entities/evaluation-detail.entity';
 import { CheckEvaluationStatusDto } from '../../dto/check-evaluation-status.dto';
-import { EvaluationType as EventEvaluationType } from '@app/common/generated/event';
 import { EventGradingScaleResolver } from '../../../../grading-scales/application/event-grading-scale.resolver';
 import {
     buildResolver,
@@ -21,17 +20,9 @@ describe('CheckEvaluationStatusUseCase', () => {
         findByProjectIdsAndEvaluator: jest.fn(),
     };
 
-    const mockEventService = {
-        getEvent: jest.fn(),
-    };
-
     beforeEach(async () => {
-        mockEventService.getEvent.mockResolvedValue({
-            id: 1,
-            evaluationType: EventEvaluationType.FINAL_PROJECTS,
-        });
-
         scaleRepository = new InMemoryGradingScaleRepository();
+        scaleRepository.eventScales.set(1, 1); // Proyectos finales
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 CheckEvaluationStatusUseCase,
@@ -41,7 +32,7 @@ describe('CheckEvaluationStatusUseCase', () => {
                 },
                 {
                     provide: EventGradingScaleResolver,
-                    useFactory: () => buildResolver(scaleRepository, mockEventService.getEvent),
+                    useFactory: () => buildResolver(scaleRepository),
                 },
             ],
         }).compile();
@@ -166,6 +157,7 @@ describe('CheckEvaluationStatusUseCase', () => {
             eventId: 456,
             projectIds: [1, 2, 3, 4, 5],
         };
+        scaleRepository.eventScales.set(456, 1);
 
         mockEvaluationRepository.findByProjectIdsAndEvaluator.mockResolvedValue([]);
 
@@ -202,13 +194,13 @@ describe('CheckEvaluationStatusUseCase', () => {
         expect(result[0].evaluation!.evaluation.date).toEqual(testDate);
     });
 
-    it.each([
-        [EventEvaluationType.ZERO_TO_HUNDRED, [100, 80, 60, 40]],
-        // 1.5 is the value ZERO_TO_FIVE stored for level 1 before it was aligned with the rubric (2)
-        [EventEvaluationType.ZERO_TO_FIVE, [5, 4, 3, 1.5]],
-        [EventEvaluationType.ZERO_TO_FIVE, [5, 4, 3, 2]],
-    ])('reverse-maps the stored points of a %p event back to levels 4..1', async (evaluationType, stored) => {
-        mockEventService.getEvent.mockResolvedValue({ id: 1, evaluationType });
+    it.each<[string, number, number[]]>([
+        ['Cero a cien', 3, [100, 80, 60, 40]],
+        // 1.5 is the value "Cero a cinco" stored for level 1 before it was aligned with the rubric (2)
+        ['Cero a cinco', 2, [5, 4, 3, 1.5]],
+        ['Cero a cinco', 2, [5, 4, 3, 2]],
+    ])('reverse-maps the stored points of a "%s" event back to levels 4..1', async (_name, scaleId, stored) => {
+        scaleRepository.eventScales.set(1, scaleId);
         mockEvaluationRepository.findByProjectIdsAndEvaluator.mockResolvedValue([
             {
                 evaluation: new Evaluation(1, 1, 1, 1, 1, 80, null, new Date()),
@@ -235,7 +227,6 @@ describe('CheckEvaluationStatusUseCase', () => {
         const [status] = await useCase.execute({ userId: 1, eventId: 1, projectIds: [1] });
 
         expect(status.evaluation!.scores.map((score) => score.score)).toEqual([4, 3, 2, 1]);
-        expect(mockEventService.getEvent).not.toHaveBeenCalled();
     });
 
     it('fails clearly when a stored score is not a value of the event scale', async () => {

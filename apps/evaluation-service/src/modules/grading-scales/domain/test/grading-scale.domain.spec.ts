@@ -1,8 +1,5 @@
-import { EvaluationType } from '@app/common/generated/event';
 import { normalizeGradingScaleInput, validateGradingScaleInput } from '../grading-scale.rules';
 import { ScaleScorer } from '../scale-scorer';
-import { systemScaleCodeFor } from '../legacy-evaluation-type';
-import { SystemScaleCode } from '../grading-scale';
 import { customScale, systemScales } from '../../testing/grading-scales.fixture';
 
 const levels = (points: number[], labels = ['Insuficiente', 'Aceptable', 'Bueno', 'Excelente']) =>
@@ -100,20 +97,5 @@ describe('ScaleScorer', () => {
 
         expect(scorer.levelFor(0.1 + 0.2)).toBe(3);
         expect(scorer.levelFor(0.33)).toBeUndefined();
-    });
-});
-
-describe('systemScaleCodeFor', () => {
-    it.each([
-        [EvaluationType.FINAL_PROJECTS, SystemScaleCode.FINAL_PROJECTS],
-        [EvaluationType.ZERO_TO_FIVE, SystemScaleCode.ZERO_TO_FIVE],
-        [EvaluationType.ZERO_TO_HUNDRED, SystemScaleCode.ZERO_TO_HUNDRED],
-        ['ZERO_TO_FIVE', SystemScaleCode.ZERO_TO_FIVE],
-        ['ZERO_TO_HUNDRED', SystemScaleCode.ZERO_TO_HUNDRED],
-        [EvaluationType.EVALUATION_TYPE_UNSPECIFIED, SystemScaleCode.FINAL_PROJECTS],
-        [undefined, SystemScaleCode.FINAL_PROJECTS],
-        ['UNKNOWN', SystemScaleCode.FINAL_PROJECTS],
-    ])('maps %p to %p', (evaluationType, code) => {
-        expect(systemScaleCodeFor(evaluationType)).toBe(code);
     });
 });

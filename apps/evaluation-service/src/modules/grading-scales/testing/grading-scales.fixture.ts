@@ -1,8 +1,7 @@
 /* eslint-disable @typescript-eslint/require-await -- in-memory fakes of async ports */
 import { GradingScale, GradingScaleInput, SystemScaleCode } from '../domain/grading-scale';
-import { EventScaleAssignment, GradingScaleRepositoryPort } from '../domain/grading-scale.repository.port';
+import { GradingScaleRepositoryPort } from '../domain/grading-scale.repository.port';
 import { EventGradingScaleResolver } from '../application/event-grading-scale.resolver';
-import { EventDirectoryPort, EventsPage } from '../infrastructure/event-directory';
 
 const LABELS = ['Insuficiente', 'Aceptable', 'Bueno', 'Excelente'];
 
@@ -93,16 +92,6 @@ export class InMemoryGradingScaleRepository implements GradingScaleRepositoryPor
         return this.eventScales.delete(eventId);
     }
 
-    async assignIfMissing(assignments: EventScaleAssignment[]): Promise<number> {
-        let inserted = 0;
-        for (const { eventId, scaleId } of assignments) {
-            if (!this.eventScales.has(eventId)) {
-                this.eventScales.set(eventId, scaleId);
-                inserted++;
-            }
-        }
-        return inserted;
-    }
 
     async findEventIdsByScale(scaleId: number): Promise<number[]> {
         return [...this.eventScales.entries()]
@@ -124,20 +113,6 @@ export class InMemoryGradingScaleRepository implements GradingScaleRepositoryPor
     }
 }
 
-/** Event directory backed by a function, usually a jest mock of `getEvent`. */
-export function eventDirectory(
-    getEvent: (eventId: number) => Promise<{ id: number; evaluationType?: unknown } | null>,
-    pages: EventsPage[] = [],
-): EventDirectoryPort {
-    return {
-        getEvent: getEvent as EventDirectoryPort['getEvent'],
-        listEvents: async (page: number) => pages[page - 1] ?? { events: [], totalPages: pages.length },
-    };
-}
-
-export function buildResolver(
-    repository: GradingScaleRepositoryPort,
-    getEvent: (eventId: number) => Promise<{ id: number; evaluationType?: unknown } | null> = async () => null,
-): EventGradingScaleResolver {
-    return new EventGradingScaleResolver(repository, eventDirectory(getEvent));
+export function buildResolver(repository: GradingScaleRepositoryPort): EventGradingScaleResolver {
+    return new EventGradingScaleResolver(repository);
 }

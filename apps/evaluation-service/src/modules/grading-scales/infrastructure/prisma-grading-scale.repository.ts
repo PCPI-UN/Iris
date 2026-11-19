@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma/prisma.service';
 import { GradingScale, GradingScaleInput } from '../domain/grading-scale';
-import { EventScaleAssignment, GradingScaleRepositoryPort } from '../domain/grading-scale.repository.port';
+import { GradingScaleRepositoryPort } from '../domain/grading-scale.repository.port';
 
 const withLevels = { levels: { orderBy: { level: 'asc' } } } satisfies Prisma.GradingScaleInclude;
 
@@ -99,17 +99,6 @@ export class PrismaGradingScaleRepository implements GradingScaleRepositoryPort 
     async unassignEvent(eventId: number): Promise<boolean> {
         const result = await this.prisma.db.eventGradingScale.deleteMany({ where: { eventId } });
         return result.count > 0;
-    }
-
-    async assignIfMissing(assignments: EventScaleAssignment[]): Promise<number> {
-        if (assignments.length === 0) {
-            return 0;
-        }
-        const result = await this.prisma.db.eventGradingScale.createMany({
-            data: assignments,
-            skipDuplicates: true,
-        });
-        return result.count;
     }
 
     async findEventIdsByScale(scaleId: number): Promise<number[]> {

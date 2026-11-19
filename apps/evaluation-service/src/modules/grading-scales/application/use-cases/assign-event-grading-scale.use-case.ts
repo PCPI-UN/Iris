@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { status } from '@grpc/grpc-js';
 import { CriterionRepositoryPort } from '../../../criterions/domain/repositories/criterion.repository.port';
-import { GradingScale } from '../../domain/grading-scale';
+import { DEFAULT_SCALE_CODE, GradingScale } from '../../domain/grading-scale';
 import { GradingScaleRepositoryPort } from '../../domain/grading-scale.repository.port';
 import { EventGradingScaleResolver } from '../event-grading-scale.resolver';
 import { scaleNotFound } from '../grading-scale.errors';
@@ -16,9 +16,9 @@ export interface AssignEventGradingScaleCommand {
 }
 
 /**
- * Sets the grading scale of an event: a catalog scale or, without one, the system scale of the
- * event's deprecated evaluation type, "Proyectos finales" by default. Once the event has
- * evaluations its scale is fixed; assigning the same scale again is accepted and changes nothing.
+ * Sets the grading scale of an event: a catalog scale or, without one, the default system scale
+ * "Proyectos finales". Once the event has evaluations its scale is fixed; assigning the same scale
+ * again is accepted and changes nothing.
  */
 @Injectable()
 export class AssignEventGradingScaleUseCase {
@@ -37,16 +37,12 @@ export class AssignEventGradingScaleUseCase {
         const hasScaleId = command.scaleId !== undefined && command.scaleId !== null;
 
         return this.criterionRepository.withRubricLock([eventId], 'exclusive', async () => {
-            const target = hasScaleId
-                ? await this.findScale(command.scaleId!)
-                : await this.resolver.legacyScaleOf(eventId);
+            const target = hasScaleId ? await this.findScale(command.scaleId!) : await this.defaultScale();
 
             const evaluated = await this.repository.findEventsWithEvaluations([eventId]);
             if (evaluated.length > 0) {
-                const current =
-                    (await this.repository.findEventScale(eventId)) ?? (await this.resolver.legacyScaleOf(eventId));
+                const current = await this.resolver.resolve(eventId);
                 if (target.id === current.id) {
-                    await this.repository.assignIfMissing([{ eventId, scaleId: current.id }]);
                     return { scale: current, locked: true };
                 }
                 throw new RpcException({
@@ -60,6 +56,17 @@ export class AssignEventGradingScaleUseCase {
             await this.repository.assignToEvent(eventId, target.id);
             return { scale: target, locked: await isLocked(this.repository, target.id, target.isSystem) };
         });
+    }
+
+    private async defaultScale(): Promise<GradingScale> {
+        const scale = await this.repository.findByCode(DEFAULT_SCALE_CODE);
+        if (!scale) {
+            throw new RpcException({
+                code: status.INTERNAL,
+                message: `System grading scale ${DEFAULT_SCALE_CODE} is missing; check the grading scale migration`,
+            });
+        }
+        return scale;
     }
 
     private async findScale(id: number): Promise<GradingScale> {
