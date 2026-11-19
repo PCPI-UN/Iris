@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiQuery,
@@ -66,6 +67,8 @@ import {
   GetRankingReportDto,
   RankingReportFormat,
 } from './dto/ranking-report/get-ranking-report.dto';
+import { ListPublishedWinnersDTO } from './dto/winners/list-published-winners.dto';
+import { WinnersPageResponse } from './dto/winners/winners-page.response';
 import { RankingReportResult } from './events.service';
 import { XLSX_CONTENT_TYPE, xlsxFile } from '../../common/excel/xlsx-file';
 import {
@@ -136,6 +139,25 @@ export class EventsController {
       statuses: [EventStatus.CLOSED],
       onlyActive: false,
     });
+  }
+
+  /**
+   * PUBLIC ENDPOINT - Winners of every event with published results and a public ranking
+   * No authentication required. Declared before `public/:id` so "winners" is not read as an id.
+   */
+  @Public()
+  @Get('public/winners')
+  @ApiOperation({
+    summary: 'List winners of all events',
+    description:
+      'Winners and co-winners of every event with published results and a public ranking, grouped by event, category and award, newest event first. Grades are null unless the event ranking shows them. No authentication required.',
+  })
+  @ApiOkResponse({
+    type: WinnersPageResponse,
+    description: 'Winners per event with pagination',
+  })
+  async listPublishedWinners(@Query() query: ListPublishedWinnersDTO) {
+    return this.eventsService.listPublishedWinners(query);
   }
 
   /**

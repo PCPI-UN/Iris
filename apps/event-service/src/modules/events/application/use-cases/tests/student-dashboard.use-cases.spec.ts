@@ -2,6 +2,7 @@ import { ListEventsByIdsUC } from '../list-events-by-ids.uc';
 import { ListAwardsByProjectsUC } from '../list-awards-by-projects.uc';
 import { EventRepository } from '../../../domain/repositories/event.repository';
 import { ListCategoriesByIdsUC } from '../list-categories-by-ids.uc';
+import { AwardWinnerRepository } from '../../../domain/repositories/award-winner.repository';
 
 describe('Student dashboard use cases (event-service)', () => {
   describe('ListEventsByIdsUC', () => {
@@ -26,7 +27,7 @@ describe('Student dashboard use cases (event-service)', () => {
   describe('ListAwardsByProjectsUC', () => {
     it('looks each project up once', async () => {
       const repo = { findByProjectIds: jest.fn().mockResolvedValue([]) };
-      const uc = new ListAwardsByProjectsUC(repo);
+      const uc = new ListAwardsByProjectsUC(repo as unknown as AwardWinnerRepository);
 
       await uc.execute({ projectIds: [5, 5, 8] });
 
@@ -35,7 +36,7 @@ describe('Student dashboard use cases (event-service)', () => {
 
     it('does not query when no project ids arrive', async () => {
       const repo = { findByProjectIds: jest.fn() };
-      const uc = new ListAwardsByProjectsUC(repo);
+      const uc = new ListAwardsByProjectsUC(repo as unknown as AwardWinnerRepository);
 
       expect(await uc.execute({ projectIds: [] })).toEqual([]);
       expect(repo.findByProjectIds).not.toHaveBeenCalled();

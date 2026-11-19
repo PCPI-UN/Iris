@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
 import { firstValueFrom, lastValueFrom } from 'rxjs';
+import { MAX_LIST_PROJECTS_BY_IDS } from '@app/common/constants/projects';
 import {
   PROJECTS_SERVICE_NAME,
   ProjectsServiceClient,
@@ -587,6 +588,35 @@ export class ProjectsService implements OnModuleInit {
     }
 
     return { ...project, tutors: toProjectTutorsResponse(project.tutors) };
+  }
+
+  /**
+   * Names of the given projects through project-service ListProjectsByIds, in calls of
+   * at most MAX_LIST_PROJECTS_BY_IDS distinct ids, so a public listing makes a bounded
+   * number of calls. Ids project-service does not return (deleted projects) are logged
+   * and left out of the map.
+   */
+  async getProjectNamesByIds(ids: number[]): Promise<Map<number, string>> {
+    const uniqueIds = [...new Set(ids)];
+    const names = new Map<number, string>();
+
+    for (let i = 0; i < uniqueIds.length; i += MAX_LIST_PROJECTS_BY_IDS) {
+      const chunk = uniqueIds.slice(i, i + MAX_LIST_PROJECTS_BY_IDS);
+      const response = await firstValueFrom(
+        this.projectsService.listProjectsByIds({ ids: chunk }),
+      );
+      for (const project of response.items ?? []) {
+        names.set(project.id, project.name);
+      }
+    }
+
+    const missing = uniqueIds.filter((id) => !names.has(id));
+    if (missing.length) {
+      this.logger.warn(
+        `[getProjectNamesByIds] Projects not found: ${missing.join(', ')}`,
+      );
+    }
+    return names;
   }
 
   private mapDocumentStatusToProto(
