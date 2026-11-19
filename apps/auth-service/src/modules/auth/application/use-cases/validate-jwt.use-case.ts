@@ -31,7 +31,7 @@ export class ValidateJwtUseCase {
       });
 
       if (!decoded.sub) {
-        throw new Error('Token payload is missing user ID (sub)');
+        throw new Error('El token no incluye el ID del usuario');
       }
 
       return {
@@ -39,10 +39,15 @@ export class ValidateJwtUseCase {
         userId: decoded.sub,
       };
     } catch (error) {
-      throw new RpcException({
-        code: status.UNAUTHENTICATED,
-        message: error.message || 'Invalid token',
-      });
+      // jsonwebtoken's own messages ("jwt expired", "invalid signature") are in English
+      const name = (error as Error)?.name;
+      const message =
+        name === 'TokenExpiredError'
+          ? 'La sesión expiró; inicia sesión de nuevo'
+          : name === 'JsonWebTokenError' || name === 'NotBeforeError'
+            ? 'El token no es válido'
+            : (error as Error)?.message || 'El token no es válido';
+      throw new RpcException({ code: status.UNAUTHENTICATED, message });
     }
   }
 }

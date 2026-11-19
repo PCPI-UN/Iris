@@ -16,5 +16,6 @@ export default {
     '^@criterions/(.*)$': '<rootDir>/apps/evaluation-service/src/modules/criterions/$1',
     '^@evaluations/(.*)$': '<rootDir>/apps/evaluation-service/src/modules/evaluations/$1',
     '^@events/(.*)$': '<rootDir>/apps/event-service/src/modules/events/$1',
+    '^@invitations/(.*)$': '<rootDir>/apps/invitation-service/src/modules/invitations/$1',
   },
 };

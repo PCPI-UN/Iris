@@ -31,7 +31,7 @@ export class AssignEventGradingScaleUseCase {
     async execute(command: AssignEventGradingScaleCommand): Promise<GradingScaleView> {
         const { eventId } = command;
         if (!Number.isInteger(eventId) || eventId <= 0) {
-            throw new RpcException({ code: status.INVALID_ARGUMENT, message: 'eventId must be a positive integer' });
+            throw new RpcException({ code: status.INVALID_ARGUMENT, message: 'eventId debe ser un entero positivo' });
         }
 
         const hasScaleId = command.scaleId !== undefined && command.scaleId !== null;
@@ -48,8 +48,8 @@ export class AssignEventGradingScaleUseCase {
                 throw new RpcException({
                     code: status.FAILED_PRECONDITION,
                     message:
-                        `The grading scale of event ${eventId} cannot change because the event already has ` +
-                        `evaluations graded with "${current.name}".`,
+                        `La escala de calificación del evento ${eventId} no puede cambiar porque el evento ya tiene ` +
+                        `evaluaciones calificadas con "${current.name}".`,
                 });
             }
 
@@ -63,7 +63,7 @@ export class AssignEventGradingScaleUseCase {
         if (!scale) {
             throw new RpcException({
                 code: status.INTERNAL,
-                message: `System grading scale ${DEFAULT_SCALE_CODE} is missing; check the grading scale migration`,
+                message: `Falta la escala del sistema ${DEFAULT_SCALE_CODE}; revisa la migración de escalas de calificación`,
             });
         }
         return scale;

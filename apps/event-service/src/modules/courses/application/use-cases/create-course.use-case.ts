@@ -18,7 +18,7 @@ export class CreateCourseUseCase {
     if (!event) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: 'Event not found',
+        message: 'No se encontró el evento',
       });
     }
 
@@ -26,7 +26,7 @@ export class CreateCourseUseCase {
     if (exists) {
       throw new RpcException({
         code: status.ALREADY_EXISTS,
-        message: 'Course code already exists for this event',
+        message: 'Ya existe una categoría con este código en el evento',
       });
     }
     return this.repo.create(input);

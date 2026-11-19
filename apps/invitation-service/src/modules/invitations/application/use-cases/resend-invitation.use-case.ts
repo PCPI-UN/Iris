@@ -5,7 +5,10 @@ import { status } from '@grpc/grpc-js';
 import { randomUUID } from 'crypto';
 import { InvitationRepositoryPort } from '../../domain/repositories/invitation.repository.port';
 import { InvitationRoleRepositoryPort } from '../../domain/repositories/invitation-role.repository.port';
-import { NotificationServicePort } from '../../infrastructure/ports/notification-service.port';
+import {
+  NotificationServicePort,
+  invitationEmailKey,
+} from '../../infrastructure/ports/notification-service.port';
 import { AuthServicePort } from '../../infrastructure/ports/auth-service.port';
 import { EventServicePort } from '../../infrastructure/ports/event-service.port';
 import { ProjectServicePort } from '../../infrastructure/ports/project-service.port';
@@ -30,14 +33,14 @@ export class ResendInvitationUseCase {
         if (!invitation) {
             throw new RpcException({
                 code: status.NOT_FOUND,
-                message: 'Invitation not found',
+                message: 'No se encontró la invitación',
             });
         }
 
         if (invitation.status !== InvitationStatus.EXPIRED && invitation.status !== InvitationStatus.PENDING) {
             throw new RpcException({
                 code: status.FAILED_PRECONDITION,
-                message: 'Only EXPIRED or PENDING invitations can be resent',
+                message: 'Solo se pueden reenviar invitaciones expiradas o pendientes',
             });
         }
 
@@ -51,13 +54,14 @@ export class ResendInvitationUseCase {
         if (acceptedInvitation) {
             const targetName = invitation.targetType === InvitationTargetType.EVENT
                 ? 'event'
-                : invitation.targetType === InvitationTargetType.PROJECT
+                : invitation.targetType === InvitationTargetType.PROJECT ||
+                    invitation.targetType === InvitationTargetType.PROJECT_TUTOR
                     ? 'project'
                     : 'platform';
 
             throw new RpcException({
                 code: status.ALREADY_EXISTS,
-                message: `User has already accepted an invitation for this ${targetName}`,
+                message: `El usuario ya aceptó una invitación para este ${targetName}`,
             });
         }
 
@@ -68,7 +72,7 @@ export class ResendInvitationUseCase {
         } catch (error) {
             throw new RpcException({
                 code: status.NOT_FOUND,
-                message: 'User not found for resend invitation',
+                message: 'No se encontró el usuario para reenviar la invitación',
             });
         }
 
@@ -138,6 +142,8 @@ export class ResendInvitationUseCase {
 
         if (invitation.targetType === InvitationTargetType.EVENT) {
             eventData = await this.eventService.getEvent(invitation.targetId);
+        } else if (invitation.targetType === InvitationTargetType.PROJECT_TUTOR) {
+            projectData = await this.projectService.getProject(invitation.targetId);
         } else if (invitation.targetType === InvitationTargetType.PROJECT) {
             projectData = await this.projectService.getProject(invitation.targetId);
             eventData = await this.eventService.getEvent(projectData.eventId);
@@ -151,6 +157,7 @@ export class ResendInvitationUseCase {
             invitationLink = `${frontendUrl}/app/invitations`;
 
         await this.sendInvitationEmail({
+            idempotencyKey: invitationEmailKey(newInvitation.id, newInvitation.expiresAt),
             targetType: invitation.targetType,
             to: invitation.email,
             firstName: user?.firstName || '',
@@ -165,6 +172,7 @@ export class ResendInvitationUseCase {
     }
 
     private async sendInvitationEmail(params: {
+        idempotencyKey: string;
         targetType: InvitationTargetType;
         eventType?: string;
         to: string;
@@ -180,6 +188,7 @@ export class ResendInvitationUseCase {
             case InvitationTargetType.PLATFORM: {
                 // TODO: For now, we are not fetching roles, so we are sending an empty string.
                 await this.notificationService.sendPlatformInvitationEmail({
+                    idempotencyKey: params.idempotencyKey,
                     to: params.to,
                     firstName: params.firstName,
                     lastName: params.lastName,
@@ -189,8 +198,20 @@ export class ResendInvitationUseCase {
                 break;
             }
 
+            case InvitationTargetType.PROJECT_TUTOR: {
+                await this.notificationService.sendProjectTutorInvitationEmail({
+                    to: params.to,
+                    firstName: params.firstName,
+                    lastName: params.lastName,
+                    invitationLink: params.invitationLink,
+                    projectName: params.projectData?.name || 'Project',
+                });
+                break;
+            }
+
             case InvitationTargetType.EVENT: {
                 await this.notificationService.sendJurorInvitationEmail({
+                    idempotencyKey: params.idempotencyKey,
                     to: params.to,
                     firstName: params.firstName,
                     lastName: params.lastName,
@@ -204,6 +225,7 @@ export class ResendInvitationUseCase {
 
             case InvitationTargetType.PROJECT: {
                 await this.notificationService.sendProjectSubmittedInvitationEmail({
+                    idempotencyKey: params.idempotencyKey,
                     to: params.to,
                     eventType: params.eventData?.eventType || 'Exposition',
                     firstName: params.firstName,

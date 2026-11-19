@@ -138,6 +138,7 @@ enum InvitationTargetType {
   EVENT = 0;
   PLATFORM = 1;
   PROJECT = 2;
+  PROJECT_TUTOR = 3;
 }
 
 // The invitation message
@@ -153,4 +154,7 @@ message Invitation {
   int32 invitedUserId = 9;
   repeated int32 roleIds = 10;
   string createdAt = 11;
+  // Delivery state of the invitation email: PENDING, SENT or FAILED. Absent when unknown
+  // (no delivery recorded, or notification-service returned an error). Only set in GetEventInvitations.
+  optional string emailStatus = 12;
 }

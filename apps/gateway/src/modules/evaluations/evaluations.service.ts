@@ -11,6 +11,7 @@ import {
   FindCriterionsByCourseResponse,
   GetProjectStatsRequest,
   GetProjectStatsResponse,
+  GetProjectResultResponse,
   EvaluateProjectRequest,
   EvaluationProto,
   GetTopProjectsByCourseResponse,
@@ -146,6 +147,34 @@ export class EvaluationsService implements OnModuleInit {
 
   async getDashboardStats() {
     return lastValueFrom(this.evaluationService.getDashboardStats({}));
+  }
+
+  /**
+   * Average grade and number of evaluations of each project that has evaluations, in
+   * one call. Same value and rounding as getProjectStats; projects without evaluations
+   * are left out.
+   */
+  async getAverageGrades(
+    projectIds: number[],
+  ): Promise<
+    { projectId: number; averageGrade: number; evaluationCount: number }[]
+  > {
+    if (!projectIds.length) return [];
+    const response = await lastValueFrom(
+      this.evaluationService.getTopProjectsByCourse({ projectIds }),
+    );
+    return (response.topProjects ?? [])
+      .filter((p) => p.evaluationCount > 0)
+      .map((p) => ({
+        projectId: p.projectId,
+        averageGrade: roundGrade(p.averageGrade),
+        evaluationCount: p.evaluationCount,
+      }));
+  }
+
+  /** Consolidated result of a project (no juror data); publication is checked by the caller */
+  async getProjectResult(projectId: number): Promise<GetProjectResultResponse> {
+    return lastValueFrom(this.evaluationService.getProjectResult({ projectId }));
   }
 
   async evaluateProject(

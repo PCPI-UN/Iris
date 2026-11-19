@@ -31,7 +31,7 @@ export class AssignJurorBulkUC {
     const notFound = projectIds.filter((pid) => !byId.has(pid));
     if (notFound.length > 0) {
       notFound.forEach((pid) => {
-        failures.push({ projectId: pid, reason: 'Project not found' });
+        failures.push({ projectId: pid, reason: 'No se encontró el proyecto' });
       });
     }
 
@@ -46,7 +46,7 @@ export class AssignJurorBulkUC {
       mismatchedProjects.forEach((p) => {
         failures.push({
           projectId: p.id,
-          reason: `Project belongs to event ${p.eventId}, expected ${eventId}`,
+          reason: `El proyecto pertenece al evento ${p.eventId}, no al ${eventId}`,
         });
       });
     }
@@ -80,7 +80,7 @@ export class AssignJurorBulkUC {
         } catch (err: any) {
           failures.push({
             projectId: pid,
-            reason: `Failed to assign: ${err.message}`,
+            reason: `No se pudo asignar: ${err.message}`,
           });
         }
       }

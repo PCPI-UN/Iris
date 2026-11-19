@@ -10,7 +10,7 @@ export class DeleteProjectUC {
   async execute(input: DeleteProjectDTO) {
     
     const exists = await this.repo.findById(input.id);
-    if (!exists) throw new NotFoundError('Project not found');
+    if (!exists) throw new NotFoundError('No se encontró el proyecto');
 
     await this.repo.delete(input.id);
     // el controller gRPC puede devolver { ok: true }

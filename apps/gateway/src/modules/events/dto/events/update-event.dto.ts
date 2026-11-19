@@ -160,7 +160,7 @@ export class UpdateEventPayloadDTO {
   @IsOptional()
   @IsString()
   @Matches(/^[a-zA-Z0-9-]+$/, {
-    message: 'accessCode must contain only alphanumeric characters and hyphens',
+    message: 'accessCode solo puede tener letras, números y guiones',
   })
   @MinLength(3)
   @MaxLength(50)
@@ -192,6 +192,16 @@ export class UpdateEventPayloadDTO {
   @IsOptional()
   @IsBoolean()
   evaluationsOpened?: boolean;
+
+  @ApiProperty({
+    description:
+      'Publishes the event results: participants can see their scores, feedback, ranking position and awards. Not sent: unchanged',
+    example: false,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  resultsPublished?: boolean;
 
   @ApiProperty({
     description: 'New start date of the event (ISO 8601 format)',

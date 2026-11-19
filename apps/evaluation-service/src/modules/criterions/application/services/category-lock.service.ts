@@ -46,7 +46,7 @@ export class CategoryLockService {
     if (locked.length > 0) {
       throw new RpcException({
         code: status.FAILED_PRECONDITION,
-        message: `Categories [${locked.join(', ')}] of event ${eventId} already have evaluations; their criteria cannot be modified`,
+        message: `Las categorías [${locked.join(', ')}] del evento ${eventId} ya tienen evaluaciones; sus criterios no se pueden modificar`,
       });
     }
   }

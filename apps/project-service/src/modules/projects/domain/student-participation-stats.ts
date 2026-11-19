@@ -13,6 +13,8 @@ export interface ParticipationEvent {
   finished: boolean;
   /** true while the event is taking place (event-service status AVAILABLE) */
   inProgress: boolean;
+  /** true when the admin published the event results */
+  resultsPublished: boolean;
 }
 
 /** One award won by a project, as returned by event-service. */
@@ -23,7 +25,7 @@ export interface ParticipationAward {
   position: number;
   categoryName: string;
   eventId: number;
-  /** true when the event ranking is published; awards stay hidden until then */
+  /** true when the admin published the event results; awards stay hidden until then */
   resultsPublished: boolean;
 }
 
@@ -45,6 +47,8 @@ export interface StudentParticipationItem {
   eventEndDate: string;
   semester: string;
   finished: boolean;
+  /** true when the admin published the event results */
+  resultsPublished: boolean;
   awards: StudentAwardItem[];
 }
 
@@ -69,6 +73,8 @@ export interface StudentCurrentProject {
   state: ProjectState;
   /** Only while the event is not over and the reviewer requested changes */
   canEdit: boolean;
+  /** true when the admin published the event results */
+  resultsPublished: boolean;
 }
 
 export interface StudentParticipationStats {
@@ -89,8 +95,8 @@ export interface StudentParticipationStats {
  * - A project counts only if its event exists and was not deleted (active). Events that
  *   already ended count as historical (`finished`), the rest as ongoing.
  * - The semester comes from the event start date (AAAA-10 / AAAA-30).
- * - Awards are those won by the counted projects in their own event, only once the event
- *   ranking is published (the same rule as the scores); co-winners count once each.
+ * - Awards are those won by the counted projects in their own event, only once the admin
+ *   publishes the event results (the same rule as the scores); co-winners count once each.
  * - `courseNames` maps the project category (courseId) to its name; unknown ones are ''.
  */
 export function buildStudentParticipationStats(
@@ -119,6 +125,7 @@ export function buildStudentParticipationStats(
       eventEndDate: event.endDate,
       semester,
       finished: event.finished,
+      resultsPublished: event.resultsPublished,
       awards: awards
         .filter(
           (award) =>
@@ -239,5 +246,6 @@ export function pickCurrentProject(
     courseName: courseNames.get(project.courseId) ?? '',
     state: project.state,
     canEdit: project.state === 'REQUEST_CHANGES',
+    resultsPublished: event.resultsPublished,
   };
 }

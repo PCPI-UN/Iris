@@ -23,13 +23,13 @@ describe('validateGradingScaleInput', () => {
         [[]],
     ])('rejects a scale without exactly 4 levels (%p)', (points) => {
         expect(validateGradingScaleInput({ name: 'X', levels: levels(points) })).toEqual([
-            expect.stringContaining('exactly 4 levels'),
+            expect.stringContaining('exactamente 4 niveles'),
         ]);
     });
 
     it.each([
-        [[10, 20, 20, 40], 'level 3 (20) is not greater than level 2 (20)'],
-        [[40, 30, 20, 10], 'level 2 (30) is not greater than level 1 (40)'],
+        [[10, 20, 20, 40], 'el nivel 3 (20) no es mayor que el nivel 2 (20)'],
+        [[40, 30, 20, 10], 'el nivel 2 (30) no es mayor que el nivel 1 (40)'],
     ])('rejects points that do not grow (%p)', (points, message) => {
         expect(validateGradingScaleInput({ name: 'X', levels: levels(points) }).join('; ')).toContain(message);
     });
@@ -37,7 +37,7 @@ describe('validateGradingScaleInput', () => {
     it('rejects repeated or out-of-range level numbers', () => {
         const input = { name: 'X', levels: [1, 2, 2, 5].map((level) => ({ level, label: 'L', points: level })) };
 
-        expect(validateGradingScaleInput(input)).toEqual([expect.stringContaining('numbered 1 to 4')]);
+        expect(validateGradingScaleInput(input)).toEqual([expect.stringContaining('numerados del 1 al 4')]);
     });
 
     it('rejects an empty name, empty labels, negative points and more than 2 decimals', () => {
@@ -53,16 +53,16 @@ describe('validateGradingScaleInput', () => {
 
         expect(problems).toEqual(
             expect.arrayContaining([
-                'name is required',
-                'level 1 needs a label',
-                expect.stringContaining('the points of level 1 must be between 0'),
-                'the points of level 2 can have at most 2 decimals',
+                'el nombre es obligatorio',
+                'el nivel 1 necesita una etiqueta',
+                expect.stringContaining('los puntos del nivel 1 deben estar entre 0'),
+                'los puntos del nivel 2 pueden tener como máximo 2 decimales',
             ]),
         );
     });
 
     it('rejects a missing scale', () => {
-        expect(validateGradingScaleInput(undefined)).toEqual(['the grading scale is required']);
+        expect(validateGradingScaleInput(undefined)).toEqual(['la escala de calificación es obligatoria']);
     });
 });
 

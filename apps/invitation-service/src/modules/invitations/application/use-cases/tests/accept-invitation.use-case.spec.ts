@@ -65,6 +65,7 @@ describe('AcceptInvitationUseCase', () => {
       getProject: jest.fn(),
       addParticipant: jest.fn(),
       listPendingParticipants: jest.fn(),
+      addProjectTutor: jest.fn(),
     };
 
     mockAuthService.getUser.mockResolvedValue({ status: 'ACTIVE' } as any);
@@ -334,7 +335,7 @@ describe('AcceptInvitationUseCase', () => {
       ).rejects.toThrow(
         new RpcException({
           code: status.FAILED_PRECONDITION,
-          message: 'Invitation cannot be accepted',
+          message: 'La invitación no se puede aceptar',
         }),
       );
 
@@ -366,7 +367,7 @@ describe('AcceptInvitationUseCase', () => {
       await expect(useCase.execute({ token: 'token-abc' })).rejects.toThrow(
         new RpcException({
           code: status.FAILED_PRECONDITION,
-          message: 'Invitation cannot be accepted',
+          message: 'La invitación no se puede aceptar',
         }),
       );
     });
@@ -396,7 +397,7 @@ describe('AcceptInvitationUseCase', () => {
       await expect(useCase.execute({ token: 'token-abc' })).rejects.toThrow(
         new RpcException({
           code: status.FAILED_PRECONDITION,
-          message: 'Invitation cannot be accepted',
+          message: 'La invitación no se puede aceptar',
         }),
       );
     });
@@ -426,7 +427,7 @@ describe('AcceptInvitationUseCase', () => {
       await expect(useCase.execute({ token: 'token-abc' })).rejects.toThrow(
         new RpcException({
           code: status.FAILED_PRECONDITION,
-          message: 'Invitation cannot be accepted',
+          message: 'La invitación no se puede aceptar',
         }),
       );
     });
@@ -534,11 +535,68 @@ describe('AcceptInvitationUseCase', () => {
       await expect(useCase.execute({ token: 'token-abc' })).rejects.toThrow(
         new RpcException({
           code: status.INVALID_ARGUMENT,
-          message: 'studentCode could not be resolved from pending participants for this invitation',
+          message: 'No se pudo obtener el código de estudiante de los participantes pendientes de esta invitación',
         }),
       );
 
       expect(projectService.addParticipant).not.toHaveBeenCalled();
+      expect(invitationRepository.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Project tutor invitation', () => {
+    const tutorInvitation = () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 7);
+      return new Invitation(
+        'inv-tutor',
+        'token-tutor',
+        'tutor@example.com',
+        InvitationTargetType.PROJECT_TUTOR,
+        10,
+        InvitationStatus.PENDING,
+        futureDate,
+        100,
+        200,
+        new Date(),
+        new Date(),
+      );
+    };
+
+    it('adds the Tutor role, links the tutor to the project and creates no event member', async () => {
+      const invitation = tutorInvitation();
+      invitationRepository.findByToken.mockResolvedValue(invitation);
+      invitationRoleRepository.findByInvitationId.mockResolvedValue([]);
+      invitationRepository.save.mockResolvedValue(invitation);
+
+      const result = await useCase.execute({ token: 'token-tutor' });
+
+      expect(result).toEqual({ success: true });
+      expect(authService.assignPlatformRoles).toHaveBeenCalledWith({
+        userId: 200,
+        roleIds: [10],
+      });
+      expect(projectService.addProjectTutor).toHaveBeenCalledWith({
+        projectId: 10,
+        userId: 200,
+        email: 'tutor@example.com',
+      });
+      expect(eventService.createEventMember).not.toHaveBeenCalled();
+      expect(projectService.addParticipant).not.toHaveBeenCalled();
+      expect(projectService.listPendingParticipants).not.toHaveBeenCalled();
+      expect(invitationRepository.save).toHaveBeenCalled();
+    });
+
+    it('neither grants the Tutor role nor accepts the invitation when the project rejects the link', async () => {
+      const invitation = tutorInvitation();
+      invitationRepository.findByToken.mockResolvedValue(invitation);
+      invitationRoleRepository.findByInvitationId.mockResolvedValue([]);
+      projectService.addProjectTutor.mockRejectedValue(
+        new Error('El proyecto no tiene un tutor pendiente con este correo'),
+      );
+
+      await expect(useCase.execute({ token: 'token-tutor' })).rejects.toThrow('no tiene un tutor pendiente');
+      expect(authService.assignPlatformRoles).not.toHaveBeenCalled();
       expect(invitationRepository.save).not.toHaveBeenCalled();
     });
   });

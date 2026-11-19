@@ -26,7 +26,7 @@ export class ActivateUserWithTokenUseCase {
     if (!valid || tokenType !== UserTokenType.ACCOUNT_SETUP) {
       throw new RpcException({
         code: status.FAILED_PRECONDITION,
-        message: 'Token is not valid for account confirmation',
+        message: 'El enlace no es válido para confirmar la cuenta',
       });
     }
 
@@ -34,7 +34,7 @@ export class ActivateUserWithTokenUseCase {
     if (!user) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: 'User not found',
+        message: 'No se encontró el usuario',
       });
     }
 

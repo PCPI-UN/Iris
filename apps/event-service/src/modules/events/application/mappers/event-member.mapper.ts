@@ -23,7 +23,7 @@ export class EventMemberMapper {
   static toCreateEventMemberResponse(): CreateEventMemberResponse {
     return {
       ok: true,
-      message: 'Event member created successfully',
+      message: 'Miembro del evento creado correctamente',
     };
   }
 

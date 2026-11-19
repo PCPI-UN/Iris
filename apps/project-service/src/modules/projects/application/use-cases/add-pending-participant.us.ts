@@ -8,22 +8,22 @@ export class AddPendingParticipantUC {
   constructor(@Inject('ProjectRepository') private readonly repo: ProjectRepository) {}
 
   async execute(input: AddPendingParticipantDTO) {
-    if (!input.projectId || input.projectId <= 0) throw new ValidationError('Invalid projectId');
+    if (!input.projectId || input.projectId <= 0) throw new ValidationError('projectId no es válido');
     // validar email básico
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(input.email)) throw new ValidationError('Invalid email format');
+    if (!emailRegex.test(input.email)) throw new ValidationError('El formato del correo no es válido');
     // validar que hay studentCode
     if (!input.studentCode || input.studentCode.trim().length === 0) {
-      throw new ValidationError('studentCode is required');
+      throw new ValidationError('studentCode es obligatorio');
     }
     if (!input.semester || input.semester.trim().length === 0) {
-      throw new ValidationError('semester is required');
+      throw new ValidationError('semester es obligatorio');
     }
     if (!input.career || input.career.trim().length === 0) {
-      throw new ValidationError('career is required');
+      throw new ValidationError('career es obligatorio');
     }
     const p = await this.repo.findById(input.projectId);
-    if (!p) throw new NotFoundError('Project not found');
+    if (!p) throw new NotFoundError('No se encontró el proyecto');
     
     // Crea o actualiza (upsert) el pending participante
     return this.repo.addPendingParticipant({

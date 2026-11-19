@@ -28,7 +28,7 @@ export class UpdateGradingScaleUseCase {
             throw scaleNotFound(id);
         }
         if (scale.isSystem) {
-            throw systemScaleIsReadOnly(scale, 'edited');
+            throw systemScaleIsReadOnly(scale, 'editar');
         }
         const normalized = validScaleInput(input);
 
@@ -40,7 +40,7 @@ export class UpdateGradingScaleUseCase {
 
             const evaluated = await this.repository.findEventsWithEvaluations(eventIds);
             if (evaluated.length > 0) {
-                throw scaleUsedByEvaluatedEvents(scale, evaluated, 'edited');
+                throw scaleUsedByEvaluatedEvents(scale, evaluated, 'editar');
             }
             return this.repository.update(id, normalized);
         });
@@ -58,7 +58,7 @@ export async function assertSameEvents(
     if (current.some((eventId) => !locked.has(eventId))) {
         throw new RpcException({
             code: status.FAILED_PRECONDITION,
-            message: 'The grading scale was assigned to another event meanwhile. Try again.',
+            message: 'La escala de calificación se asignó a otro evento mientras tanto. Inténtalo de nuevo.',
         });
     }
 }

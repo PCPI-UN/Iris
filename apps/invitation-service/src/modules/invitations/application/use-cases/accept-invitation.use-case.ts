@@ -9,7 +9,7 @@ import { EventServicePort } from '../../infrastructure/ports/event-service.port'
 import { ProjectServicePort } from '../../infrastructure/ports/project-service.port';
 import { AcceptInvitationResponse } from '@app/common/generated/invitation';
 import { normalizeEmail } from '@app/common/utils/email.util';
-import { InvitationTargetType } from '../../domain/entities/invitation.entity';
+import { InvitationTargetType, TUTOR_ROLE_ID } from '../../domain/entities/invitation.entity';
 
 @Injectable()
 export class AcceptInvitationUseCase {
@@ -28,7 +28,7 @@ export class AcceptInvitationUseCase {
     if (!invitation || !invitation.canBeAccepted()) {
       throw new RpcException({
         code: status.FAILED_PRECONDITION,
-        message: 'Invitation cannot be accepted',
+        message: 'La invitación no se puede aceptar',
       });
     }
 
@@ -39,7 +39,7 @@ export class AcceptInvitationUseCase {
       if (!dto.password && !dto.microsoftToken) {
         throw new RpcException({
           code: status.INVALID_ARGUMENT,
-          message: 'Password or Microsoft authentication token is required for new user activation',
+          message: 'Para activar un usuario nuevo se requiere una contraseña o el token de Microsoft',
         });
       }
 
@@ -98,7 +98,7 @@ export class AcceptInvitationUseCase {
         if (!project) {
           throw new RpcException({
             code: status.NOT_FOUND,
-            message: `Project with ID ${invitation.targetId} not found`,
+            message: `No se encontró el proyecto con ID ${invitation.targetId}`,
           });
         }
 
@@ -115,7 +115,7 @@ export class AcceptInvitationUseCase {
           if (!studentCode) {
             throw new RpcException({
               code: status.INVALID_ARGUMENT,
-              message: 'studentCode could not be resolved from pending participants for this invitation',
+              message: 'No se pudo obtener el código de estudiante de los participantes pendientes de esta invitación',
             });
           }
 
@@ -137,6 +137,21 @@ export class AcceptInvitationUseCase {
           });
         }
 
+        break;
+
+      case InvitationTargetType.PROJECT_TUTOR:
+        // Link first: a tutor removed from the project after the invitation is rejected here
+        // and does not get the role
+        await this.projectService.addProjectTutor({
+          projectId: invitation.targetId,
+          userId: invitation.invitedUserId,
+          email: invitation.email,
+        });
+        // Additive: the Tutor role is added to the roles the user already has
+        await this.authService.assignPlatformRoles({
+          userId: invitation.invitedUserId,
+          roleIds: [TUTOR_ROLE_ID],
+        });
         break;
     }
 

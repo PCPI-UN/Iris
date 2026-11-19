@@ -13,7 +13,7 @@ export class ListCoursesByEventUseCase {
     if (!Number.isInteger(eventId) || eventId <= 0) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: 'eventId is required and must be > 0',
+        message: 'eventId es obligatorio y debe ser mayor que 0',
       });
     }
 

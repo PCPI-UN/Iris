@@ -18,7 +18,7 @@ export class EventGradingScaleResolver {
         if (!scale) {
             throw new RpcException({
                 code: status.FAILED_PRECONDITION,
-                message: `Event ${eventId} has no grading scale assigned`,
+                message: `El evento ${eventId} no tiene una escala de calificación asignada`,
             });
         }
         return scale;

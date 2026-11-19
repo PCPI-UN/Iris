@@ -15,7 +15,7 @@ export class GetEventGradingScaleUseCase {
 
     async execute(eventId: number): Promise<GradingScaleView> {
         if (!Number.isInteger(eventId) || eventId <= 0) {
-            throw new RpcException({ code: status.INVALID_ARGUMENT, message: 'eventId must be a positive integer' });
+            throw new RpcException({ code: status.INVALID_ARGUMENT, message: 'eventId debe ser un entero positivo' });
         }
         const scale = await this.resolver.resolve(eventId);
         return { scale, locked: await isLocked(this.repository, scale.id, scale.isSystem) };

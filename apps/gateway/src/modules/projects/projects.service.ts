@@ -45,6 +45,9 @@ import {
   TypedDocument,
   ProjectDocumentInputDto,
 } from './dto/project-document-input.dto';
+import { ProjectTutorsInputDto } from './dto/project-tutors-input.dto';
+import { parseProjectTutors } from './parse-project-tutors';
+import { toProjectTutorsResponse } from './project-tutors-response';
 import { AzureBlobUploadService } from './azure-blob-upload.service';
 import { PendingParticipantInputDto } from './dto/pending-participant-input.dto';
 import {
@@ -81,6 +84,9 @@ import {
 } from './types/project-enrichment.types';
 import { RemoveJurorFromProjectDto } from './dto/remove-juror-from-project.dto';
 import { JurorRemovalResult } from './types/juror-removal.types';
+
+/** Platform roles a project tutor can be picked from: Professor (9) and Tutor (10). */
+const TUTOR_CANDIDATE_ROLE_IDS = [9, 10];
 
 export type {
   JurorProfile,
@@ -137,7 +143,7 @@ export class ProjectsService implements OnModuleInit {
     const eventType = body.eventType;
     if (eventType !== 'Competition' && eventType !== 'Exposition') {
       throw new BadRequestException(
-        'Invalid event type. Must be "Competition" or "Exposition".',
+        'Tipo de evento no válido. Debe ser "Competition" o "Exposition".',
       );
     }
 
@@ -147,10 +153,12 @@ export class ProjectsService implements OnModuleInit {
         participants = JSON.parse(body.participants);
       } catch (error: any) {
         throw new BadRequestException(
-          'Invalid participants format. Must be a valid JSON array.',
+          'El formato de los participantes no es válido. Debe ser un arreglo JSON válido.',
         );
       }
     }
+
+    const tutors = parseProjectTutors(body.tutors);
 
     let documentMetadata: ProjectDocumentInputDto[] = [];
     if (body.documents) {
@@ -158,14 +166,14 @@ export class ProjectsService implements OnModuleInit {
         documentMetadata = JSON.parse(body.documents);
       } catch (error: any) {
         throw new BadRequestException(
-          'Invalid documents format. Must be a valid JSON array.',
+          'El formato de los documentos no es válido. Debe ser un arreglo JSON válido.',
         );
       }
     }
 
     if (files.length !== documentMetadata.length) {
       throw new BadRequestException(
-        `Number of files (${files.length}) does not match number of document metadata entries (${documentMetadata.length})`,
+        `La cantidad de archivos (${files.length}) no coincide con la cantidad de documentos descritos (${documentMetadata.length})`,
       );
     }
 
@@ -177,14 +185,14 @@ export class ProjectsService implements OnModuleInit {
     if (invalidDocs.length > 0) {
       const invalidTypes = invalidDocs.map((doc) => doc.type).join(', ');
       throw new BadRequestException(
-        `Invalid document type(s): ${invalidTypes}. Valid types are: ${validTypes.join(', ')}`,
+        `Tipos de documento no válidos: ${invalidTypes}. Los tipos válidos son: ${validTypes.join(', ')}`,
       );
     }
 
     // Validate maximum file count (1 logo + 1 poster + 2 supporting docs = 4 max)
     if (files.length > 4) {
       throw new BadRequestException(
-        'Maximum 4 files allowed: 1 logo, 1 poster, and 2 supporting documents',
+        'Se permiten máximo 4 archivos: 1 logo, 1 póster y 2 documentos de soporte',
       );
     }
 
@@ -194,7 +202,7 @@ export class ProjectsService implements OnModuleInit {
     if (oversizedFiles.length > 0) {
       const fileNames = oversizedFiles.map((f) => f.originalname).join(', ');
       throw new BadRequestException(
-        `Files exceed 25MB limit: ${fileNames}. Maximum file size is 25MB per file.`,
+        `Estos archivos superan el límite de 25 MB: ${fileNames}. El tamaño máximo es 25 MB por archivo.`,
       );
     }
 
@@ -210,14 +218,14 @@ export class ProjectsService implements OnModuleInit {
 
     // Validate: max 1 logo, 1 poster, 2 supporting documents
     if (typeCounts['LOGO'] > 1) {
-      throw new BadRequestException('Only 1 logo file is allowed');
+      throw new BadRequestException('Solo se permite 1 archivo de logo');
     }
     if (typeCounts['POSTER'] > 1) {
-      throw new BadRequestException('Only 1 poster file is allowed');
+      throw new BadRequestException('Solo se permite 1 archivo de póster');
     }
     if (typeCounts['SUPPORTING_DOCUMENT'] > 2) {
       throw new BadRequestException(
-        'Maximum 2 supporting document files are allowed',
+        'Se permiten máximo 2 documentos de soporte',
       );
     }
 
@@ -226,7 +234,7 @@ export class ProjectsService implements OnModuleInit {
 
     if (isNaN(eventId) || isNaN(courseId)) {
       throw new BadRequestException(
-        'eventId and courseId must be valid numbers',
+        'eventId y courseId deben ser números válidos',
       );
     }
 
@@ -243,6 +251,8 @@ export class ProjectsService implements OnModuleInit {
           name: body.name,
           description: body.description,
           projectCode: body.projectCode,
+          tutorUserIds: tutors.userIds,
+          pendingTutors: tutors.pending,
           participants: participants.map((p) => ({
             firstName: p.firstName,
             lastName: p.lastName,
@@ -256,7 +266,7 @@ export class ProjectsService implements OnModuleInit {
       );
       createdProject = response.project;
       if (!createdProject) {
-        throw new BadRequestException('Project creation returned no project');
+        throw new BadRequestException('La creación del proyecto no devolvió ningún proyecto');
       }
       this.logger.log(
         `Project created successfully with ID: ${createdProject.id}`,
@@ -285,7 +295,7 @@ export class ProjectsService implements OnModuleInit {
         error.stack,
       );
       throw new BadRequestException(
-        `Project created but failed to upload files: ${error.message}`,
+        `Se creó el proyecto, pero no se pudieron subir los archivos: ${error.message}`,
       );
     }
 
@@ -310,12 +320,12 @@ export class ProjectsService implements OnModuleInit {
         error.stack,
       );
       throw new BadRequestException(
-        `Project created and files uploaded, but failed to attach documents: ${error.message}`,
+        `Se creó el proyecto y se subieron los archivos, pero no se pudieron adjuntar los documentos: ${error.message}`,
       );
     }
 
     // Return the created project
-    return { message: 'Project submitted successfully', success: true };
+    return { message: 'Proyecto enviado correctamente', success: true };
   }
 
   async createProjectWithParticipants(dto: CreateProjectWithParticipantsDto) {
@@ -327,6 +337,8 @@ export class ProjectsService implements OnModuleInit {
         name: dto.name,
         description: dto.description,
         projectCode: dto.projectCode,
+        tutorUserIds: [],
+        pendingTutors: [],
         participants:
           dto.participants?.map((p) => ({
             firstName: p.firstName,
@@ -362,6 +374,34 @@ export class ProjectsService implements OnModuleInit {
     return firstValueFrom(
       this.projectsService.addPendingParticipant(request),
     );
+  }
+
+  /**
+   * Active users with the Tutor or Professor role whose name matches `search`.
+   * Id and name only: the email of other users is not exposed.
+   */
+  async searchTutorCandidates(search: string) {
+    const { users } = await this.authService.findUsersByRoles({
+      roleIds: TUTOR_CANDIDATE_ROLE_IDS,
+      search: search.trim(),
+      userIds: [],
+    });
+    return users.map((user) => ({
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+    }));
+  }
+
+  async setProjectTutors(projectId: number, dto: ProjectTutorsInputDto) {
+    const res = await firstValueFrom(
+      this.projectsService.setProjectTutors({
+        projectId,
+        tutorUserIds: dto.userIds,
+        pendingTutors: dto.pending,
+      }),
+    );
+    return { ...res, tutors: toProjectTutorsResponse(res.tutors) };
   }
 
   async assignJurorToProjects(dto: AssignJurorToProjectsDto) {
@@ -516,12 +556,18 @@ export class ProjectsService implements OnModuleInit {
   async getProjectForReview(id: number): Promise<ProjectForReviewResponseDto> {
     const project = await this.getProjectById(id);
 
-    const { participants, pendingParticipants, documents, ...projectInfo } =
-      project;
+    const {
+      participants,
+      pendingParticipants,
+      documents,
+      tutors,
+      ...projectInfo
+    } = project;
 
     return {
       confirmedParticipants: participants,
       pendingParticipants,
+      tutors,
       project: projectInfo,
       documents,
     };
@@ -537,10 +583,10 @@ export class ProjectsService implements OnModuleInit {
     const project = res.items[0];
 
     if (!project) {
-      throw new NotFoundException('Project not found');
+      throw new NotFoundException('No se encontró el proyecto');
     }
 
-    return project;
+    return { ...project, tutors: toProjectTutorsResponse(project.tutors) };
   }
 
   private mapDocumentStatusToProto(
@@ -569,12 +615,12 @@ export class ProjectsService implements OnModuleInit {
     );
     const document = items?.find((item) => item.id === documentId);
     if (!document) {
-      throw new NotFoundException('Project document not found');
+      throw new NotFoundException('No se encontró el documento del proyecto');
     }
 
     const url = this.azureBlobUploadService.openUrl(document.url);
     if (!url) {
-      throw new NotFoundException('Project document has no stored file');
+      throw new NotFoundException('El documento del proyecto no tiene un archivo guardado');
     }
     return url;
   }
@@ -602,7 +648,7 @@ export class ProjectsService implements OnModuleInit {
     );
 
     if (!res.document) {
-      throw new NotFoundException('Project document not found');
+      throw new NotFoundException('No se encontró el documento del proyecto');
     }
 
     return res.document;
@@ -743,17 +789,17 @@ export class ProjectsService implements OnModuleInit {
         documentMetadata = JSON.parse(body.documents);
       } catch (error: any) {
         throw new BadRequestException(
-          'Invalid documents format. Must be a valid JSON array.',
+          'El formato de los documentos no es válido. Debe ser un arreglo JSON válido.',
         );
       }
     } else {
-      throw new BadRequestException('documents field is required');
+      throw new BadRequestException('El campo documents es obligatorio');
     }
 
     // 2. Validar que length de files == length de metadata
     if (files.length !== documentMetadata.length) {
       throw new BadRequestException(
-        `Number of files (${files.length}) does not match number of document metadata entries (${documentMetadata.length})`,
+        `La cantidad de archivos (${files.length}) no coincide con la cantidad de documentos descritos (${documentMetadata.length})`,
       );
     }
 
@@ -765,14 +811,14 @@ export class ProjectsService implements OnModuleInit {
     if (invalidDocs.length > 0) {
       const invalidTypes = invalidDocs.map((doc) => doc.type).join(', ');
       throw new BadRequestException(
-        `Invalid document type(s): ${invalidTypes}. Valid types are: ${validTypes.join(', ')}`,
+        `Tipos de documento no válidos: ${invalidTypes}. Los tipos válidos son: ${validTypes.join(', ')}`,
       );
     }
 
     // 4. Validar máximo de files en ESTA petición
     if (files.length > 4) {
       throw new BadRequestException(
-        'Maximum 4 files allowed per request: 1 logo, 1 poster, and 2 supporting documents',
+        'Se permiten máximo 4 archivos por solicitud: 1 logo, 1 póster y 2 documentos de soporte',
       );
     }
 
@@ -782,7 +828,7 @@ export class ProjectsService implements OnModuleInit {
     if (oversizedFiles.length > 0) {
       const fileNames = oversizedFiles.map((f) => f.originalname).join(', ');
       throw new BadRequestException(
-        `Files exceed 5MB limit: ${fileNames}. Maximum file size is 5MB per file.`,
+        `Estos archivos superan el límite de 5 MB: ${fileNames}. El tamaño máximo es 5 MB por archivo.`,
       );
     }
 
@@ -796,16 +842,16 @@ export class ProjectsService implements OnModuleInit {
     );
 
     if (typeCounts['LOGO'] > 1) {
-      throw new BadRequestException('Only 1 logo file is allowed per request');
+      throw new BadRequestException('Solo se permite 1 archivo de logo por solicitud');
     }
     if (typeCounts['POSTER'] > 1) {
       throw new BadRequestException(
-        'Only 1 poster file is allowed per request',
+        'Solo se permite 1 archivo de póster por solicitud',
       );
     }
     if (typeCounts['SUPPORTING_DOCUMENT'] > 2) {
       throw new BadRequestException(
-        'Maximum 2 supporting document files are allowed per request',
+        'Se permiten máximo 2 documentos de soporte por solicitud',
       );
     }
 
@@ -817,7 +863,7 @@ export class ProjectsService implements OnModuleInit {
     const project = (projectGrpcResponse as any).project ?? projectGrpcResponse;
 
     if (!project) {
-      throw new NotFoundException(`Project with id ${projectId} not found`);
+      throw new NotFoundException(`No se encontró el proyecto con ID ${projectId}`);
     }
 
     this.logger.log(
@@ -827,7 +873,7 @@ export class ProjectsService implements OnModuleInit {
     // 7.2. Obtener el evento asociado para revisar evaluaciones y fechas
     if (!project.eventId) {
       throw new BadRequestException(
-        'Cannot add files: project is not linked to any event',
+        'No se pueden agregar archivos: el proyecto no está vinculado a ningún evento',
       );
     }
 
@@ -839,7 +885,7 @@ export class ProjectsService implements OnModuleInit {
 
     if (!event) {
       throw new NotFoundException(
-        `Event with id ${project.eventId} not found for this project`,
+        `No se encontró el evento con ID ${project.eventId} de este proyecto`,
       );
     }
 
@@ -858,13 +904,13 @@ export class ProjectsService implements OnModuleInit {
         )}`,
       );
       throw new BadRequestException(
-        'Cannot add files: event evaluations state is not properly configured',
+        'No se pueden agregar archivos: el estado de evaluaciones del evento no está bien configurado',
       );
     }
 
     if (evaluationsOpened === true) {
       throw new BadRequestException(
-        'Cannot add files: evaluations are already opened for this event/project',
+        'No se pueden agregar archivos: las evaluaciones de este evento ya están abiertas',
       );
     }
 
@@ -872,7 +918,7 @@ export class ProjectsService implements OnModuleInit {
 
     if (!rawEndDate) {
       throw new BadRequestException(
-        'Cannot add files: event end date is not defined',
+        'No se pueden agregar archivos: el evento no tiene fecha de finalización',
       );
     }
 
@@ -883,7 +929,7 @@ export class ProjectsService implements OnModuleInit {
 
     if (now >= eventEndDate) {
       throw new BadRequestException(
-        'Cannot add files: event end date has already passed',
+        'No se pueden agregar archivos: la fecha de finalización del evento ya pasó',
       );
     }
 
@@ -903,7 +949,7 @@ export class ProjectsService implements OnModuleInit {
         `Failed to upload files to Azure: ${error.message}`,
         error.stack,
       );
-      throw new BadRequestException(`Failed to upload files: ${error.message}`);
+      throw new BadRequestException(`No se pudieron subir los archivos: ${error.message}`);
     }
 
     // 9. Adjuntar documentos al proyecto
@@ -930,12 +976,12 @@ export class ProjectsService implements OnModuleInit {
         error.stack,
       );
       throw new BadRequestException(
-        `Files uploaded, but failed to attach documents: ${error.message}`,
+        `Se subieron los archivos, pero no se pudieron adjuntar los documentos: ${error.message}`,
       );
     }
 
     return {
-      message: 'Files added to project successfully',
+      message: 'Archivos agregados al proyecto correctamente',
       success: true,
     };
   }
@@ -948,7 +994,18 @@ export class ProjectsService implements OnModuleInit {
       userId,
       eventId,
     };
-    return lastValueFrom(this.projectsService.getMyProjectByEvent(request));
+    const res = await lastValueFrom(
+      this.projectsService.getMyProjectByEvent(request),
+    );
+    return res.project
+      ? {
+          ...res,
+          project: {
+            ...res.project,
+            tutors: toProjectTutorsResponse(res.project.tutors),
+          },
+        }
+      : res;
   }
 
   async listUserParticipations(

@@ -13,7 +13,7 @@ describe('resolveEmailProviders', () => {
   };
 
   const resolve = (vars: Record<string, string>) => {
-    const logger = { log: jest.fn(), warn: jest.fn() };
+    const logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
     const providers = resolveEmailProviders((key) => vars[key], logger);
     return { names: providers.map((p) => p.name), logger };
   };
@@ -94,6 +94,34 @@ describe('resolveEmailProviders', () => {
     expect(() => resolve({ ...ACS, EMAIL_PROVIDERS: 'emailjs' })).toThrow(
       'No email provider configured',
     );
+  });
+
+  it('skips a provider that cannot be built and logs the cause', () => {
+    const { names, logger } = resolve({
+      ...ACS,
+      ...EMAILJS,
+      ACS_CONNECTION_STRING: 'not-a-connection-string',
+    });
+
+    expect(names).toEqual(['emailjs']);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'Email provider "acs" skipped: it could not be built',
+      ),
+    );
+    expect(logger.log).toHaveBeenCalledWith(
+      'Email providers: only emailjs configured, no fallback',
+    );
+  });
+
+  it('fails to start when the only provider cannot be built', () => {
+    expect(() =>
+      resolve({
+        ...ACS,
+        ACS_CONNECTION_STRING: 'not-a-connection-string',
+        EMAIL_PROVIDERS: 'acs',
+      }),
+    ).toThrow('No email provider configured');
   });
 
   it('fails to start on an unknown provider', () => {

@@ -28,6 +28,8 @@ import {
   ChangePasswordResponse,
   ActivateUserResponse,
   User,
+  FindUsersByRolesRequest,
+  FindUsersByRolesResponse,
 } from '@app/common/generated/auth';
 import { LoginDto } from './dto/login.dto';
 import { ActivateUserDto } from './dto/activate-user.dto';
@@ -131,6 +133,12 @@ export class AuthService implements OnModuleInit {
         newPassword,
       } as ChangePasswordRequest),
     );
+  }
+
+  async findUsersByRoles(
+    request: FindUsersByRolesRequest,
+  ): Promise<FindUsersByRolesResponse> {
+    return firstValueFrom(this.authService.findUsersByRoles(request));
   }
 
   async updateOwnProfile(request: UpdateOwnProfileRequest): Promise<User> {

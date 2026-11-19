@@ -89,3 +89,26 @@ describe('AuthServiceAdapter.findUsersByIds', () => {
     await expect(adapter.findUsersByIds([1])).rejects.toBe(unavailable);
   });
 });
+
+describe('AuthServiceAdapter roles', () => {
+  it('findUsersByRoles sends the roles and ids and maps the summaries', async () => {
+    const findUsersByRoles = jest
+      .fn()
+      .mockResolvedValue([{ id: 7, firstName: 'Ana', lastName: 'Paz', roleIds: [10] }]);
+    const adapter = new AuthServiceAdapter({ findUsersByRoles } as unknown as AuthGrpcClient);
+
+    await expect(adapter.findUsersByRoles({ roleIds: [9, 10], userIds: [7] })).resolves.toEqual([
+      { id: 7, firstName: 'Ana', lastName: 'Paz', roleIds: [10] },
+    ]);
+    expect(findUsersByRoles).toHaveBeenCalledWith({ roleIds: [9, 10], userIds: [7] });
+  });
+
+  it('assignPlatformRoles forwards the user and roles', async () => {
+    const assignPlatformRoles = jest.fn().mockResolvedValue(undefined);
+    const adapter = new AuthServiceAdapter({ assignPlatformRoles } as unknown as AuthGrpcClient);
+
+    await adapter.assignPlatformRoles(7, [10]);
+
+    expect(assignPlatformRoles).toHaveBeenCalledWith(7, [10]);
+  });
+});

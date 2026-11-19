@@ -19,7 +19,7 @@ export class FindByIdUseCase {
         if (!evaluation) {
             throw new RpcException({
                 code: 5, // 5 = NOT_FOUND in gRPC
-                message: 'Evaluation not found',
+                message: 'No se encontró la evaluación',
             });
         }
 

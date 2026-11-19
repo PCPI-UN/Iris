@@ -21,7 +21,7 @@ export class UpdateUserUseCase {
     if (!user) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: `User with ID #${id} not found`,
+        message: `No se encontró el usuario con ID #${id}`,
       });
     }
 
@@ -36,7 +36,7 @@ export class UpdateUserUseCase {
       if (phoneExists) {
         throw new RpcException({
           code: status.ALREADY_EXISTS,
-          message: 'Another user with this phone number already exists',
+          message: 'Ya existe otro usuario con este número de teléfono',
         });
       }
       user.phone = phone;

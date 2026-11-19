@@ -21,7 +21,7 @@ Each module follows the layering described in `LLM_RULES.md` (`domain`, `applica
 
 | Module | Responsibility |
 | --- | --- |
-| `events` | Event CRUD and listings, dashboard stats, AR listing, event members, ranking configuration, and the catalog (categories, awards, award winners, inscription details, recaps). For the student dashboard: `ListEventsByIds` (deleted events included, with `active = false`), `ListAwardsByProjects` (awards won by a set of projects in active categories, with their category, event and whether the event ranking is published) and `ListCategoriesByIds` |
+| `events` | Event CRUD and listings, results publication (`results_published`: participants see their scores and awards only once the admin sets it), dashboard stats, AR listing, event members, ranking configuration, and the catalog (categories, awards, award winners, inscription details, recaps). For the student dashboard: `ListEventsByIds` (deleted events included, with `active = false`), `ListAwardsByProjects` (awards won by a set of projects in active categories, with their category, event and whether the event results are published) and `ListCategoriesByIds` |
 | `courses` | Legacy "course" API. There is no courses table: it reads and writes `categories` (`code` maps to `name`) |
 
 ## Dependencies

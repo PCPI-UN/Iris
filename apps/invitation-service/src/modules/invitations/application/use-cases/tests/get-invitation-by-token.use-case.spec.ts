@@ -173,7 +173,7 @@ describe('GetInvitationByTokenUseCase', () => {
       ).rejects.toThrow(
         new RpcException({
           code: status.NOT_FOUND,
-          message: 'Invitation not found or is invalid',
+          message: 'No se encontró la invitación o no es válida',
         }),
       );
 
@@ -205,7 +205,7 @@ describe('GetInvitationByTokenUseCase', () => {
       await expect(useCase.execute({ token: 'token-abc' })).rejects.toThrow(
         new RpcException({
           code: status.NOT_FOUND,
-          message: 'Invitation not found or is invalid',
+          message: 'No se encontró la invitación o no es válida',
         }),
       );
 
@@ -237,7 +237,7 @@ describe('GetInvitationByTokenUseCase', () => {
       await expect(useCase.execute({ token: 'token-abc' })).rejects.toThrow(
         new RpcException({
           code: status.NOT_FOUND,
-          message: 'Invitation not found or is invalid',
+          message: 'No se encontró la invitación o no es válida',
         }),
       );
 
@@ -269,7 +269,7 @@ describe('GetInvitationByTokenUseCase', () => {
       await expect(useCase.execute({ token: 'token-abc' })).rejects.toThrow(
         new RpcException({
           code: status.FAILED_PRECONDITION,
-          message: 'Invitation is missing a valid user reference.',
+          message: 'La invitación no tiene un usuario válido.',
         }),
       );
 

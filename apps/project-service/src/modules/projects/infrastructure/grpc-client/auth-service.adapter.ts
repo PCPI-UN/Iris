@@ -3,6 +3,7 @@ import { status } from '@grpc/grpc-js';
 import {
   AuthServicePort,
   AuthUser,
+  RoleHolder,
 } from '../../application/ports/auth-service.port';
 import { User } from '@app/common/generated/auth';
 import { AuthGrpcClient } from './auth.grpc-client';
@@ -29,6 +30,23 @@ export class AuthServiceAdapter implements AuthServicePort {
       found.push(...users.filter((user): user is AuthUser => user !== null));
     }
     return found;
+  }
+
+  async findUsersByRoles(input: { roleIds: number[]; userIds?: number[] }): Promise<RoleHolder[]> {
+    const users = await this.grpc.findUsersByRoles({
+      roleIds: input.roleIds,
+      userIds: input.userIds ?? [],
+    });
+    return users.map((user) => ({
+      id: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      roleIds: user.roleIds,
+    }));
+  }
+
+  async assignPlatformRoles(userId: number, roleIds: number[]): Promise<void> {
+    await this.grpc.assignPlatformRoles(userId, roleIds);
   }
 
   private async orNull(call: () => Promise<User>): Promise<AuthUser | null> {

@@ -33,7 +33,7 @@ export interface StudentDashboardData extends StudentParticipationStats {
  * project of the event that has not ended and the academic data of the user.
  *
  * - Statistics and history only count APPROVED projects of events that were not deleted,
- *   and awards only once the event ranking is published (see buildStudentParticipationStats).
+ *   and awards only once the admin publishes the event results (see buildStudentParticipationStats).
  * - The current project is taken from every project of the user, whatever its review
  *   state, following the priority of pickCurrentProject.
  * - The academic data is derived from all the user's participations, as in
@@ -53,7 +53,7 @@ export class GetStudentParticipationStatsUC {
     input: GetStudentParticipationStatsDTO,
   ): Promise<StudentDashboardData> {
     if (!Number.isInteger(input.userId) || input.userId < 1) {
-      throw new ValidationError('userId must be a positive integer');
+      throw new ValidationError('userId debe ser un entero positivo');
     }
 
     const [projects, participations] = await Promise.all([

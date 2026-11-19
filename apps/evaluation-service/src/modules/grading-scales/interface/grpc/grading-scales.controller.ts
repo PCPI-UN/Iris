@@ -85,7 +85,7 @@ export class GradingScalesController {
     @GrpcMethod(GRADING_SCALE_SERVICE_NAME, 'DeleteGradingScale')
     async delete(request: DeleteGradingScaleRequest): Promise<DeleteGradingScaleResponse> {
         await this.deleteGradingScale.execute(request.id);
-        return { success: true, message: 'Grading scale deleted' };
+        return { success: true, message: 'Escala de calificación borrada' };
     }
 
     @GrpcMethod(GRADING_SCALE_SERVICE_NAME, 'AssignEventGradingScale')

@@ -109,7 +109,7 @@ describe('SetPasswordUseCase', () => {
         expect.objectContaining({
           error: expect.objectContaining({
             code: status.NOT_FOUND,
-            message: 'User not found',
+            message: 'No se encontró el usuario',
           }),
         }),
       );

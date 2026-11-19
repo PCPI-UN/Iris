@@ -18,6 +18,10 @@ export interface JurorImportTemplateProject {
   name: string;
   /** Full names: confirmed participants first, then those still pending */
   members: string[];
+  /** Tutor full names: linked ones first, then those still pending */
+  tutors: string[];
+  /** Emails of those same tutors, in the same order */
+  tutorEmails: string[];
 }
 
 export interface JurorImportTemplate {
@@ -61,7 +65,9 @@ export class GetJurorImportTemplateUC {
     ]);
 
     const approved = projects.filter((project) => project.state === 'APPROVED');
-    const members = await this.loadMembers(approved.map((p) => p.id));
+    const approvedIds = approved.map((p) => p.id);
+    const members = await this.loadMembers(approvedIds);
+    const tutors = await this.loadTutors(approvedIds);
 
     const categoryName = new Map(categories.map((c) => [c.id, c.name]));
     const templateProjects = approved
@@ -71,6 +77,8 @@ export class GetJurorImportTemplateUC {
         projectCode: project.projectCode?.trim() ?? '',
         name: project.name,
         members: members.get(project.id) ?? [],
+        tutors: (tutors.get(project.id) ?? []).map((t) => t.name),
+        tutorEmails: (tutors.get(project.id) ?? []).map((t) => t.email),
       }))
       .sort(
         (a, b) =>
@@ -109,6 +117,43 @@ export class GetJurorImportTemplateUC {
       ].filter(Boolean);
       byProject.set(projectId, names);
     });
+    return byProject;
+  }
+
+  /** Tutors by project, linked ones first (name and email from auth-service) and then pending ones */
+  private async loadTutors(projectIds: number[]) {
+    const byProject = new Map<number, { name: string; email: string }[]>();
+    if (!projectIds.length) return byProject;
+    const [links, pendings] = await Promise.all([
+      this.repo.listTutorLinksByProjects(projectIds),
+      this.repo.listPendingTutorsByProjects(projectIds),
+    ]);
+    const users = await this.auth.findUsersByIds(links.map((l) => l.userId));
+    const userById = new Map<number, AuthUser>(users.map((u) => [u.id, u]));
+    const add = (projectId: number, name: string, email: string) =>
+      byProject.set(projectId, [
+        ...(byProject.get(projectId) ?? []),
+        { name, email },
+      ]);
+
+    for (const link of links) {
+      const user = userById.get(link.userId);
+      if (user)
+        add(
+          link.projectId,
+          fullName(user.firstName, user.lastName),
+          user.email,
+        );
+    }
+    for (const pending of pendings) {
+      // A pending tutor already JOINED is linked in project_tutors and listed above
+      if (pending.status === 'JOINED') continue;
+      add(
+        pending.projectId,
+        fullName(pending.firstName, pending.lastName),
+        pending.email,
+      );
+    }
     return byProject;
   }
 }

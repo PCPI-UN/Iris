@@ -14,11 +14,11 @@ export class UpdateProjectDocumentUC {
   async execute(input: UpdateProjectDocumentDTO) {
     const existing = await this.repo.findDocumentById(input.id);
     if (!existing) {
-      throw new NotFoundError('Project document not found');
+      throw new NotFoundError('No se encontró el documento del proyecto');
     }
 
     if (input.url !== undefined && input.url.trim() === '') {
-      throw new ConflictError('Document url cannot be empty');
+      throw new ConflictError('La URL del documento no puede estar vacía');
     }
 
     const updated = await this.repo.updateDocument({

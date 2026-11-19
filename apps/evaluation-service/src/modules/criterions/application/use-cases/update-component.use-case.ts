@@ -18,7 +18,7 @@ export class UpdateComponentUseCase {
     if (!existingComponent) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: `Component with ID ${updateComponentDto.id} not found`,
+        message: `No se encontró el componente con ID ${updateComponentDto.id}`,
       });
     }
 
@@ -37,7 +37,7 @@ export class UpdateComponentUseCase {
     if (!existingComponent) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: `Component with ID ${id} not found`,
+        message: `No se encontró el componente con ID ${id}`,
       });
     }
 
@@ -45,7 +45,7 @@ export class UpdateComponentUseCase {
     if (name !== undefined && (!name || name.trim().length === 0)) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: 'Component name cannot be empty',
+        message: 'El nombre del componente no puede estar vacío',
       });
     }
 
@@ -53,7 +53,7 @@ export class UpdateComponentUseCase {
     if (weight !== undefined && (!(weight > 0) || weight > 1)) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: 'Weight must be greater than 0 and at most 1',
+        message: 'El peso debe ser mayor que 0 y como máximo 1',
       });
     }
 

@@ -120,7 +120,7 @@ describe('UpdateUserUseCase', () => {
         expect.objectContaining({
           error: expect.objectContaining({
             code: status.ALREADY_EXISTS,
-            message: 'Another user with this phone number already exists',
+            message: 'Ya existe otro usuario con este número de teléfono',
           }),
         }),
       );

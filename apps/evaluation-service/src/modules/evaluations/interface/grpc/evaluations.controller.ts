@@ -5,6 +5,8 @@ import { FindByIdUseCase } from '@evaluations/application/use-cases/find-evaluat
 import { FindEvaluationsByProjectUseCase } from '@evaluations/application/use-cases/find-evaluations-by-project.use-case';
 import { FindEvaluationsByEvaluatorUseCase } from '@evaluations/application/use-cases/find-evaluations-by-evaluator.use-case';
 import { GetProjectStatsUseCase } from '@evaluations/application/use-cases/get-project-stats.use-case';
+import { GetProjectResultUseCase } from '@evaluations/application/use-cases/get-project-result.use-case';
+import { GetProjectResultDto } from '@evaluations/application/dto/get-project-result.dto';
 import { CheckEvaluationStatusUseCase } from '@evaluations/application/use-cases/check-evaluation-status.use-case';
 import { GetTopProjectsByCourseUseCase } from '@evaluations/application/use-cases/get-top-projects-by-course.use-case';
 import { EvaluateProjectDto } from '@evaluations/application/dto/evaluate-project.dto';
@@ -19,6 +21,7 @@ import {
     EvaluationProto,
     FindEvaluationsByEvaluatorResponse,
     GetProjectStatsResponse,
+    GetProjectResultResponse,
     CheckEvaluationStatusResponse,
     GetTopProjectsByCourseRequest,
     GetTopProjectsByCourseResponse,
@@ -35,6 +38,7 @@ export class EvaluationsController {
         private readonly checkEvaluationStatusUseCase: CheckEvaluationStatusUseCase,
         private readonly getTopProjectsByCourseUseCase: GetTopProjectsByCourseUseCase,
         private readonly getDashboardStatsUC: GetDashboardStatsUC,
+        private readonly getProjectResultUseCase: GetProjectResultUseCase,
     ) { }
 
     @GrpcMethod(EVALUATION_SERVICE_NAME, 'EvaluateProject')
@@ -68,6 +72,12 @@ export class EvaluationsController {
     async getProjectStats(request: GetProjectStatsDto): Promise<GetProjectStatsResponse> {
         const stats = await this.getProjectStatsUseCase.execute(request);
         return EvaluationMapper.toGetProjectStatsResponse(stats, request.projectId);
+    }
+
+    @GrpcMethod(EVALUATION_SERVICE_NAME, 'GetProjectResult')
+    async getProjectResult(request: GetProjectResultDto): Promise<GetProjectResultResponse> {
+        const result = await this.getProjectResultUseCase.execute(request);
+        return EvaluationMapper.toGetProjectResultResponse(result);
     }
 
     @GrpcMethod(EVALUATION_SERVICE_NAME, 'CheckEvaluationStatus')

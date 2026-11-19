@@ -66,7 +66,7 @@ describe('EventService - grading scale of the event', () => {
   it('deletes the new event when its scale is rejected', async () => {
     const { service, eventGrpc, gradingScaleGrpc } = build();
     gradingScaleGrpc.assignEventGradingScale.mockReturnValue(
-      throwError(() => ({ code: 3, details: 'Invalid grading scale' })) as any,
+      throwError(() => ({ code: 3, details: 'Escala de calificación inválida' })) as any,
     );
 
     await expect(service.create({ name: 'Feria', gradingScaleId: 77 } as any)).rejects.toEqual(
@@ -196,7 +196,7 @@ describe('GradingScaleDto', () => {
   it('rejects a scale without exactly 4 levels', async () => {
     const errors = await check({ name: 'X', levels: [{ level: 1, label: 'L', points: 1 }] });
 
-    expect(JSON.stringify(errors)).toContain('exactly 4 levels');
+    expect(JSON.stringify(errors)).toContain('exactamente 4 niveles');
   });
 
   it('rejects a level outside 1-4, an empty label and points with 3 decimals', async () => {

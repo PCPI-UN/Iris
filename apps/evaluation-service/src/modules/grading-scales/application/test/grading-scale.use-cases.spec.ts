@@ -54,7 +54,7 @@ describe('Grading scale use cases', () => {
 
         it('returns NOT_FOUND for an unknown scale', async () => {
             await expect(new GetGradingScaleUseCase(repository).execute(999)).rejects.toEqual(
-                rpcError(status.NOT_FOUND, 'Grading scale 999 not found'),
+                rpcError(status.NOT_FOUND, 'No se encontró la escala de calificación 999'),
             );
         });
     });
@@ -71,8 +71,8 @@ describe('Grading scale use cases', () => {
         });
 
         it.each([
-            [levels([10, 20, 30]), 'exactly 4 levels'],
-            [levels([10, 30, 20, 40]), 'points must grow'],
+            [levels([10, 20, 30]), 'exactamente 4 niveles'],
+            [levels([10, 30, 20, 40]), 'los puntos deben crecer'],
         ])('rejects an invalid scale with INVALID_ARGUMENT', async (scaleLevels, message) => {
             await expect(
                 new CreateGradingScaleUseCase(repository).execute({ name: 'X', levels: scaleLevels }),
@@ -90,10 +90,10 @@ describe('Grading scale use cases', () => {
 
         it('never edits or deletes a system scale', async () => {
             await expect(update().execute(1, { name: 'X', levels: levels([1, 2, 3, 4]) })).rejects.toEqual(
-                rpcError(status.FAILED_PRECONDITION, '"Proyectos finales" is a system grading scale and cannot be edited'),
+                rpcError(status.FAILED_PRECONDITION, '"Proyectos finales" es una escala del sistema y no se puede editar'),
             );
             await expect(remove().execute(2)).rejects.toEqual(
-                rpcError(status.FAILED_PRECONDITION, 'cannot be deleted'),
+                rpcError(status.FAILED_PRECONDITION, 'no se puede borrar'),
             );
         });
 
@@ -112,10 +112,10 @@ describe('Grading scale use cases', () => {
             repository.evaluatedEvents.add(7);
 
             await expect(update().execute(50, { name: 'X', levels: levels([5, 6, 7, 8]) })).rejects.toEqual(
-                rpcError(status.FAILED_PRECONDITION, 'cannot be edited because event(s) 7 already have evaluations graded with it. Create a new scale instead.'),
+                rpcError(status.FAILED_PRECONDITION, 'no se puede editar porque los eventos 7 ya tienen evaluaciones calificadas con ella. Crea una escala nueva.'),
             );
             await expect(remove().execute(50)).rejects.toEqual(
-                rpcError(status.FAILED_PRECONDITION, 'cannot be deleted because event(s) 7 already have evaluations'),
+                rpcError(status.FAILED_PRECONDITION, 'no se puede borrar porque los eventos 7 ya tienen evaluaciones'),
             );
             expect(repository.scales.get(50)?.levels[0].points).toBe(1);
         });
@@ -124,7 +124,7 @@ describe('Grading scale use cases', () => {
             repository.eventScales.set(7, 50);
 
             await expect(remove().execute(50)).rejects.toEqual(
-                rpcError(status.FAILED_PRECONDITION, 'is assigned to event(s) 7. Assign them another scale before deleting it.'),
+                rpcError(status.FAILED_PRECONDITION, 'está asignada a los eventos 7. Asígnales otra escala antes de borrarla.'),
             );
         });
 
@@ -159,7 +159,7 @@ describe('Grading scale use cases', () => {
             repository.evaluatedEvents.add(7);
 
             await expect(unassign().execute(7)).rejects.toEqual(
-                rpcError(status.FAILED_PRECONDITION, 'already has evaluations'),
+                rpcError(status.FAILED_PRECONDITION, 'ya tiene evaluaciones'),
             );
             expect(repository.eventScales.get(7)).toBe(1);
         });
@@ -191,7 +191,7 @@ describe('Grading scale use cases', () => {
 
         it('returns NOT_FOUND for an unknown scale id', async () => {
             await expect(assign().execute({ eventId: 7, scaleId: 999 })).rejects.toEqual(
-                rpcError(status.NOT_FOUND, 'Grading scale 999 not found'),
+                rpcError(status.NOT_FOUND, 'No se encontró la escala de calificación 999'),
             );
         });
 
@@ -202,7 +202,7 @@ describe('Grading scale use cases', () => {
             await expect(assign().execute({ eventId: 7, scaleId: 3 })).rejects.toEqual(
                 rpcError(
                     status.FAILED_PRECONDITION,
-                    'The grading scale of event 7 cannot change because the event already has evaluations graded with "Proyectos finales".',
+                    'La escala de calificación del evento 7 no puede cambiar porque el evento ya tiene evaluaciones calificadas con "Proyectos finales".',
                 ),
             );
             expect(repository.eventScales.get(7)).toBe(1);
@@ -232,7 +232,7 @@ describe('Grading scale use cases', () => {
 
         it('fails explicitly for an event without a scale and assigns nothing', async () => {
             await expect(getEventScale().execute(7)).rejects.toEqual(
-                rpcError(status.FAILED_PRECONDITION, 'Event 7 has no grading scale assigned'),
+                rpcError(status.FAILED_PRECONDITION, 'El evento 7 no tiene una escala de calificación asignada'),
             );
             expect(repository.eventScales.has(7)).toBe(false);
         });

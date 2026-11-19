@@ -9,7 +9,11 @@ export enum InvitationTargetType {
   EVENT = 'EVENT',
   PLATFORM = 'PLATFORM',
   PROJECT = 'PROJECT',
+  PROJECT_TUTOR = 'PROJECT_TUTOR',
 }
+
+/** Platform role id of `Tutor`, granted when a project tutor accepts the invitation. */
+export const TUTOR_ROLE_ID = 10;
 
 export class Invitation {
   constructor(
@@ -40,7 +44,7 @@ export class Invitation {
 
   accept(invitedUserId: number): void {
     if (!this.canBeAccepted()) {
-      throw new Error('Invitation cannot be accepted');
+      throw new Error('La invitación no se puede aceptar');
     }
     this.status = InvitationStatus.ACCEPTED;
     this.invitedUserId = invitedUserId;
@@ -48,7 +52,7 @@ export class Invitation {
 
   reject(): void {
     if (!this.canBeRejected()) {
-      throw new Error('Invitation cannot be rejected');
+      throw new Error('La invitación no se puede rechazar');
     }
     this.status = InvitationStatus.REJECTED;
   }

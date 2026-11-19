@@ -24,7 +24,7 @@ export class ForgotPasswordUseCase {
     const genericResponse = {
       success: true,
       message:
-        'If an account exists with this email, a password reset link has been sent.',
+        'Si existe una cuenta con este correo, se envió un enlace para restablecer la contraseña.',
     };
 
     if (!user || !user.active || user.status === 'PENDING') {

@@ -73,11 +73,11 @@ sequenceDiagram
 - **Counted projects**: only `APPROVED` projects where the user is a confirmed participant (`project_participants`).
 - **Events**: read from `event-service` with `ListEventsByIds`. Deleted events (`active = false`) are left out. Events that already ended (status `CLOSED`) are marked `finished` (historical); the rest are ongoing.
 - **Semester**: derived from the event start date in Bogota time, `AAAA-10` from January to June and `AAAA-30` from July to December.
-- **Awards**: read with `ListAwardsByProjects`; only awards of active categories in the project's own event count, co-winners once each, and only once the event ranking is published (`ranking_event.visible_public`), the same rule as the scores.
+- **Awards**: read with `ListAwardsByProjects`; only awards of active categories in the project's own event count, co-winners once each, and only once the admin publishes the event results (`event.results_published`), the same rule as the scores.
 - **Current project**: the user's project in an event that has not ended and was not deleted, in any review state (so the student sees whether it is pending, approved or needs changes). With several: a rejected project never displaces another one, an event in progress goes before an upcoming one, then the event in progress that started last or the upcoming one that starts first. `canEdit` is true only for `REQUEST_CHANGES`. It carries the team size (participants captured at submission) and the number of active documents.
 - **Category name**: read with one `ListCategoriesByIds` call; if it fails or a category is missing, the name stays empty.
 - **Academic data**: derived from all the user's participations, as in `ListUserParticipations` (the request carries the session email), so the dashboard needs a single call.
-- **Response**: totals (events, finished and ongoing events, projects, awards), `bySemester` from the oldest semester, `participations` from the most recent event, `currentProject` when there is one, and `academic`.
+- **Response**: totals (events, finished and ongoing events, projects, awards), `bySemester` from the oldest semester, `participations` from the most recent event, `currentProject` when there is one, and `academic`. Each participation and the current project say whether the event results are published (`event.results_published`), so the gateway only adds scores to those.
 
 ## Related
 

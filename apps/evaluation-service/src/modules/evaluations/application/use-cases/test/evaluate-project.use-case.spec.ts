@@ -162,7 +162,7 @@ describe('EvaluateProjectUseCase', () => {
 
         await expect(
             useCase.execute({ projectId: 1, userId: 1, scores: [{ criterionId: 1, score: 5 }] }),
-        ).rejects.toThrow('must be a level of the grading scale "Proyectos finales": 1, 2, 3, 4');
+        ).rejects.toThrow('debe ser un nivel de la escala de calificación "Proyectos finales": 1, 2, 3, 4');
     });
 
     it('rejects the evaluation of an event without a grading scale and saves nothing', async () => {
@@ -171,7 +171,7 @@ describe('EvaluateProjectUseCase', () => {
 
         await expect(
             useCase.execute({ projectId: 1, userId: 1, scores: [{ criterionId: 1, score: 4 }] }),
-        ).rejects.toThrow('Event 1 has no grading scale assigned');
+        ).rejects.toThrow('El evento 1 no tiene una escala de calificación asignada');
         expect(mockEvaluationRepository.save).not.toHaveBeenCalled();
     });
 
@@ -213,7 +213,7 @@ describe('EvaluateProjectUseCase', () => {
 
         await expect(
             useCase.execute({ projectId: 1, userId: 1, scores: [{ criterionId: 1, score: level }] }),
-        ).rejects.toThrow('must be a level of the grading scale');
+        ).rejects.toThrow('debe ser un nivel de la escala de calificación');
     });
 
     it('should calculate grade correctly with real-world rubric data (15 criterions, 3 components)', async () => {
@@ -291,7 +291,7 @@ describe('EvaluateProjectUseCase', () => {
             useCase.execute({ projectId: 1, userId: 1, scores: [{ criterionId: 1, score: 4 }] }),
         ).rejects.toThrow(
             expect.objectContaining({
-                message: expect.stringContaining('already evaluated')
+                message: expect.stringContaining('ya evaluó')
             })
         );
     });
@@ -303,7 +303,7 @@ describe('EvaluateProjectUseCase', () => {
             useCase.execute({ projectId: 1, userId: 1, scores: [{ criterionId: 999, score: 4 }] }),
         ).rejects.toThrow(
             expect.objectContaining({
-                message: expect.stringContaining('Criterion 999 not found')
+                message: expect.stringContaining('El criterio 999 no está')
             })
         );
     });

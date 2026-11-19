@@ -62,8 +62,8 @@ export class GradingScaleDto {
     ],
   })
   @IsArray()
-  @ArrayMinSize(4, { message: 'a grading scale must have exactly 4 levels' })
-  @ArrayMaxSize(4, { message: 'a grading scale must have exactly 4 levels' })
+  @ArrayMinSize(4, { message: 'una escala de calificación debe tener exactamente 4 niveles' })
+  @ArrayMaxSize(4, { message: 'una escala de calificación debe tener exactamente 4 niveles' })
   @ValidateNested({ each: true })
   @Type(() => GradingScaleLevelDto)
   levels!: GradingScaleLevelDto[];

@@ -43,14 +43,16 @@ describe('ValidateJwtUseCase', () => {
     it('should throw UNAUTHENTICATED when token is invalid', async () => {
       const token = 'invalid-jwt-token';
 
-      mockJwtService.verifyAsync.mockRejectedValue(new Error('Invalid signature'));
+      mockJwtService.verifyAsync.mockRejectedValue(
+        Object.assign(new Error('invalid signature'), { name: 'JsonWebTokenError' }),
+      );
 
       await expect(useCase.execute(token)).rejects.toThrow(RpcException);
       await expect(useCase.execute(token)).rejects.toThrow(
         expect.objectContaining({
           error: expect.objectContaining({
             code: status.UNAUTHENTICATED,
-            message: 'Invalid signature',
+            message: 'El token no es válido',
           }),
         }),
       );
@@ -59,14 +61,14 @@ describe('ValidateJwtUseCase', () => {
     it('should throw UNAUTHENTICATED when token is expired', async () => {
       const token = 'expired-jwt-token';
 
-      mockJwtService.verifyAsync.mockRejectedValue(new Error('jwt expired'));
+      mockJwtService.verifyAsync.mockRejectedValue(Object.assign(new Error('jwt expired'), { name: 'TokenExpiredError' }));
 
       await expect(useCase.execute(token)).rejects.toThrow(RpcException);
       await expect(useCase.execute(token)).rejects.toThrow(
         expect.objectContaining({
           error: expect.objectContaining({
             code: status.UNAUTHENTICATED,
-            message: 'jwt expired',
+            message: 'La sesión expiró; inicia sesión de nuevo',
           }),
         }),
       );
@@ -83,7 +85,7 @@ describe('ValidateJwtUseCase', () => {
         expect.objectContaining({
           error: expect.objectContaining({
             code: status.UNAUTHENTICATED,
-            message: 'Token payload is missing user ID (sub)',
+            message: 'El token no incluye el ID del usuario',
           }),
         }),
       );

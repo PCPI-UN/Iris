@@ -23,8 +23,13 @@ import { ListProjectJurorsUC } from './application/use-cases/list-project-jurors
 import { GetDashboardStatsUC } from './application/use-cases/get-dashboard-stats.uc';
 import { AddParticipantUC } from './application/use-cases/add-participant.uc';
 import { ListParticipantsUC } from './application/use-cases/list-participants.uc';
+import { AddProjectTutorUC } from './application/use-cases/add-project-tutor.uc';
 import { AddPendingParticipantUC } from './application/use-cases/add-pending-participant.us';
 import { ListPendingParticipantsUC } from './application/use-cases/list-pending-participants.uc';
+import { SetProjectTutorsUC } from './application/use-cases/set-project-tutors.uc';
+import { ListProjectTutorsUC } from './application/use-cases/list-project-tutors.uc';
+import { INVITATION_COMMAND_PORT } from './application/ports/invitation.command-port';
+import { InvitationServiceAdapter } from './infrastructure/grpc-client/invitation-service.adapter';
 import { InvitationClientModule } from './invitation-client.module';
 import { EventServiceModule } from './event-service.module';
 import { EventServiceAdapter } from './infrastructure/grpc-client/event-service.adapter';
@@ -79,6 +84,11 @@ import { AuthServiceAdapter } from './infrastructure/grpc-client/auth-service.ad
     AddParticipantUC,
     ListParticipantsUC,
     AddPendingParticipantUC,
+    AddProjectTutorUC,
+    SetProjectTutorsUC,
+    ListProjectTutorsUC,
+    InvitationServiceAdapter,
+    { provide: INVITATION_COMMAND_PORT, useExisting: InvitationServiceAdapter },
     ListPendingParticipantsUC,
     ListProjectsAssignedToJurorUC,
     ListProjectsForReviewUC,

@@ -118,7 +118,7 @@ describe('GetRubricReadinessUseCase', () => {
 
         await expect(useCase.execute({ eventId: 1, courseId: 99 })).rejects.toEqual(
             expect.objectContaining({
-                error: expect.objectContaining({ message: 'Course 99 does not belong to event 1' }),
+                error: expect.objectContaining({ message: 'La categoría 99 no pertenece al evento 1' }),
             }),
         );
     });

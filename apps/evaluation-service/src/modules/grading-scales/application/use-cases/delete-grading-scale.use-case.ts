@@ -23,7 +23,7 @@ export class DeleteGradingScaleUseCase {
             throw scaleNotFound(id);
         }
         if (scale.isSystem) {
-            throw systemScaleIsReadOnly(scale, 'deleted');
+            throw systemScaleIsReadOnly(scale, 'borrar');
         }
 
         const eventIds = await this.repository.findEventIdsByScale(id);
@@ -32,14 +32,14 @@ export class DeleteGradingScaleUseCase {
 
             const evaluated = await this.repository.findEventsWithEvaluations(eventIds);
             if (evaluated.length > 0) {
-                throw scaleUsedByEvaluatedEvents(scale, evaluated, 'deleted');
+                throw scaleUsedByEvaluatedEvents(scale, evaluated, 'borrar');
             }
             if (eventIds.length > 0) {
                 throw new RpcException({
                     code: status.FAILED_PRECONDITION,
                     message:
-                        `Grading scale "${scale.name}" is assigned to event(s) ${eventIds.join(', ')}. ` +
-                        'Assign them another scale before deleting it.',
+                        `La escala de calificación "${scale.name}" está asignada a los eventos ${eventIds.join(', ')}. ` +
+                        'Asígnales otra escala antes de borrarla.',
                 });
             }
             await this.repository.delete(id);

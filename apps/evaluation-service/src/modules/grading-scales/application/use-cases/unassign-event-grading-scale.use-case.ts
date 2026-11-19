@@ -18,7 +18,7 @@ export class UnassignEventGradingScaleUseCase {
 
     async execute(eventId: number): Promise<boolean> {
         if (!Number.isInteger(eventId) || eventId <= 0) {
-            throw new RpcException({ code: status.INVALID_ARGUMENT, message: 'eventId must be a positive integer' });
+            throw new RpcException({ code: status.INVALID_ARGUMENT, message: 'eventId debe ser un entero positivo' });
         }
 
         return this.criterionRepository.withRubricLock([eventId], 'exclusive', async () => {
@@ -26,7 +26,7 @@ export class UnassignEventGradingScaleUseCase {
             if (evaluated.length > 0) {
                 throw new RpcException({
                     code: status.FAILED_PRECONDITION,
-                    message: `The grading scale of event ${eventId} cannot be removed because the event already has evaluations.`,
+                    message: `No se puede quitar la escala de calificación del evento ${eventId} porque el evento ya tiene evaluaciones.`,
                 });
             }
             return this.repository.unassignEvent(eventId);

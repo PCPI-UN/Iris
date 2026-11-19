@@ -203,7 +203,7 @@ describe('EvaluateProjectUseCase - rubric rules', () => {
 
             await expect(
                 useCase.execute({ projectId: 1, userId: 1, scores: scoreAll(posterRubric, 4) }),
-            ).rejects.toEqual(rpcError(status.FAILED_PRECONDITION, 'current: 97.90%'));
+            ).rejects.toEqual(rpcError(status.FAILED_PRECONDITION, 'actual: 97.90%'));
             expect(mockEvaluationRepository.save).not.toHaveBeenCalled();
         });
 
@@ -212,7 +212,7 @@ describe('EvaluateProjectUseCase - rubric rules', () => {
 
             await expect(
                 useCase.execute({ projectId: 1, userId: 1, scores: scoreAll(posterRubric.slice(0, 12), 4) }),
-            ).rejects.toEqual(rpcError(status.FAILED_PRECONDITION, `components without criteria for this category: ${ORAL}`));
+            ).rejects.toEqual(rpcError(status.FAILED_PRECONDITION, `componentes sin criterios para esta categoría: ${ORAL}`));
         });
 
         it('rejects the evaluation when a criterion is not inside a component of the event', async () => {
@@ -221,7 +221,7 @@ describe('EvaluateProjectUseCase - rubric rules', () => {
 
             await expect(
                 useCase.execute({ projectId: 1, userId: 1, scores: scoreAll(rubric, 4) }),
-            ).rejects.toEqual(rpcError(status.FAILED_PRECONDITION, 'criteria without a component of the event: 16'));
+            ).rejects.toEqual(rpcError(status.FAILED_PRECONDITION, 'criterios sin un componente del evento: 16'));
         });
 
         it('rejects the evaluation when the project course has no criteria', async () => {
@@ -229,7 +229,7 @@ describe('EvaluateProjectUseCase - rubric rules', () => {
 
             await expect(
                 useCase.execute({ projectId: 1, userId: 1, scores: [{ criterionId: 1, score: 4 }] }),
-            ).rejects.toEqual(rpcError(status.FAILED_PRECONDITION, 'No evaluation criteria'));
+            ).rejects.toEqual(rpcError(status.FAILED_PRECONDITION, 'No hay criterios de evaluación'));
         });
 
         it('ignores criteria of the same course that belong to another event', async () => {
@@ -248,7 +248,7 @@ describe('EvaluateProjectUseCase - rubric rules', () => {
         it('rejects an evaluation that does not score every criterion', async () => {
             await expect(
                 useCase.execute({ projectId: 1, userId: 1, scores: scoreAll(posterRubric.slice(0, 13), 4) }),
-            ).rejects.toEqual(rpcError(status.INVALID_ARGUMENT, 'Missing criteria: 14, 15'));
+            ).rejects.toEqual(rpcError(status.INVALID_ARGUMENT, 'Faltan los criterios: 14, 15'));
             expect(mockEvaluationRepository.save).not.toHaveBeenCalled();
         });
 
@@ -256,7 +256,7 @@ describe('EvaluateProjectUseCase - rubric rules', () => {
             const scores = [...scoreAll(posterRubric, 4), { criterionId: 13, score: 4 }];
 
             await expect(useCase.execute({ projectId: 1, userId: 1, scores })).rejects.toEqual(
-                rpcError(status.INVALID_ARGUMENT, 'Criterion 13 was scored more than once'),
+                rpcError(status.INVALID_ARGUMENT, 'El criterio 13 se calificó más de una vez'),
             );
         });
 
@@ -264,13 +264,13 @@ describe('EvaluateProjectUseCase - rubric rules', () => {
             const scores = [...scoreAll(posterRubric, 4), { criterionId: 500, score: 4 }];
 
             await expect(useCase.execute({ projectId: 1, userId: 1, scores })).rejects.toEqual(
-                rpcError(status.INVALID_ARGUMENT, 'Criterion 500 not found in the evaluation rubric'),
+                rpcError(status.INVALID_ARGUMENT, 'El criterio 500 no está en la rúbrica de evaluación'),
             );
         });
 
         it('rejects an empty score list', async () => {
             await expect(useCase.execute({ projectId: 1, userId: 1, scores: [] })).rejects.toEqual(
-                rpcError(status.INVALID_ARGUMENT, 'At least one score is required'),
+                rpcError(status.INVALID_ARGUMENT, 'Se requiere al menos un puntaje'),
             );
         });
 
@@ -278,7 +278,7 @@ describe('EvaluateProjectUseCase - rubric rules', () => {
             const scores = scoreAll(posterRubric, 4).map((s, i) => (i === 0 ? { ...s, score: rawScore } : s));
 
             await expect(useCase.execute({ projectId: 1, userId: 1, scores })).rejects.toEqual(
-                rpcError(status.INVALID_ARGUMENT, 'must be a level of the grading scale'),
+                rpcError(status.INVALID_ARGUMENT, 'debe ser un nivel de la escala de calificación'),
             );
         });
     });

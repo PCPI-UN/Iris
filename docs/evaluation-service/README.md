@@ -53,7 +53,7 @@ Rules:
 
 ### Events created before the catalog
 
-Every reader of an event's scale goes through `EventGradingScaleResolver`, which only reads `event_grading_scale`. An event without a row answers `FAILED_PRECONDITION` ("Event N has no grading scale assigned"); nothing assigns a scale on the fly.
+Every reader of an event's scale goes through `EventGradingScaleResolver`, which only reads `event_grading_scale`. An event without a row answers `FAILED_PRECONDITION` ("El evento N no tiene una escala de calificación asignada"); nothing assigns a scale on the fly.
 
 The events created before the catalog get their scale once per environment, before this version is deployed. The events live in `event_service` and the assignments in `evaluation_service`, so it takes two queries:
 
@@ -103,6 +103,17 @@ All projects of a category are graded with the same rubric, so once grading star
 There is no exception for an incomplete rubric: fixing it would grade the remaining jurors with a different rubric than the ones who already evaluated, and historical grades are never recalculated. Evaluations of deleted projects are ignored when deciding which categories are locked.
 
 Rubric changes and evaluations of an event never interleave: both run in a transaction holding a Postgres advisory lock on the event (shared for evaluations, exclusive for changes). If the lock cannot be taken in time the call fails with `ABORTED` and can be retried. Inside that transaction an evaluation also locks its (project, juror, event), so two simultaneous submissions of the same juror cannot both be saved. Repositories must query through `this.prisma.db`, which points to that transaction.
+
+## Result for participants
+
+`GetProjectResult` gives the consolidated result of one project, which the gateway shows to its participants once the admin publishes the event results:
+
+- `finalScore`: average of the jurors' grades, rounded with `roundGrade` as in the ranking.
+- `maxScore`: stored value of the highest raw score (4) in the event's evaluation type, which is also the highest grade.
+- `criteria`: average stored score per criterion, with its component and the effective weight stored with the evaluations.
+- `consolidatedFeedback`: the jurors' comments in one text, empty ones skipped.
+
+It never returns juror ids nor how many jurors evaluated, and it does not check publication or who asks: the gateway does.
 
 ## Dependencies
 

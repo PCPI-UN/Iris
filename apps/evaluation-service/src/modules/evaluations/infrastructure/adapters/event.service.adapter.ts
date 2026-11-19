@@ -27,7 +27,7 @@ export class EventServiceAdapter implements EventServicePort, OnModuleInit {
             this.eventService.getEvent({ id })
         );
         if (!response.event) {
-            throw new Error('Event not found');
+            throw new Error('No se encontró el evento');
         }
         return response.event;
     }

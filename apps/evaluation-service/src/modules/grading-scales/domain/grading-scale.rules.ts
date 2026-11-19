@@ -18,29 +18,29 @@ function hasAtMostTwoDecimals(value: number): boolean {
  */
 export function validateGradingScaleInput(input: GradingScaleInput | undefined | null): string[] {
     if (!input) {
-        return ['the grading scale is required'];
+        return ['la escala de calificación es obligatoria'];
     }
 
     const problems: string[] = [];
     const name = typeof input.name === 'string' ? input.name.trim() : '';
 
     if (!name) {
-        problems.push('name is required');
+        problems.push('el nombre es obligatorio');
     } else if (name.length > MAX_SCALE_NAME_LENGTH) {
-        problems.push(`name must be at most ${MAX_SCALE_NAME_LENGTH} characters`);
+        problems.push(`el nombre puede tener como máximo ${MAX_SCALE_NAME_LENGTH} caracteres`);
     }
 
     const levels = Array.isArray(input.levels) ? input.levels : [];
 
     if (levels.length !== GRADING_SCALE_LEVELS) {
-        problems.push(`a grading scale must have exactly ${GRADING_SCALE_LEVELS} levels (received ${levels.length})`);
+        problems.push(`una escala de calificación debe tener exactamente ${GRADING_SCALE_LEVELS} niveles (recibió ${levels.length})`);
         return problems;
     }
 
     const numbers = levels.map((level) => level?.level);
     const expected = Array.from({ length: GRADING_SCALE_LEVELS }, (_, index) => index + 1);
     if (!expected.every((level) => numbers.filter((number) => number === level).length === 1)) {
-        problems.push(`levels must be numbered 1 to ${GRADING_SCALE_LEVELS}, each one once`);
+        problems.push(`los niveles deben ir numerados del 1 al ${GRADING_SCALE_LEVELS}, cada uno una vez`);
         return problems;
     }
 
@@ -49,17 +49,17 @@ export function validateGradingScaleInput(input: GradingScaleInput | undefined |
     for (const level of sorted) {
         const label = typeof level.label === 'string' ? level.label.trim() : '';
         if (!label) {
-            problems.push(`level ${level.level} needs a label`);
+            problems.push(`el nivel ${level.level} necesita una etiqueta`);
         } else if (label.length > MAX_LEVEL_LABEL_LENGTH) {
-            problems.push(`the label of level ${level.level} must be at most ${MAX_LEVEL_LABEL_LENGTH} characters`);
+            problems.push(`la etiqueta del nivel ${level.level} puede tener como máximo ${MAX_LEVEL_LABEL_LENGTH} caracteres`);
         }
 
         if (typeof level.points !== 'number' || !Number.isFinite(level.points)) {
-            problems.push(`level ${level.level} needs numeric points`);
+            problems.push(`el nivel ${level.level} necesita puntos numéricos`);
         } else if (level.points < 0 || level.points > MAX_LEVEL_POINTS) {
-            problems.push(`the points of level ${level.level} must be between 0 and ${MAX_LEVEL_POINTS}`);
+            problems.push(`los puntos del nivel ${level.level} deben estar entre 0 y ${MAX_LEVEL_POINTS}`);
         } else if (!hasAtMostTwoDecimals(level.points)) {
-            problems.push(`the points of level ${level.level} can have at most 2 decimals`);
+            problems.push(`los puntos del nivel ${level.level} pueden tener como máximo 2 decimales`);
         }
     }
 
@@ -70,9 +70,9 @@ export function validateGradingScaleInput(input: GradingScaleInput | undefined |
     for (let index = 1; index < sorted.length; index++) {
         if (sorted[index].points <= sorted[index - 1].points) {
             problems.push(
-                `points must grow from level 1 to level ${GRADING_SCALE_LEVELS}: ` +
-                `level ${sorted[index].level} (${sorted[index].points}) is not greater than ` +
-                `level ${sorted[index - 1].level} (${sorted[index - 1].points})`,
+                `los puntos deben crecer del nivel 1 al nivel ${GRADING_SCALE_LEVELS}: ` +
+                `el nivel ${sorted[index].level} (${sorted[index].points}) no es mayor que ` +
+                `el nivel ${sorted[index - 1].level} (${sorted[index - 1].points})`,
             );
         }
     }
