@@ -46,8 +46,8 @@ ALTER TABLE "public"."event_grading_scale" ADD CONSTRAINT "event_grading_scale_s
 
 -- Seed: read-only system scales. Their points are the values the former
 -- evaluation types stored, so existing evaluation_detail scores keep reading
--- back as the same levels. Existing events are assigned by the service at
--- startup, because the events live in event-service's database.
+-- back as the same levels. Events are not assigned here, because they live in
+-- event-service's database.
 INSERT INTO "public"."grading_scales" ("id", "name", "description", "is_system", "code") VALUES
     (1, 'Proyectos finales', 'Escala de proyectos finales: 25, 55, 75 y 90 puntos.', true, 'FINAL_PROJECTS'),
     (2, 'Cero a cinco', 'Escala de 0 a 5: 2, 3, 4 y 5 puntos.', true, 'ZERO_TO_FIVE'),

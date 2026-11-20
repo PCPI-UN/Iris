@@ -36,4 +36,4 @@ libs/common/src/generated
 
 ## Grading Scales
 
-Each event is graded with a grading scale of 4 levels (label and points) from the catalog of `evaluation-service`. Events are created and edited with `gradingScaleId`; the deprecated `event.EvaluationType` is no longer accepted by the gateway. See [Evaluation Service](./evaluation-service/README.md#events-created-before-the-catalog) for the one-time assignment of the events created before the catalog.
+Each event is graded with a grading scale of 4 levels (label and points) from the catalog of `evaluation-service`. Events are created and edited with `gradingScaleId`. See [Evaluation Service](./evaluation-service/README.md#grading-scales) for the rules.
