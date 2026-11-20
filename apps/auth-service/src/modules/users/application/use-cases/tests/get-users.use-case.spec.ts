@@ -1,7 +1,11 @@
 import { GetUsersUseCase } from '../get-users.use-case';
 import { UserRepositoryPort } from '../../../../users/domain/repositories/user.repository.port';
 import { GetUsersDto } from '../../../../users/application/dto/get-users.dto';
-import { User, UserStatus } from '../../../../users/domain/entities/user.entity';
+import {
+  User,
+  UserStatus,
+} from '../../../../users/domain/entities/user.entity';
+import { Role } from '@roles/domain/entities/role.entity';
 
 describe('GetUsersUseCase', () => {
   let useCase: GetUsersUseCase;
@@ -32,8 +36,32 @@ describe('GetUsersUseCase', () => {
       };
 
       const mockUsers = [
-        new User(1, 'John', 'Doe', 'john@example.com', 'pass', '123', true, UserStatus.CONFIRMED),
-        new User(2, 'Jane', 'Smith', 'jane@example.com', 'pass', '456', true, UserStatus.CONFIRMED),
+        {
+          user: new User(
+            1,
+            'John',
+            'Doe',
+            'john@example.com',
+            'pass',
+            '123',
+            true,
+            UserStatus.CONFIRMED,
+          ),
+          roles: [new Role(1, 'Admin', 'Administrator', 'PLATFORM')],
+        },
+        {
+          user: new User(
+            2,
+            'Jane',
+            'Smith',
+            'jane@example.com',
+            'pass',
+            '456',
+            true,
+            UserStatus.CONFIRMED,
+          ),
+          roles: [],
+        },
       ];
 
       mockUserRepository.findAll.mockResolvedValue({
@@ -85,8 +113,32 @@ describe('GetUsersUseCase', () => {
       };
 
       const mockUsers = [
-        new User(1, 'John', 'Doe', 'john@example.com', 'pass', '123', true, UserStatus.CONFIRMED),
-        new User(2, 'Jane', 'Smith', 'jane@example.com', 'pass', '456', false, UserStatus.CONFIRMED), // inactive
+        {
+          user: new User(
+            1,
+            'John',
+            'Doe',
+            'john@example.com',
+            'pass',
+            '123',
+            true,
+            UserStatus.CONFIRMED,
+          ),
+          roles: [],
+        },
+        {
+          user: new User(
+            2,
+            'Jane',
+            'Smith',
+            'jane@example.com',
+            'pass',
+            '456',
+            false,
+            UserStatus.CONFIRMED,
+          ), // inactive
+          roles: [],
+        },
       ];
 
       mockUserRepository.findAll.mockResolvedValue({
