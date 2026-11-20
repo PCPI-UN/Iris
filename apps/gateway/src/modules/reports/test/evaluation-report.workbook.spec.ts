@@ -24,6 +24,7 @@ describe('Evaluation report workbook', () => {
     maxScore: 100,
     generatedAt: new Date('2026-11-13T15:00:00Z'),
     showJurorCount: true,
+    showPositions: true,
     projects: [
       {
         rowNumber: 1,
@@ -253,6 +254,42 @@ describe('Evaluation report workbook', () => {
   });
 
   /** CU-86e3vmz0c: the student's report never shows how many jurors evaluated */
+  /** Filtered report of an event without ranking configuration */
+  describe('report without positions', () => {
+    const noPositions: EvaluationReport = {
+      ...report,
+      showJurorCount: false,
+      showPositions: false,
+      projects: [{ ...report.projects[0], jurorCount: null, position: null }],
+    };
+
+    it('leaves the position column out of the summary and the note', async () => {
+      const sheet = (await load(noPositions)).getWorksheet(SUMMARY_SHEET)!;
+
+      expect(values(sheet, 4, 6)).toEqual([
+        'Código',
+        'ID Proyecto',
+        'Nombre del Proyecto',
+        'Integrantes del Equipo',
+        'Puntaje Final',
+        'Comentarios Consolidados',
+      ]);
+      expect(values(sheet, 5, 6)).toEqual([
+        1,
+        120,
+        'Vía de integración',
+        'Ana Pérez, Luis Gómez',
+        85.8,
+        'Muy claros | Faltó el costo',
+      ]);
+      expect(sheet.getCell('G5').value).toBeNull();
+      const note = sheet.getCell('A7').text;
+      expect(note).toContain('Puntaje Final');
+      expect(note).not.toContain('Posición');
+      expect(note).not.toContain('coganadores');
+    });
+  });
+
   describe('student report', () => {
     const studentReport: EvaluationReport = {
       ...report,

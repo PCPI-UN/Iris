@@ -126,14 +126,19 @@ const DETAIL_COLUMNS: ColumnDef<DetailKey>[] = [
   },
 ];
 
-/** The columns of the report: without "N° de Jurados" in the student's report */
+/**
+ * The columns of the report: without "N° de Jurados" in the student's report, and
+ * without "Posición" when the report carries no positions (filtered report of an event
+ * without ranking configuration). Left out, not hidden: the values are not written.
+ */
 function columnsFor<K extends string>(
   columns: ColumnDef<K>[],
   report: EvaluationReport,
 ): Columns<K> {
-  const list = report.showJurorCount
-    ? columns
-    : columns.filter((column) => column.key !== 'jurors');
+  const left = new Set<string>();
+  if (!report.showJurorCount) left.add('jurors');
+  if (!report.showPositions) left.add('position');
+  const list = columns.filter((column) => !left.has(column.key));
   const at = (key: K) => list.findIndex((column) => column.key === key) + 1;
   return { list, at };
 }
@@ -339,9 +344,12 @@ function addSummarySheet(
     lastRow + 2,
     columns.list.length,
     'Nota: Puntaje Final = promedio del puntaje otorgado por cada jurado al proyecto. ' +
-      'Posición según el ranking de IRIS en la categoría: los proyectos con el mismo ' +
-      'promedio comparten la posición (coganadores). Los proyectos sin evaluaciones van ' +
-      `al final, sin puntaje ni posición. Generado por IRIS el ${formatDate(report.generatedAt)}.`,
+      (report.showPositions
+        ? 'Posición según el ranking de IRIS en la categoría: los proyectos con el mismo ' +
+          'promedio comparten la posición (coganadores). Los proyectos sin evaluaciones ' +
+          'van al final, sin puntaje ni posición. '
+        : 'Los proyectos sin evaluaciones van al final, sin puntaje. ') +
+      `Generado por IRIS el ${formatDate(report.generatedAt)}.`,
   );
 }
 

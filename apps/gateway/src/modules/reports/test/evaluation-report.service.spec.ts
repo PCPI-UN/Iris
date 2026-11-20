@@ -71,6 +71,10 @@ describe('EvaluationReportService', () => {
       getProjectParticipantNames: jest.fn((p: { id: number }) => [
         `Estudiante ${p.id}`,
       ]),
+      getRankingEventByEventId: jest.fn(
+        (): Promise<{ rankingEvent?: unknown }> =>
+          Promise.resolve({ rankingEvent: { id: 1, eventId: 10 } }),
+      ),
     };
     const evaluationsService = {
       getAverageGrades: jest.fn(() => Promise.resolve(averages)),
@@ -347,6 +351,74 @@ describe('EvaluationReportService', () => {
       await expect(service.buildForStudent(50, 10)).rejects.toBeInstanceOf(
         NotFoundException,
       );
+    });
+
+    /** Same rule as the student results: no ranking configuration, no position */
+    describe('event without ranking configuration', () => {
+      const noRanking = Object.assign(new Error('Ranking config not found'), {
+        code: 5, // gRPC NOT_FOUND
+      });
+
+      it('leaves the position out of the student report', async () => {
+        const { service, eventsService } = build({ event: published });
+        eventsService.getRankingEventByEventId.mockRejectedValueOnce(noRanking);
+
+        const report = await service.buildForStudent(50, 10);
+
+        expect(report.showPositions).toBe(false);
+        expect(report.projects[0]).toMatchObject({
+          projectId: 1,
+          position: null,
+          finalScore: 80.5,
+        });
+      });
+
+      it('leaves the positions out of an academic role report', async () => {
+        const { service, eventsService } = build({ event: published });
+        eventsService.getRankingEventByEventId.mockRejectedValueOnce(noRanking);
+
+        const report = await service.buildForUser(
+          user(['read:academic_projects']),
+          10,
+          7,
+        );
+
+        expect(report.showPositions).toBe(false);
+        expect(report.projects.map((p) => [p.projectId, p.position])).toEqual([
+          [3, null],
+        ]);
+      });
+
+      it('also treats an empty ranking response as no ranking', async () => {
+        const { service, eventsService } = build({ event: published });
+        eventsService.getRankingEventByEventId.mockResolvedValueOnce({});
+
+        const report = await service.buildForStudent(50, 10);
+
+        expect(report.projects[0].position).toBeNull();
+      });
+
+      it('keeps the positions in the whole category report of read:grades', async () => {
+        const { service, eventsService } = build();
+        eventsService.getRankingEventByEventId.mockRejectedValue(noRanking);
+
+        const report = await service.buildForUser(user(['read:grades']), 10, 7);
+
+        expect(report.showPositions).toBe(true);
+        expect(report.projects[0].position).toBe(1);
+        expect(eventsService.getRankingEventByEventId).not.toHaveBeenCalled();
+      });
+
+      it('fails instead of hiding the positions when event-service fails', async () => {
+        const { service, eventsService } = build({ event: published });
+        eventsService.getRankingEventByEventId.mockRejectedValueOnce(
+          Object.assign(new Error('unavailable'), { code: 14 }),
+        );
+
+        await expect(service.buildForStudent(50, 10)).rejects.toThrow(
+          'unavailable',
+        );
+      });
     });
   });
 

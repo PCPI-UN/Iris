@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { status } from '@grpc/grpc-js';
 import { GetProjectResultResponse } from '@app/common/generated/evaluation';
 import { EventService } from '../events/events.service';
 import { EvaluationsService } from '../evaluations/evaluations.service';
@@ -41,7 +42,8 @@ const roundWeight = (weight: number): number =>
  * - Positions use the ranking rule (dense positions over the rounded averages): projects
  *   with the same average are co-winners and share the position (CU-86e3vmz0h). They are
  *   computed over the whole category even when only some rows are shown. The grades are
- *   never changed.
+ *   never changed. The reports filtered to a scope or to the student's project carry no
+ *   position when the event has no ranking configuration, as the student results.
  *
  * Who sees which rows:
  * - `read:grades` (Admin, EventManager, FacultyAdmin, Dean): every project, at any time.
@@ -78,10 +80,10 @@ export class EvaluationReportService {
     if (!event) throw new NotFoundException(`Event ${eventId} not found`);
     if (!event.resultsPublished) throw new ForbiddenException(NOT_PUBLISHED);
 
-    const inScope = await this.projectsService.listAllProjectsInScope({
-      userId: user.id,
-      eventId,
-    });
+    const [inScope, showPositions] = await Promise.all([
+      this.projectsService.listAllProjectsInScope({ userId: user.id, eventId }),
+      this.hasRanking(eventId),
+    ]);
     const projectIds = inScope
       .filter((project) => project.courseId === categoryId)
       .map((project) => project.id);
@@ -90,7 +92,10 @@ export class EvaluationReportService {
     );
     if (!projectIds.length) throw noProjects;
 
-    const report = await this.build(eventId, categoryId, { projectIds });
+    const report = await this.build(eventId, categoryId, {
+      projectIds,
+      showPositions,
+    });
     // Projects of the scope that were not approved are not graded nor listed
     if (!report.projects.length) throw noProjects;
     return report;
@@ -112,6 +117,7 @@ export class EvaluationReportService {
     const report = await this.build(eventId, project!.courseId, {
       projectIds: [project!.id],
       showJurorCount: false,
+      showPositions: await this.hasRanking(eventId),
     });
     // Only approved projects are graded and ranked
     if (!report.projects.length) {
@@ -122,12 +128,32 @@ export class EvaluationReportService {
     return report;
   }
 
+  /**
+   * Whether the event has a ranking configuration, the same rule as the student results
+   * (StudentResultsService.ownRanking): without one, the reports filtered to a scope or to
+   * the student's project carry no position. event-service answers NOT_FOUND when the
+   * event has none; any other error fails the report instead of hiding the positions.
+   */
+  private async hasRanking(eventId: number): Promise<boolean> {
+    try {
+      const { rankingEvent } =
+        await this.eventsService.getRankingEventByEventId(eventId);
+      return !!rankingEvent;
+    } catch (error: unknown) {
+      if ((error as { code?: number } | null)?.code === status.NOT_FOUND) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
   async build(
     eventId: number,
     categoryId: number,
     scope: EvaluationReportScope = {},
   ): Promise<EvaluationReport> {
     const showJurorCount = scope.showJurorCount ?? true;
+    const showPositions = scope.showPositions ?? true;
     const [event, { category }] = await Promise.all([
       this.eventsService.getEventById(eventId),
       this.eventsService.getCategory(categoryId),
@@ -196,7 +222,7 @@ export class EvaluationReportService {
         evaluated,
         // The ranking average, so the grade shown is the one the position comes from
         finalScore: average?.averageGrade ?? null,
-        position: positionById.get(id) ?? null,
+        position: showPositions ? (positionById.get(id) ?? null) : null,
         jurorCount: showJurorCount ? (average?.evaluationCount ?? 0) : null,
         comments: splitFeedback(result.consolidatedFeedback),
         components: evaluated ? groupByComponent(result) : [],
@@ -211,6 +237,7 @@ export class EvaluationReportService {
       maxScore: results.find((r) => r.maxScore > 0)?.maxScore ?? 0,
       generatedAt: new Date(),
       showJurorCount,
+      showPositions,
       projects: rows,
     };
   }
