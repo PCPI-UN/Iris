@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { User } from '@users/domain/entities/user.entity';
+import { Role } from '@roles/domain/entities/role.entity';
 import { normalizeEmail } from '@app/common/utils/email.util';
 import {
   PaginatedUsersResult,
@@ -82,6 +83,9 @@ export class PrismaUserRepository implements UserRepositoryPort {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
+        include: {
+          platformRoles: { where: { active: true }, include: { role: true } },
+        },
       }),
       this.prisma.user.count({
         where: whereClause,
@@ -89,7 +93,13 @@ export class PrismaUserRepository implements UserRepositoryPort {
     ]);
 
     return {
-      users: users.map(UserMapper.toDomain),
+      users: users.map(({ platformRoles, ...user }) => ({
+        user: UserMapper.toDomain(user),
+        roles: platformRoles.map(
+          ({ role }) =>
+            new Role(role.id, role.name, role.description, role.scope),
+        ),
+      })),
       total,
     };
   }

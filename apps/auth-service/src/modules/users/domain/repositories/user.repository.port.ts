@@ -1,8 +1,15 @@
 import { User } from '../entities/user.entity';
+import { Role } from '@roles/domain/entities/role.entity';
 import { TransactionClient } from '@common/prisma/types/transaction-client.type';
 
+export interface UserWithPlatformRoles {
+  user: User;
+  /** Active platform roles of the user. */
+  roles: Role[];
+}
+
 export interface PaginatedUsersResult {
-  users: User[];
+  users: UserWithPlatformRoles[];
   total: number;
 }
 
