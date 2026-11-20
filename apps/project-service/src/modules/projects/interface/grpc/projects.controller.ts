@@ -20,6 +20,7 @@ import {
   toProtoTutor,
   protoToDocumentStatus,
   toPreviewJurorImportResponse,
+  toExecuteJurorImportResponse,
   toGetJurorImportTemplateResponse,
   toProtoStudentParticipationStats,
 } from './mappers';
@@ -55,11 +56,13 @@ import { INVITATION_SERVICE_NAME } from '@app/common/generated/invitation';
 import { lastValueFrom } from 'rxjs';
 import { status } from '@grpc/grpc-js';
 import {
+  ExecuteJurorImportRequest,
   GetJurorImportTemplateRequest,
   PreviewJurorImportRequest,
 } from '@app/common/generated/project';
 import { GetJurorImportTemplateUC } from '../../application/use-cases/get-juror-import-template.uc';
 import { PreviewJurorImportUC } from '../../application/use-cases/preview-juror-import.uc';
+import { ExecuteJurorImportUC } from '../../application/use-cases/execute-juror-import.uc';
 
 interface InvitationGrpcService {
   CreateInvitation(data: {
@@ -112,6 +115,7 @@ export class ProjectsController {
     private readonly checkActiveSubmissionByEmailsUC: CheckActiveSubmissionByEmailsUC,
     private readonly changeToUnderReviewProjectUC: ChangeToUnderReviewProjectUC,
     private readonly previewJurorImportUC: PreviewJurorImportUC,
+    private readonly executeJurorImportUC: ExecuteJurorImportUC,
     private readonly getJurorImportTemplateUC: GetJurorImportTemplateUC,
     private readonly getStudentParticipationStatsUC: GetStudentParticipationStatsUC,
     @Inject(INVITATION_SERVICE_NAME) private readonly client: ClientGrpc,
@@ -587,6 +591,16 @@ export class ProjectsController {
       rows: req.rows ?? [],
     });
     return toPreviewJurorImportResponse(preview);
+  }
+
+  @GrpcMethod('ProjectsService', 'ExecuteJurorImport')
+  async executeJurorImportRpc(req: ExecuteJurorImportRequest) {
+    const execution = await this.executeJurorImportUC.execute({
+      eventId: req.eventId,
+      rows: req.rows ?? [],
+      failedInvitations: req.failedInvitations ?? [],
+    });
+    return toExecuteJurorImportResponse(execution);
   }
 
   @GrpcMethod('ProjectsService', 'GetJurorImportTemplate')

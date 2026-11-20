@@ -43,6 +43,8 @@ export interface ProjectRepository {
   upsertAssignment(projectId: number, juror: JurorKey): Promise<void>;
   // Bulk assign juror to multiple projects in one operation
   bulkUpsertAssignments(projectIds: number[], juror: JurorKey): Promise<void>;
+  /** Writes the assignments of several jurors at once, skipping the existing ones; returns how many were inserted */
+  createAssignments(assignments: { projectId: number; juror: JurorKey }[]): Promise<number>;
   removeAssignment(projectId: number, juror: JurorKey): Promise<boolean>; // true si borró algo
   listAssignments(projectId: number): Promise<JurorKey[]>; // opcional útil
 

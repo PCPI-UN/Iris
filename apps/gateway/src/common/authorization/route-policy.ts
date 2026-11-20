@@ -175,6 +175,9 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'POST /events/:eventId/juror-imports/preview': {
     permission: ['manage:events'],
   },
+  'POST /events/:eventId/juror-imports/execute': {
+    permission: ['manage:events'],
+  },
   'GET /events/:eventId/juror-imports/template': {
     permission: ['manage:events'],
   },

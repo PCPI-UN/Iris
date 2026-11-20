@@ -51,6 +51,8 @@ service ProjectsService {
 
   // Juror import from the PF spreadsheet: validates every row, writes nothing
   rpc PreviewJurorImport (PreviewJurorImportRequest) returns (PreviewJurorImportResponse);
+  // Assigns the jurors of a confirmed juror import; refuses it when the preview cannot be confirmed
+  rpc ExecuteJurorImport (ExecuteJurorImportRequest) returns (ExecuteJurorImportResponse);
   // Data to build the downloadable template: departments and approved projects of the event
   rpc GetJurorImportTemplate (GetJurorImportTemplateRequest) returns (GetJurorImportTemplateResponse);
 
@@ -510,6 +512,31 @@ message PreviewJurorImportResponse {
   JurorImportTotals totals = 2;
   repeated string eventWarnings = 3;  // event-level problems; any of them blocks the confirmation
   bool canConfirm = 4;                // no row errors and no event warnings
+}
+
+message JurorImportFailedInvitation {
+  string email = 1;
+  string message = 2;  // in Spanish, why the invitation could not be sent
+}
+
+message ExecuteJurorImportRequest {
+  int32 eventId = 1;
+  repeated JurorImportRow rows = 2;  // the same rows of the preview
+  // Jurors whose invitation could not be sent: their rows are reported as errors and not assigned
+  repeated JurorImportFailedInvitation failedInvitations = 3;
+}
+
+message JurorImportExecutionTotals {
+  int32 rows = 1;
+  int32 assigned = 2;
+  int32 skipped = 3;
+  int32 errors = 4;
+  int32 jurors = 5;  // distinct jurors in assigned rows
+}
+
+message ExecuteJurorImportResponse {
+  repeated JurorImportRowResult rows = 1;  // ASSIGN: assigned now, SKIP: already assigned, ERROR: not assigned
+  JurorImportExecutionTotals totals = 2;
 }
 
 message GetJurorImportTemplateRequest {

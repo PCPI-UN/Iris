@@ -22,6 +22,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { RequirePermission } from '../../../common/decorators/require-permission.decorator';
+import { GetUser } from '../../../common/decorators/get-user.decorator';
+import { AppUser } from '../../auth/types/app-user.type';
 import { XLSX_CONTENT_TYPE, xlsxFile } from '../../../common/excel/xlsx-file';
 import { JurorImportsService } from './juror-imports.service';
 import {
@@ -82,6 +84,60 @@ export class JurorImportsController {
     @UploadedFile() file?: Express.Multer.File,
   ) {
     return this.jurorImportsService.preview(eventId, file);
+  }
+
+  @RequirePermission('manage:events')
+  @Post('execute')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: JUROR_IMPORT_MAX_BYTES, files: 1 },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Execute a juror import after its preview',
+    description:
+      'Send the same file of the preview once the person confirms it. The file is validated again: ' +
+      'if the preview cannot be confirmed nothing is done and the answer is a 400 with the preview. ' +
+      'Otherwise the jurors who are not in the event are invited (new accounts are created and receive the email), ' +
+      'and every juror is assigned to their project; existing assignments are skipped, so nothing is duplicated. ' +
+      'A juror whose invitation fails is reported as an error and not assigned; the others are assigned anyway.',
+  })
+  @ApiParam({ name: 'eventId', type: Number, example: 1 })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description:
+            'The same filled juror template sent to the preview (.xlsx)',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Summary: result per row (ASSIGN assigned now, SKIP already assigned, ERROR not assigned, with a message in Spanish) ' +
+      'and totals (rows, assigned, skipped, errors, jurors, invitationsSent, newUsers)',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Missing or invalid file, or a preview that cannot be confirmed (body: message and preview)',
+  })
+  @ApiResponse({ status: 404, description: 'Event not found' })
+  @ApiResponse({ status: 413, description: 'File larger than the limit' })
+  execute(
+    @Param('eventId', ParseIntPipe) eventId: number,
+    @GetUser() user: AppUser,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.jurorImportsService.execute(eventId, file, user.id);
   }
 
   @RequirePermission('manage:events')

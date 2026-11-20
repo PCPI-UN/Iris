@@ -192,6 +192,23 @@ export class PrismaProjectRepository implements ProjectRepository {
     });
   }
 
+  async createAssignments(
+    assignments: { projectId: number; juror: JurorKey }[],
+  ): Promise<number> {
+    if (!assignments.length) return 0;
+    // One INSERT: all the assignments are written or none
+    const { count } = await this.prisma.projectAssignment.createMany({
+      data: assignments.map(({ projectId, juror }) => ({
+        projectId,
+        memberUserId: juror.memberUserId,
+        memberEventId: juror.memberEventId,
+        memberRoleId: juror.memberRoleId,
+      })),
+      skipDuplicates: true,
+    });
+    return count;
+  }
+
   async removeAssignment(projectId: number, juror: JurorKey): Promise<boolean> {
     const res = await this.prisma.projectAssignment.deleteMany({
       where: {
