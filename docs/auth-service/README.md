@@ -57,6 +57,11 @@ The role and permission catalogue lives in the migrations of this service, not i
 - Nobody changes their own roles or deactivates their own account.
 - The platform always keeps an active `Admin`: deactivating the last one, or removing the role from them, returns `FAILED_PRECONDITION`. Admins whose account is deactivated do not count.
 
+Invitations follow the same rules for granting roles:
+
+- `CheckPlatformRoleGrant({ actorUserId, roleIds, targetUserId? })` answers whether the actor may grant those roles: platform roles only, `Admin`/`FacultyAdmin` only with `manage:admins`, never to oneself. `invitation-service` calls it before creating a `PLATFORM` invitation.
+- `AssignPlatformRoles` accepts an optional `actorUserId` (the inviter, when a `PLATFORM` invitation is accepted) and then applies the same check. Without an actor it assigns as before; it is used that way for the Tutor role of project tutors.
+
 ## Dependencies
 
 - **Uses**: PostgreSQL and `notification-service` (emails).

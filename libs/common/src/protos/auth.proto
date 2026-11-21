@@ -55,6 +55,7 @@ service AuthService {
   // ---- ROLES MODULE ----
   // Assigns platform roles to a user
   rpc AssignPlatformRoles(AssignPlatformRolesRequest) returns (AssignPlatformRolesResponse) {}
+  rpc CheckPlatformRoleGrant(CheckPlatformRoleGrantRequest) returns (CheckPlatformRoleGrantResponse) {}
   // Retrieves roles by their IDs
   rpc GetRolesByIds(GetRolesByIdsRequest) returns (GetRolesByIdsResponse) {}
   // Retrieves all the roles in the system
@@ -334,6 +335,22 @@ message GetUsersResponse {
 message AssignPlatformRolesRequest {
   int32 userId = 1;
   repeated int32 roleIds = 2;
+  // User who grants the roles (the inviter of a platform invitation). When set, the
+  // administrator rules apply: PLATFORM roles only, Admin/FacultyAdmin only with
+  // manage:admins, and nobody grants roles to themselves.
+  optional int32 actorUserId = 3;
+}
+
+// Same rules as AssignPlatformRoles with an actor, without assigning anything.
+// Fails with PERMISSION_DENIED or INVALID_ARGUMENT when the grant is not allowed.
+message CheckPlatformRoleGrantRequest {
+  int32 actorUserId = 1;
+  repeated int32 roleIds = 2;
+  optional int32 targetUserId = 3;
+}
+
+message CheckPlatformRoleGrantResponse {
+  bool allowed = 1;
 }
 
 // The response message for assigning platform roles.

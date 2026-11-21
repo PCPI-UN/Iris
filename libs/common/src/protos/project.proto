@@ -55,6 +55,9 @@ service ProjectsService {
   rpc ExecuteJurorImport (ExecuteJurorImportRequest) returns (ExecuteJurorImportResponse);
   // Data to build the downloadable template: departments and approved projects of the event
   rpc GetJurorImportTemplate (GetJurorImportTemplateRequest) returns (GetJurorImportTemplateResponse);
+  // Fails with PERMISSION_DENIED unless the user may read or edit the project: a confirmed
+  // participant, an assigned juror (read only) or platform staff (read:events / manage:events)
+  rpc CheckProjectAccess (CheckProjectAccessRequest) returns (CheckProjectAccessResponse);
 
   // Academic read endpoints: only the projects the user may read, from their scope permissions
   // (read_all, read_tutored, read_course, read_department :academic_projects)
@@ -666,6 +669,24 @@ message GetStudentParticipationStatsResponse {
   StudentCurrentProject currentProject = 8;
   // Derived from all the user's participations, as in ListUserParticipations
   AcademicInfo academic = 9;
+}
+
+enum ProjectAccessAction {
+  PROJECT_ACCESS_ACTION_UNSPECIFIED = 0;
+  PROJECT_ACCESS_READ = 1;
+  PROJECT_ACCESS_EDIT = 2;
+}
+
+message CheckProjectAccessRequest {
+  int32 userId = 1;
+  ProjectAccessAction action = 2;
+  // One of them: the project, or a document of the project
+  int32 projectId = 3;
+  int32 documentId = 4;
+}
+
+message CheckProjectAccessResponse {
+  int32 projectId = 1;
 }
 
 /************** Academic read endpoints **************/

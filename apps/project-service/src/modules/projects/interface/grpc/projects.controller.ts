@@ -32,6 +32,7 @@ import { AssignJurorBulkUC } from '../../application/use-cases/assign-juror-bulk
 import { ReassignProjectJurorUC } from '../../application/use-cases/reassign-project-juror.uc';
 import { RemoveJurorFromProjectUC } from '../../application/use-cases/remove-juror-from-project.uc';
 import { ListProjectJurorsUC } from '../../application/use-cases/list-project-jurors.uc';
+import { CheckProjectAccessUC } from '../../application/use-cases/check-project-access.uc';
 import { GetDashboardStatsUC } from '../../application/use-cases/get-dashboard-stats.uc';
 import { AddParticipantUC } from '../../application/use-cases/add-participant.uc';
 import { ListParticipantsUC } from '../../application/use-cases/list-participants.uc';
@@ -61,9 +62,11 @@ import { INVITATION_SERVICE_NAME } from '@app/common/generated/invitation';
 import { lastValueFrom } from 'rxjs';
 import { status } from '@grpc/grpc-js';
 import {
+  CheckProjectAccessRequest,
   ExecuteJurorImportRequest,
   GetJurorImportTemplateRequest,
   PreviewJurorImportRequest,
+  ProjectAccessAction,
 } from '@app/common/generated/project';
 import { GetJurorImportTemplateUC } from '../../application/use-cases/get-juror-import-template.uc';
 import { PreviewJurorImportUC } from '../../application/use-cases/preview-juror-import.uc';
@@ -119,6 +122,7 @@ export class ProjectsController {
     private readonly listUserParticipationsUC: ListUserParticipationsUC,
     private readonly checkActiveSubmissionByEmailsUC: CheckActiveSubmissionByEmailsUC,
     private readonly changeToUnderReviewProjectUC: ChangeToUnderReviewProjectUC,
+    private readonly checkProjectAccessUC: CheckProjectAccessUC,
     private readonly previewJurorImportUC: PreviewJurorImportUC,
     private readonly executeJurorImportUC: ExecuteJurorImportUC,
     private readonly getJurorImportTemplateUC: GetJurorImportTemplateUC,
@@ -318,6 +322,28 @@ export class ProjectsController {
       userId: result.userId,
       message: result.message,
     };
+  }
+
+  @GrpcMethod('ProjectsService', 'CheckProjectAccess')
+  async checkProjectAccessRpc(req: CheckProjectAccessRequest) {
+    // The enum may arrive as its number or its name, depending on the client loader
+    const action = req.action as ProjectAccessAction | string;
+    const isRead =
+      action === ProjectAccessAction.PROJECT_ACCESS_READ || action === 'PROJECT_ACCESS_READ';
+    const isEdit =
+      action === ProjectAccessAction.PROJECT_ACCESS_EDIT || action === 'PROJECT_ACCESS_EDIT';
+    if (!isRead && !isEdit) {
+      throw new RpcException({
+        code: status.INVALID_ARGUMENT,
+        message: 'action debe ser PROJECT_ACCESS_READ o PROJECT_ACCESS_EDIT',
+      });
+    }
+    return this.checkProjectAccessUC.execute({
+      userId: req.userId,
+      action: isRead ? 'READ' : 'EDIT',
+      projectId: req.projectId || undefined,
+      documentId: req.documentId || undefined,
+    });
   }
 
   @GrpcMethod('ProjectsService', 'ListProjectJurors')

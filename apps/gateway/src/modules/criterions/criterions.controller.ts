@@ -255,7 +255,8 @@ export class CriterionsController {
   @ApiOperation({
     summary: 'Get criterions by course',
     description:
-      'Retrieves all criterions associated with a specific course.',
+      'Retrieves all criterions associated with a specific course. Only a session is required: ' +
+      'the rubric has no grades and jurors (platform role User) load it to evaluate.',
   })
   @ApiParam({
     name: 'courseId',
@@ -265,10 +266,6 @@ export class CriterionsController {
   @ApiResponse({
     status: 200,
     description: 'Criterions retrieved successfully',
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - Requires read:events permission',
   })
   async findCriterionsByCourse(
     @Param('courseId', ParseIntPipe) courseId: number,

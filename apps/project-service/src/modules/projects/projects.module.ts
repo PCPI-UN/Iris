@@ -21,6 +21,7 @@ import { AssignJurorBulkUC } from './application/use-cases/assign-juror-bulk.uc'
 import { ReassignProjectJurorUC } from './application/use-cases/reassign-project-juror.uc';
 import { RemoveJurorFromProjectUC } from './application/use-cases/remove-juror-from-project.uc';
 import { ListProjectJurorsUC } from './application/use-cases/list-project-jurors.uc';
+import { CheckProjectAccessUC } from './application/use-cases/check-project-access.uc';
 import { GetDashboardStatsUC } from './application/use-cases/get-dashboard-stats.uc';
 import { AddParticipantUC } from './application/use-cases/add-participant.uc';
 import { ListParticipantsUC } from './application/use-cases/list-participants.uc';
@@ -88,6 +89,7 @@ import { AuthServiceAdapter } from './infrastructure/grpc-client/auth-service.ad
     ReassignProjectJurorUC,
     RemoveJurorFromProjectUC,
     ListProjectJurorsUC,
+    CheckProjectAccessUC,
     GetDashboardStatsUC,
     AddParticipantUC,
     ListParticipantsUC,

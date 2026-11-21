@@ -7,18 +7,19 @@
  * Changing who can call an endpoint means changing both, on purpose.
  *
  * - `public`: no session.
- * - `session`: any authenticated user; `why` says why that is enough (own data, or the
- *   service behind checks ownership).
- * - `pending`: only a session today, without a decision yet. They are reviewed one by one
- *   in the task "Seguridad - Exigir permiso en los endpoints que escriben y solo piden
- *   sesión" (ClickUp 1dfnv12c650); a `pending` endpoint must end as `permission` or `session`.
+ * - `session`: any authenticated user; `why` says why that is enough (own data, or data
+ *   that is not sensitive).
+ * - `owner`: the guard only asks for a session and the service named in `why` checks that
+ *   the caller owns the resource (participant of the project, assigned juror) or is staff.
  * - `permission`: the permission(s) required; roles that hold them are in the auth-service
  *   migrations (Admin passes every check).
+ *
+ * There is no "pending" value: every endpoint has a decision.
  */
 export type RouteAccess =
   | { access: 'public' }
   | { access: 'session'; why: string }
-  | { access: 'pending' }
+  | { access: 'owner'; why: string }
   | { permission: string[] };
 
 export const ROUTE_POLICY: Record<string, RouteAccess> = {
@@ -67,7 +68,10 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'DELETE /criterions/components/:id': { permission: ['manage:events'] },
   'GET /criterions/components/:id': { permission: ['read:events'] },
   'PUT /criterions/components/:id': { permission: ['manage:events'] },
-  'GET /criterions/course/:courseId': { access: 'pending' },
+  'GET /criterions/course/:courseId': {
+    access: 'session',
+    why: 'rubric of a category, without grades; assigned jurors (platform role User) load it to evaluate',
+  },
   'GET /criterions/readiness': { permission: ['manage:events'] },
   // modules/dashboard/dashboard.controller.ts
   'GET /dashboard/stats': { permission: ['read:events'] },
@@ -85,7 +89,7 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'GET /evaluations/courses/:courseId/top-projects': {
     permission: ['read:grades'],
   },
-  'GET /evaluations/projects/:projectId/stats': { access: 'pending' },
+  'GET /evaluations/projects/:projectId/stats': { permission: ['read:grades'] },
   'POST /evaluations/projects/evaluate': {
     access: 'session',
     why: 'evaluation-service checks that the caller is a juror assigned to the project, evaluations are open and the event dates',
@@ -104,36 +108,42 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
     why: "the caller's own project in the event",
   },
   'GET /events/ar': { access: 'public' },
-  'GET /events/award-winners': { access: 'pending' },
-  'POST /events/award-winners': { access: 'pending' },
-  'DELETE /events/award-winners/:id': { access: 'pending' },
-  'GET /events/award-winners/:id': { access: 'pending' },
-  'PATCH /events/award-winners/:id': { access: 'pending' },
-  'GET /events/categories': { access: 'pending' },
-  'POST /events/categories': { access: 'pending' },
-  'DELETE /events/categories/:id': { access: 'pending' },
-  'GET /events/categories/:id': { access: 'pending' },
-  'PATCH /events/categories/:id': { access: 'pending' },
-  'GET /events/categories/event/:eventId': { access: 'pending' },
-  'GET /events/category-awards': { access: 'pending' },
-  'POST /events/category-awards': { access: 'pending' },
-  'DELETE /events/category-awards/:id': { access: 'pending' },
-  'GET /events/category-awards/:id': { access: 'pending' },
-  'PATCH /events/category-awards/:id': { access: 'pending' },
-  'GET /events/courses': { access: 'pending' },
+  'GET /events/award-winners': { permission: ['read:grades'] },
+  'POST /events/award-winners': { permission: ['manage:events'] },
+  'DELETE /events/award-winners/:id': { permission: ['manage:events'] },
+  'GET /events/award-winners/:id': { permission: ['read:grades'] },
+  'PATCH /events/award-winners/:id': { permission: ['manage:events'] },
+  'GET /events/categories': { permission: ['read:events'] },
+  'POST /events/categories': { permission: ['manage:events'] },
+  'DELETE /events/categories/:id': { permission: ['manage:events'] },
+  'GET /events/categories/:id': { permission: ['read:events'] },
+  'PATCH /events/categories/:id': { permission: ['manage:events'] },
+  'GET /events/categories/event/:eventId': { permission: ['read:events'] },
+  'GET /events/category-awards': { permission: ['read:events'] },
+  'POST /events/category-awards': { permission: ['manage:events'] },
+  'DELETE /events/category-awards/:id': { permission: ['manage:events'] },
+  'GET /events/category-awards/:id': { permission: ['read:events'] },
+  'PATCH /events/category-awards/:id': { permission: ['manage:events'] },
+  'GET /events/courses': { permission: ['read:events'] },
   'POST /events/courses': { permission: ['create:event-members'] },
   'DELETE /events/courses/:id': { permission: ['delete:event-members'] },
-  'GET /events/courses/:id': { access: 'pending' },
-  'PATCH /events/courses/:id': { access: 'pending' },
-  'GET /events/courses/all': { access: 'pending' },
-  'GET /events/courses/dropdown/:eventId': { access: 'pending' },
-  'GET /events/courses/event/:eventId': { access: 'pending' },
+  'GET /events/courses/:id': {
+    access: 'session',
+    why: 'one category of an event; the student project wizard needs it and the same data is public in /events/public/:id',
+  },
+  'PATCH /events/courses/:id': { permission: ['manage:events'] },
+  'GET /events/courses/all': { permission: ['read:events'] },
+  'GET /events/courses/dropdown/:eventId': { permission: ['read:events'] },
+  'GET /events/courses/event/:eventId': {
+    access: 'session',
+    why: 'categories of an event; the student project wizard needs them and the same data is public in /events/public/:id',
+  },
   'GET /events/dropdown': { permission: ['read:events'] },
-  'GET /events/inscription-details': { access: 'pending' },
-  'POST /events/inscription-details': { access: 'pending' },
-  'DELETE /events/inscription-details/:id': { access: 'pending' },
-  'GET /events/inscription-details/:id': { access: 'pending' },
-  'PATCH /events/inscription-details/:id': { access: 'pending' },
+  'GET /events/inscription-details': { permission: ['read:events'] },
+  'POST /events/inscription-details': { permission: ['manage:events'] },
+  'DELETE /events/inscription-details/:id': { permission: ['manage:events'] },
+  'GET /events/inscription-details/:id': { permission: ['read:events'] },
+  'PATCH /events/inscription-details/:id': { permission: ['manage:events'] },
   'POST /events/members': { permission: ['create:event-members'] },
   'GET /events/members/:eventId': { permission: ['read:event-members'] },
   'DELETE /events/members/delete': { permission: ['delete:event-members'] },
@@ -150,11 +160,11 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'DELETE /events/ranking-config/:id': { permission: ['manage:events'] },
   'GET /events/ranking-config/:id': { permission: ['read:events'] },
   'GET /events/ranking-config/by-event/:eventId': { access: 'public' },
-  'GET /events/recaps': { access: 'pending' },
-  'POST /events/recaps': { access: 'pending' },
-  'DELETE /events/recaps/:id': { access: 'pending' },
-  'GET /events/recaps/:id': { access: 'pending' },
-  'PATCH /events/recaps/:id': { access: 'pending' },
+  'GET /events/recaps': { permission: ['read:events'] },
+  'POST /events/recaps': { permission: ['manage:events'] },
+  'DELETE /events/recaps/:id': { permission: ['manage:events'] },
+  'GET /events/recaps/:id': { permission: ['read:events'] },
+  'PATCH /events/recaps/:id': { permission: ['manage:events'] },
   'GET /events/statuses': { access: 'public' },
   'PATCH /events/update-ranking-config/:id': { permission: ['manage:events'] },
   // modules/grading-scales/grading-scales.controller.ts
@@ -164,7 +174,10 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'GET /grading-scales/:id': { permission: ['read:events'] },
   'PUT /grading-scales/:id': { permission: ['manage:events'] },
   // modules/invitations/invitations.controller.ts
-  'POST /invitations': { access: 'pending' },
+  'POST /invitations': {
+    access: 'owner',
+    why: 'invitation-service AuthorizeInvitation: PLATFORM needs create:invitations and a grant auth-service allows (Admin/FacultyAdmin only with manage:admins, never to oneself); EVENT needs manage:events; PROJECT/PROJECT_TUTOR need a participant of the project or manage:events and only give Participant/Tutor',
+  },
   'POST /invitations/:invitationId/resend': { permission: ['manage:events'] },
   'GET /invitations/:token': { access: 'public' },
   'POST /invitations/accept': { access: 'public' },
@@ -195,20 +208,38 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   },
   // modules/projects/projects.controller.ts
   'POST /projects': { access: 'public' },
-  'GET /projects/:id': { access: 'pending' },
-  'PATCH /projects/:id/approve': { access: 'pending' },
-  'POST /projects/:id/change-to-under-review': { access: 'pending' },
-  'PATCH /projects/:id/code': { access: 'pending' },
-  'GET /projects/:id/for-review': { access: 'pending' },
-  'PATCH /projects/:id/info': { access: 'pending' },
-  'GET /projects/:id/jurors': { access: 'pending' },
-  'PATCH /projects/:id/reject': { access: 'pending' },
-  'PATCH /projects/:id/request-changes': { access: 'pending' },
+  'GET /projects/:id': {
+    access: 'owner',
+    why: 'project-service CheckProjectAccess READ: participants, assigned jurors or read:events',
+  },
+  'PATCH /projects/:id/approve': { permission: ['manage:events'] },
+  'POST /projects/:id/change-to-under-review': {
+    access: 'owner',
+    why: 'project-service requires a confirmed participant and the REQUEST_CHANGES state',
+  },
+  'PATCH /projects/:id/code': {
+    access: 'owner',
+    why: 'the gateway use case requires a confirmed participant and the REQUEST_CHANGES state',
+  },
+  'GET /projects/:id/for-review': {
+    access: 'owner',
+    why: 'project-service CheckProjectAccess READ: participants, assigned jurors or read:events',
+  },
+  'PATCH /projects/:id/info': {
+    access: 'owner',
+    why: 'project-service CheckProjectAccess EDIT: participants or manage:events',
+  },
+  'GET /projects/:id/jurors': { permission: ['read:event-members'] },
+  'PATCH /projects/:id/reject': { permission: ['manage:events'] },
+  'PATCH /projects/:id/request-changes': { permission: ['manage:events'] },
   'POST /projects/:projectId/documents': { access: 'public' },
   'GET /projects/:projectId/documents/:documentId/open': { access: 'public' },
-  'DELETE /projects/:projectId/jurors/:jurorId': { access: 'pending' },
-  'POST /projects/add-update-participants': { access: 'pending' },
-  'POST /projects/assign-jurors': { access: 'pending' },
+  'DELETE /projects/:projectId/jurors/:jurorId': { permission: ['manage:events'] },
+  'POST /projects/add-update-participants': {
+    access: 'owner',
+    why: 'project-service CheckProjectAccess EDIT on the projectId of the body: participants or manage:events',
+  },
+  'POST /projects/assign-jurors': { permission: ['manage:events'] },
   'GET /projects/assigned-projects': {
     access: 'session',
     why: 'projects assigned to the calling juror',
@@ -218,16 +249,19 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'PUT /projects/:id/tutors': { permission: ['manage:events'] },
   'GET /projects/by-event/:eventId': { access: 'public' },
   'GET /projects/by-event/:eventId/with-jurors': { access: 'public' },
-  'PATCH /projects/documents/:id': { access: 'pending' },
-  'PATCH /projects/reassign-juror': { access: 'pending' },
+  'PATCH /projects/documents/:id': {
+    access: 'owner',
+    why: 'project-service CheckProjectAccess EDIT on the project of the document, before the file is uploaded: participants or manage:events',
+  },
+  'PATCH /projects/reassign-juror': { permission: ['manage:events'] },
   // modules/reports/reports.controller.ts
   'GET /events/:eventId/my-project/report': {
-    access: 'session',
-    why: "report of the caller's own project, only once the admin publishes the results",
+    access: 'owner',
+    why: "EvaluationReportService (gateway): report of the caller's own project, only once the admin publishes the results",
   },
   'GET /events/:eventId/reports/evaluation': {
-    access: 'session',
-    why: 'the service checks read:grades (whole category) or read:academic_projects (only the projects in scope, once published); anyone else gets 403',
+    access: 'owner',
+    why: 'EvaluationReportService (gateway) checks read:grades (whole category) or read:academic_projects (only the projects in scope, once published); anyone else gets 403',
   },
   // modules/terms/terms.controller.ts
   'GET /terms': { permission: ['read:events'] },

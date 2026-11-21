@@ -75,13 +75,14 @@ function declaredRoutes(): DeclaredRoute[] {
 function describeDeclared(route: DeclaredRoute): RouteAccess {
   if (route.isPublic) return { access: 'public' };
   if (route.permissions.length > 0) return { permission: [...route.permissions].sort() };
-  return { access: 'pending' };
+  return { access: 'session' } as RouteAccess;
 }
 
 function normalize(access: RouteAccess): RouteAccess {
   if ('permission' in access) return { permission: [...access.permission].sort() };
-  // `session` and `pending` are the same for the guard: only a session is required
-  if (access.access === 'session') return { access: 'pending' };
+  // `session` and `owner` are the same for the guard: only a session is required
+  // (for `owner`, the service behind checks the resource)
+  if (access.access === 'session' || access.access === 'owner') return { access: 'session' } as RouteAccess;
   return access;
 }
 
@@ -123,7 +124,10 @@ describe('Route access policy', () => {
 
   it('explains every endpoint that only requires a session', () => {
     const unexplained = Object.entries(ROUTE_POLICY)
-      .filter(([, access]) => 'access' in access && access.access === 'session' && !access.why)
+      .filter(
+        ([, access]) =>
+          'access' in access && (access.access === 'session' || access.access === 'owner') && !access.why,
+      )
       .map(([key]) => key);
 
     expect(unexplained).toEqual([]);

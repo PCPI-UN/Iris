@@ -25,6 +25,8 @@ import { InvitationMapper } from '../../application/mappers/invitation.mapper';
 import { ListEventInvitationsUseCase } from '../../application/use-cases/list-event-invitations.use-case';
 import { ResendInvitationUseCase } from '../../application/use-cases/resend-invitation.use-case';
 import { ListUserInvitationsUseCase } from '../../application/use-cases/list-user-invitations.use-case';
+import { AuthorizeInvitationUseCase } from '../../application/use-cases/authorize-invitation.use-case';
+import { AuthorizeInvitationDto } from '../../application/dto/authorize-invitation.dto';
 
 const INVITATION_SERVICE_NAME = 'InvitationService';
 
@@ -39,7 +41,17 @@ export class InvitationController {
     private readonly listEventInvitationsUseCase: ListEventInvitationsUseCase,
     private readonly resendInvitationUseCase: ResendInvitationUseCase,
     private readonly listUserInvitationsUseCase: ListUserInvitationsUseCase,
+    private readonly authorizeInvitationUseCase: AuthorizeInvitationUseCase,
   ) { }
+
+  @GrpcMethod(INVITATION_SERVICE_NAME, 'AuthorizeInvitation')
+  async authorizeInvitation(request: AuthorizeInvitationDto): Promise<{ allowed: boolean }> {
+    await this.authorizeInvitationUseCase.execute({
+      ...request,
+      roleIds: request.roleIds ?? [],
+    });
+    return { allowed: true };
+  }
 
   @GrpcMethod(INVITATION_SERVICE_NAME, 'CreateInvitation')
   async createInvitation(request: CreateInvitationDto): Promise<Invitation> {

@@ -30,9 +30,22 @@ The service has a single module, `projects`, following the layering described in
 | Participants | Pending participants and confirmed participants |
 | Jurors | Assign, reassign, remove and list jurors; projects assigned to a juror |
 
+## Project access (`CheckProjectAccess`)
+
+The gateway only asks for a session on the endpoints that read or edit one project and calls `CheckProjectAccess` (`domain/project-access.ts`) first. It answers `PERMISSION_DENIED` unless the user:
+
+| Action | Allowed |
+| --- | --- |
+| `PROJECT_ACCESS_READ` (`GET /projects/:id`, `GET /projects/:id/for-review`) | a confirmed participant, a juror assigned to the project, or a user with `read:events` |
+| `PROJECT_ACCESS_EDIT` (`PATCH /projects/:id/info`, `PATCH /projects/documents/:id`, `POST /projects/add-update-participants`, and project invitations in `invitation-service`) | a confirmed participant, or a user with `manage:events` |
+
+Admin passes like in the gateway guard. Pending participants (not joined yet) do not count. With `documentId` the project of the document is checked. Permissions come from `auth-service` (`GetUserPermissions`), only when the user is not a participant.
+
+`ChangeToUnderReviewProject` checks the participant on its own; `PATCH /projects/:id/code` is checked in the gateway use case.
+
 ## Dependencies
 
-- **Uses**: PostgreSQL, `event-service` (event and category validation, events and awards for the student dashboard), `invitation-service` (participant invitations) and `notification-service` (review emails).
+- **Uses**: PostgreSQL, `auth-service` (platform permissions for `CheckProjectAccess`, Tutor role), `event-service` (event and category validation, events and awards for the student dashboard), `invitation-service` (participant invitations) and `notification-service` (review emails).
 - **Used by**: `gateway`, `invitation-service` (accepting project invitations) and `evaluation-service` (project and juror lookup).
 
 ## Main flow: submission and review

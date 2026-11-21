@@ -160,11 +160,6 @@ export class CreateAwardWinnerDTO {
   @ApiProperty()
   @IsNumber()
   grade: number;
-
-  @ApiProperty()
-  @IsInt()
-  @Min(1)
-  assignedByUserId: number;
 }
 
 export class UpdateAwardWinnerDTO {
@@ -183,12 +178,6 @@ export class UpdateAwardWinnerDTO {
   @IsOptional()
   @IsNumber()
   grade?: number;
-
-  @ApiProperty({ required: false })
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  assignedByUserId?: number;
 }
 
 export class ListAwardWinnersDTO extends PaginationQueryDTO {

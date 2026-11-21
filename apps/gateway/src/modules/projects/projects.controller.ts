@@ -123,23 +123,29 @@ export class ProjectsController {
     );
   }
 
-  // TODO: Add platform permission guard - only admins/team leaders can add/update pending participants
   @Post('add-update-participants')
   @ApiOperation({
     summary: 'Add a pending participant to a project or update an existing one',
     description:
-      'Adds a new pending participant to a project or updates an existing pending participant if the email already exists for that project. ',
+      'Adds a new pending participant to a project or updates an existing pending participant if the email already exists for that project. ' +
+      'Only a participant of the project or a user with manage:events.',
   })
   @ApiResponse({
     status: 201,
     description: 'Participant created/updated successfully',
   })
-  addPendingParticipant(@Body() body: AddPendingParticipantDto) {
+  async addPendingParticipant(
+    @Body() body: AddPendingParticipantDto,
+    @GetUser('id') userId: number,
+  ) {
+    await this.projectsService.assertProjectAccess(userId, 'EDIT', {
+      projectId: body.projectId,
+    });
     return this.projectsService.addPendingParticipant(body);
   }
 
-  // TODO: Add platform permission guard - only admins/event managers can assign jurors
   @Post('assign-jurors')
+  @RequirePermission('manage:events')
   @ApiOperation({
     summary: 'Assign a juror to multiple projects',
     description:
@@ -165,8 +171,8 @@ export class ProjectsController {
     return this.projectsService.assignJurorToProjects(assignJurorDto);
   }
 
-  // TODO: Add platform permission guard - only admins/event managers can reassign jurors
   @Patch('reassign-juror')
+  @RequirePermission('manage:events')
   @ApiOperation({
     summary: 'Reassign a project from one juror to another',
     description:
@@ -193,6 +199,7 @@ export class ProjectsController {
   }
 
   @Delete(':projectId/jurors/:jurorId')
+  @RequirePermission('manage:events')
   @ApiOperation({
     summary: 'Remove a juror from a project',
     description:
@@ -221,8 +228,8 @@ export class ProjectsController {
     return this.projectsService.removeJurorFromProject(dto);
   }
 
-  // TODO: Add platform permission guard - only admins/event managers can approve projects
   @Patch(':id/approve')
+  @RequirePermission('manage:events')
   @ApiOperation({
     summary: 'Approve a project',
     description:
@@ -253,8 +260,8 @@ export class ProjectsController {
     return this.projectsService.approveProject({ id, ...approveDto }, user.id);
   }
 
-  // TODO: Add platform permission guard - only admins/event managers can reject projects
   @Patch(':id/reject')
+  @RequirePermission('manage:events')
   @ApiOperation({
     summary: 'Reject a project',
     description:
@@ -290,6 +297,7 @@ export class ProjectsController {
   }
 
   @Patch(':id/request-changes')
+  @RequirePermission('manage:events')
   @ApiOperation({
     summary: 'Request changes of a project',
     description:
@@ -470,14 +478,21 @@ export class ProjectsController {
     status: 404,
     description: 'Project not found',
   })
-  async getProjectForReview(@Param('id', ParseIntPipe) id: number) {
+  async getProjectForReview(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser('id') userId: number,
+  ) {
+    await this.projectsService.assertProjectAccess(userId, 'READ', {
+      projectId: id,
+    });
     return this.projectsService.getProjectForReview(id);
   }
 
   @Get(':id')
   @ApiOperation({
     summary: 'Get project by id',
-    description: 'Returns a single project for the given id.',
+    description:
+      'Returns a single project for the given id. Only its participants, its assigned jurors and users with read:events.',
   })
   @ApiParam({
     name: 'id',
@@ -485,7 +500,13 @@ export class ProjectsController {
     description: 'Project identifier',
     example: 1,
   })
-  async getProject(@Param('id', ParseIntPipe) id: number) {
+  async getProject(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser('id') userId: number,
+  ) {
+    await this.projectsService.assertProjectAccess(userId, 'READ', {
+      projectId: id,
+    });
     return this.projectsService.getProjectById(id);
   }
 
@@ -493,7 +514,8 @@ export class ProjectsController {
   @ApiOperation({
     summary: 'Update project document',
     description:
-      'Update the document file, type, or state of a project document.',
+      'Update the document file, type, or state of a project document. ' +
+      'Only a participant of the project or a user with manage:events; checked before the file is uploaded.',
   })
   @ApiParam({
     name: 'id',
@@ -528,7 +550,11 @@ export class ProjectsController {
     @Param('id', ParseIntPipe) id: number,
     @UploadedFile() file: Express.Multer.File,
     @Body() body: UpdateProjectDocumentDto,
+    @GetUser('id') userId: number,
   ) {
+    await this.projectsService.assertProjectAccess(userId, 'EDIT', {
+      documentId: id,
+    });
     const updated = await this.projectsService.updateProjectDocument(
       id,
       body,
@@ -540,7 +566,8 @@ export class ProjectsController {
   @Patch(':id/info')
   @ApiOperation({
     summary: 'Update project information',
-    description: 'Updates the name and/or description of a project.',
+    description:
+      'Updates the name and/or description of a project. Only a participant of the project or a user with manage:events.',
   })
   @ApiParam({
     name: 'id',
@@ -562,7 +589,11 @@ export class ProjectsController {
   async updateProjectInfo(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateProjectInfoDto: UpdateProjectInfoDto,
+    @GetUser('id') userId: number,
   ) {
+    await this.projectsService.assertProjectAccess(userId, 'EDIT', {
+      projectId: id,
+    });
     return this.projectsService.updateProjectInfo(
       id,
       updateProjectInfoDto.name,
@@ -615,6 +646,7 @@ export class ProjectsController {
   }
 
   @Get(':id/jurors')
+  @RequirePermission('read:event-members')
   @ApiOperation({
     summary: 'List jurors assigned to a project',
     description:

@@ -11,7 +11,7 @@ Single HTTP entry point of the platform. It authenticates the browser session, c
 | Gateway does | Gateway does not |
 | --- | --- |
 | Read the session cookie, verify the access token and load the user with their platform roles and permissions | Issue or store tokens, users, roles or permissions: that belongs to `auth-service` |
-| Enforce platform permissions declared on each endpoint | Check event-level roles (juror, participant) or ownership: services do that where they need it |
+| Enforce platform permissions declared on each endpoint | Decide event-level roles (juror, participant) or ownership: services do that; the gateway asks them first on `owner` endpoints (`CheckProjectAccess`, `AuthorizeInvitation`) |
 | Run the Microsoft sign-in redirect and code exchange, then hand the Microsoft token to `auth-service` | Store project documents itself: files go to Azure Blob Storage |
 | Validate request shape with DTOs and map gRPC errors to HTTP status codes | Persist anything: every state change happens in a service |
 | Combine data from several services for some screens (rankings, top projects, juror lists, dashboard) | Send emails: services call `notification-service` |
@@ -49,9 +49,29 @@ Cross-cutting code lives in `src/common`: guards, decorators (`@Public`, `@Requi
 | Access | Meaning |
 | --- | --- |
 | `public` | No session |
-| `session` | Any authenticated user; `why` explains why that is enough (own data, or the service behind checks ownership) |
-| `pending` | Only a session today, without a decision yet; each one must end as `permission` or `session` |
+| `session` | Any authenticated user; `why` explains why that is enough (own data, or data that is not sensitive) |
+| `owner` | Only a session in the guard; the service named in `why` checks that the caller owns the resource (participant of the project, assigned juror) or is staff |
 | `permission` | The permissions listed |
+
+There is no `pending` value: the type does not allow it, so every endpoint has a decision.
+
+### Endpoints checked by the service behind
+
+For `owner` endpoints the guard only asks for a session; the check happens in the service that owns the data, before anything is changed:
+
+| Endpoints | Who passes | Where |
+| --- | --- | --- |
+| `GET /projects/:id`, `GET /projects/:id/for-review` | Confirmed participants, jurors assigned to the project, `read:events` | `project-service` `CheckProjectAccess` (READ) |
+| `PATCH /projects/:id/info`, `PATCH /projects/documents/:id`, `POST /projects/add-update-participants` | Confirmed participants, `manage:events` | `project-service` `CheckProjectAccess` (EDIT); documents are checked before the file is uploaded |
+| `PATCH /projects/:id/code`, `POST /projects/:id/change-to-under-review` | Confirmed participants, while the project is in `REQUEST_CHANGES` | gateway use case / `project-service` |
+| `POST /invitations` | Depends on the target type | `invitation-service` `AuthorizeInvitation` ([rules](../invitation-service/README.md)); `auth-service` checks a platform grant again on acceptance |
+| `GET /events/:eventId/reports/evaluation`, `GET /events/:eventId/my-project/report` | `read:grades`, `read:academic_projects` within scope, or the caller's own project once results are published | `EvaluationReportService` (gateway) |
+
+A project tutor reads the projects they tutor through `/academic/projects/:id`, not `GET /projects/:id`.
+
+Some reads stay at `session` because the data is not sensitive and non-staff users need it: `GET /criterions/course/:courseId` (rubric without grades, loaded by jurors) and `GET /events/courses/event/:eventId`, `GET /events/courses/:id` (categories of an event, used by the student project wizard and already public in `/events/public/:id`).
+
+In `POST`/`PATCH /events/award-winners`, the assigner is the caller; the body does not carry it.
 
 See [auth-service](../auth-service/) for how tokens are issued and refreshed.
 
