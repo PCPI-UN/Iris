@@ -6,6 +6,10 @@ package invitation;
 service InvitationService {
   // Creates a new invitation
   rpc CreateInvitation (CreateInvitationRequest) returns (Invitation) {}
+  // Fails with PERMISSION_DENIED unless the inviter may create this invitation (POST /invitations):
+  // PLATFORM needs create:invitations and a grant auth-service allows, EVENT needs manage:events,
+  // PROJECT / PROJECT_TUTOR need a participant of the project or manage:events
+  rpc AuthorizeInvitation (AuthorizeInvitationRequest) returns (AuthorizeInvitationResponse) {}
   // Gets an invitation by token
   rpc GetInvitationByToken (GetInvitationByTokenRequest) returns (GetInvitationByTokenResponse) {}
   // Accepts an invitation
@@ -42,6 +46,18 @@ message CreateInvitationRequest {
   optional string firstName = 7;
   optional string lastName = 8;
   string eventType = 9;
+}
+
+message AuthorizeInvitationRequest {
+  int32 inviterUserId = 1;
+  string email = 2;
+  string targetType = 3;
+  int32 targetId = 4;
+  repeated int32 roleIds = 5;
+}
+
+message AuthorizeInvitationResponse {
+  bool allowed = 1;
 }
 
 // The request message for getting an invitation by token

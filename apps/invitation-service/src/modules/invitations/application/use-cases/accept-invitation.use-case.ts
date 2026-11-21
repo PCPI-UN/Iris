@@ -74,9 +74,12 @@ export class AcceptInvitationUseCase {
       case InvitationTargetType.PLATFORM:
         // Assign platform roles to the user
         if (roleIds.length > 0) {
+          // The inviter grants the roles: auth-service applies the administrator rules again,
+          // so an invitation never gives more than its inviter may give
           await this.authService.assignPlatformRoles({
             userId: invitation.invitedUserId,
             roleIds,
+            actorUserId: invitation.invitedByUserId,
           });
         }
         break;

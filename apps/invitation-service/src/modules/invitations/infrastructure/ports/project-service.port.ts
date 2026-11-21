@@ -14,6 +14,12 @@ export abstract class ProjectServicePort {
   abstract getProject(projectId: number): Promise<Project | null>;
 
   /**
+   * Fails with PERMISSION_DENIED unless the user is a confirmed participant of the project
+   * or holds manage:events (project-service CheckProjectAccess, EDIT).
+   */
+  abstract checkCanEditProject(userId: number, projectId: number): Promise<void>;
+
+  /**
    * Adds a participant to a project.
    *
    * @param params - Participant creation parameters

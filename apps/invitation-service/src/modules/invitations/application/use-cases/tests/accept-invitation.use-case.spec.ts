@@ -154,9 +154,11 @@ describe('AcceptInvitationUseCase', () => {
         userId: 200,
         password: 'securePassword123',
       });
+      // the inviter (100) grants the roles, so auth-service applies the administrator rules
       expect(authService.assignPlatformRoles).toHaveBeenCalledWith({
         userId: 200,
         roleIds: [10, 11],
+        actorUserId: 100,
       });
       expect(invitation.status).toBe(InvitationStatus.ACCEPTED);
       expect(invitationRepository.save).toHaveBeenCalledWith(invitation);
@@ -194,9 +196,11 @@ describe('AcceptInvitationUseCase', () => {
       // Assert
       expect(result).toEqual({ success: true });
       expect(authService.activateUser).not.toHaveBeenCalled();
+      // the inviter (100) grants the roles, so auth-service applies the administrator rules
       expect(authService.assignPlatformRoles).toHaveBeenCalledWith({
         userId: 200,
         roleIds: [10],
+        actorUserId: 100,
       });
     });
 
