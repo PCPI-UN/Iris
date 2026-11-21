@@ -763,4 +763,8 @@ message ProjectStateChangeBlock {
 message AdminChangeProjectStateResponse {
   optional Project project = 1;
   optional ProjectStateChangeBlock blocked = 2;
+  // Work in other services that failed after the change was saved: TUTOR_ACTIVATION, NOTIFICATION
+  repeated string failedEffects = 3;
+  // Spanish warning for failedEffects; empty when nothing failed
+  string warning = 4;
 }

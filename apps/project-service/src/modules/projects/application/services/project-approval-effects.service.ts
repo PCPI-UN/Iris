@@ -48,8 +48,9 @@ export class ProjectApprovalEffects {
     project: { id: number; name: string },
     template: EmailTemplate,
     reason?: string,
-  ): Promise<void> {
+  ): Promise<{ sent: number; failed: number }> {
     const pendings = await this.repo.listPendingParticipants(project.id);
+    let failed = 0;
     for (const pending of pendings) {
       try {
         await this.notificationService.sendEmail({
@@ -63,12 +64,15 @@ export class ProjectApprovalEffects {
           },
         });
       } catch (error) {
+        failed += 1;
         this.logger.error(
-          `Failed to send email to ${pending.email}: ${String(error)}`,
+          `Failed to send email to ${pending.email}`,
+          error instanceof Error ? error.stack : String(error),
         );
         // Continue sending to other participants even if one fails
       }
     }
+    return { sent: pendings.length - failed, failed };
   }
 
   /** Tutor role for the linked tutors and invitations for the pending ones; safe to repeat. */

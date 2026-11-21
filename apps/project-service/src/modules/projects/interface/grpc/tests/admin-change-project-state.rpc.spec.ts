@@ -20,12 +20,12 @@ describe('ProjectsService.AdminChangeProjectState', () => {
     force: false,
   };
 
-  it('maps the proto state and returns the changed project', async () => {
+  it('maps the proto state and returns the changed project with the failed effects', async () => {
     const execute = jest.fn().mockResolvedValue({
-      id: 4,
-      eventId: 9,
-      name: 'Robot',
-      state: 'UNDER_REVIEW',
+      project: { id: 4, eventId: 9, name: 'Robot', state: 'UNDER_REVIEW' },
+      failedEffects: ['NOTIFICATION'],
+      warning:
+        'El estado se cambió, pero no se pudieron enviar todos los correos a los integrantes.',
     });
 
     const res = await build(execute).adminChangeProjectStateRpc(request);
@@ -38,11 +38,19 @@ describe('ProjectsService.AdminChangeProjectState', () => {
       notify: false,
       force: false,
     });
-    expect(res).toMatchObject({ project: { id: 4, state: 1 } });
+    expect(res).toMatchObject({
+      project: { id: 4, state: 1 },
+      failedEffects: ['NOTIFICATION'],
+      warning: expect.stringContaining('correos') as unknown,
+    });
   });
 
   it('leaves an unspecified state undefined so the use case answers 400', async () => {
-    const execute = jest.fn().mockResolvedValue({ id: 4, state: 'APPROVED' });
+    const execute = jest.fn().mockResolvedValue({
+      project: { id: 4, state: 'APPROVED' },
+      failedEffects: [],
+      warning: null,
+    });
 
     await build(execute).adminChangeProjectStateRpc({ ...request, state: 0 });
 

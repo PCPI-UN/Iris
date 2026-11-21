@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { EmailTemplate } from '@app/common/generated/notification';
 import { UnitOfWork } from '@app/common/ports/unit-of-work.port';
 import { ProjectRepository } from '../../domain/repositories/project.repository';
@@ -7,10 +7,17 @@ import {
   ProjectChangeLogRepository,
 } from '../../domain/repositories/project-change-log.repository';
 import { Project, ProjectState } from '../../domain/entities/project.entity';
-import { NotFoundError, ValidationError } from '../../domain/errors';
+import {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from '../../domain/errors';
 import { buildProjectChangeLogEntry } from '../../domain/project-change-log';
 import {
+  AdminStateEffect,
+  failedEffectsWarning,
   ProjectStateChangeBlockedError,
+  STATE_CHANGED_MEANWHILE,
   stateChangeBlock,
 } from '../../domain/admin-state-change';
 import {
@@ -51,6 +58,14 @@ export interface AdminChangeProjectStateInput {
   force?: boolean;
 }
 
+export interface AdminChangeProjectStateResult {
+  project: Project;
+  /** Effects in other services that failed after the change was saved */
+  failedEffects: AdminStateEffect[];
+  /** Spanish warning for failedEffects, null when nothing failed */
+  warning: string | null;
+}
+
 /** The event type as the email templates and invitations name it */
 export const eventTypeName = (event: { eventType?: unknown } | null): string =>
   event?.eventType === 2 || event?.eventType === 'COMPETENCIA'
@@ -84,6 +99,8 @@ export const stateTemplate = (
  */
 @Injectable()
 export class AdminChangeProjectStateUC {
+  private readonly logger = new Logger(AdminChangeProjectStateUC.name);
+
   constructor(
     @Inject('ProjectRepository') private readonly repo: ProjectRepository,
     @Inject(EVENT_SERVICE_PORT) private readonly events: EventServicePort,
@@ -95,7 +112,9 @@ export class AdminChangeProjectStateUC {
     private readonly uow: UnitOfWork,
   ) {}
 
-  async execute(input: AdminChangeProjectStateInput): Promise<Project> {
+  async execute(
+    input: AdminChangeProjectStateInput,
+  ): Promise<AdminChangeProjectStateResult> {
     const project = await this.repo.findById(input.projectId);
     if (!project) throw new NotFoundError('No se encontró el proyecto');
 
@@ -143,32 +162,61 @@ export class AdminChangeProjectStateUC {
       after: { state: target },
       reason,
     })!;
-    // The state and its change log entry are saved together; other services are called outside
+    // The state and its change log entry are saved together; other services are called outside.
+    // The update only applies if the state is still the one read, so two simultaneous changes
+    // cannot both be saved (nor send their emails twice).
     const updated = await this.uow.run(async () => {
-      const changed = await this.repo.setProjectStateWithReason(
+      const changed = await this.repo.changeStateIfCurrent(
         project.id,
+        project.state,
         target,
-        // undefined keeps the current project.reason
-        STATES_WITH_REASON.includes(target) ? reason : undefined,
+        // Other states clear the reason, which stays in the change log
+        STATES_WITH_REASON.includes(target) ? reason : null,
       );
+      if (!changed) throw new ConflictError(STATE_CHANGED_MEANWHILE);
       await this.changeLog.create(entry);
       return changed;
     });
 
+    // Saved: a failure from here on is reported, not thrown, because retrying the request
+    // would answer that the project is already in the new state
+    const failedEffects: AdminStateEffect[] = [];
     const eventType = eventTypeName(event);
     // Tutor roles and invitations are what lets the tutors in, so they do not depend on notify
     if (target === 'APPROVED') {
-      await this.approvalEffects.activateTutors(project.id, eventType);
+      try {
+        await this.approvalEffects.activateTutors(project.id, eventType);
+      } catch (error) {
+        failedEffects.push('TUTOR_ACTIVATION');
+        this.logger.error(
+          `Tutor activation failed after the admin state change of project ${project.id}`,
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
     }
     const template = input.notify ? stateTemplate(target, eventType) : null;
     if (template !== null) {
-      await this.approvalEffects.notifyPendingParticipantsWith(
-        { id: project.id, name: project.name },
-        template,
-        target === 'APPROVED' ? undefined : reason,
-      );
+      try {
+        const { failed } =
+          await this.approvalEffects.notifyPendingParticipantsWith(
+            { id: project.id, name: project.name },
+            template,
+            target === 'APPROVED' ? undefined : reason,
+          );
+        if (failed) failedEffects.push('NOTIFICATION');
+      } catch (error) {
+        failedEffects.push('NOTIFICATION');
+        this.logger.error(
+          `Emails failed after the admin state change of project ${project.id}`,
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
     }
 
-    return updated;
+    return {
+      project: updated,
+      failedEffects,
+      warning: failedEffectsWarning(failedEffects),
+    };
   }
 }

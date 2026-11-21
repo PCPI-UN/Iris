@@ -3,8 +3,15 @@ import { UnitOfWork } from '@app/common/ports/unit-of-work.port';
 import { AdminChangeProjectStateUC } from '../admin-change-project-state.uc';
 import { ProjectApprovalEffects } from '../../services/project-approval-effects.service';
 import { SetProjectTutorsUC } from '../set-project-tutors.uc';
-import { NotFoundError, ValidationError } from '../../../domain/errors';
-import { ProjectStateChangeBlockedError } from '../../../domain/admin-state-change';
+import {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from '../../../domain/errors';
+import {
+  ProjectStateChangeBlockedError,
+  STATE_CHANGED_MEANWHILE,
+} from '../../../domain/admin-state-change';
 import { ProjectState } from '../../../domain/entities/project.entity';
 
 describe('AdminChangeProjectStateUC', () => {
@@ -42,10 +49,12 @@ describe('AdminChangeProjectStateUC', () => {
     };
     const repo = {
       findById: jest.fn().mockResolvedValue(project),
-      setProjectStateWithReason: jest.fn((id: number, state: ProjectState) => {
-        if (open) inTransaction.push('state');
-        return Promise.resolve({ ...project, id, state });
-      }),
+      changeStateIfCurrent: jest.fn(
+        (id: number, _from: ProjectState, state: ProjectState) => {
+          if (open) inTransaction.push('state');
+          return Promise.resolve<object | null>({ ...project, id, state });
+        },
+      ),
       listPendingParticipants: jest.fn().mockResolvedValue(PENDINGS),
     };
     const changeLog = {
@@ -109,12 +118,13 @@ describe('AdminChangeProjectStateUC', () => {
 
     const result = await uc.execute({ ...base, state: 'UNDER_REVIEW' });
 
-    expect(result.state).toBe('UNDER_REVIEW');
-    // The reason is only stored in the project for the states whose email shows it
-    expect(repo.setProjectStateWithReason).toHaveBeenCalledWith(
+    expect(result.project.state).toBe('UNDER_REVIEW');
+    // Only if the state is still the one read; the reason is cleared outside REJECTED/REQUEST_CHANGES
+    expect(repo.changeStateIfCurrent).toHaveBeenCalledWith(
       4,
+      'APPROVED',
       'UNDER_REVIEW',
-      undefined,
+      null,
     );
     expect(changeLog.create).toHaveBeenCalledWith({
       projectId: 4,
@@ -128,6 +138,7 @@ describe('AdminChangeProjectStateUC', () => {
     expect(inTransaction).toEqual(['state', 'changeLog']);
     expect(tutors.activate).not.toHaveBeenCalled();
     expect(notifications.sendEmail).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ failedEffects: [], warning: null });
   });
 
   it.each([undefined, '', '   '])(
@@ -140,7 +151,7 @@ describe('AdminChangeProjectStateUC', () => {
       ).rejects.toThrow(
         new ValidationError('El motivo del cambio de estado es obligatorio'),
       );
-      expect(repo.setProjectStateWithReason).not.toHaveBeenCalled();
+      expect(repo.changeStateIfCurrent).not.toHaveBeenCalled();
     },
   );
 
@@ -150,7 +161,7 @@ describe('AdminChangeProjectStateUC', () => {
     await expect(uc.execute({ ...base, state: 'REJECTED' })).rejects.toThrow(
       ValidationError,
     );
-    expect(repo.setProjectStateWithReason).not.toHaveBeenCalled();
+    expect(repo.changeStateIfCurrent).not.toHaveBeenCalled();
   });
 
   it('answers 400 for an unknown state', async () => {
@@ -188,7 +199,7 @@ describe('AdminChangeProjectStateUC', () => {
     expect(block.message).toContain('2 evaluaciones de jurados');
     expect(block.message).toContain('sale del ranking');
     expect(block.message).toContain('importación de jurados');
-    expect(repo.setProjectStateWithReason).not.toHaveBeenCalled();
+    expect(repo.changeStateIfCurrent).not.toHaveBeenCalled();
     expect(notifications.sendEmail).not.toHaveBeenCalled();
   });
 
@@ -201,8 +212,8 @@ describe('AdminChangeProjectStateUC', () => {
       force: true,
     });
 
-    expect(result.state).toBe('UNDER_REVIEW');
-    expect(repo.setProjectStateWithReason).toHaveBeenCalledTimes(1);
+    expect(result.project.state).toBe('UNDER_REVIEW');
+    expect(repo.changeStateIfCurrent).toHaveBeenCalledTimes(1);
     expect(evaluations.countEvaluationsByProject).not.toHaveBeenCalled();
   });
 
@@ -222,7 +233,7 @@ describe('AdminChangeProjectStateUC', () => {
     });
     expect(block.message).toContain('el evento ya publicó sus resultados');
     expect(block.message).not.toContain('sale del ranking');
-    expect(repo.setProjectStateWithReason).not.toHaveBeenCalled();
+    expect(repo.changeStateIfCurrent).not.toHaveBeenCalled();
   });
 
   it('REJECTED to APPROVED activates the tutors as the normal approval, without emails when notify is false', async () => {
@@ -270,8 +281,9 @@ describe('AdminChangeProjectStateUC', () => {
 
       await uc.execute({ ...base, state, reason: '  Plagio  ', notify: true });
 
-      expect(repo.setProjectStateWithReason).toHaveBeenCalledWith(
+      expect(repo.changeStateIfCurrent).toHaveBeenCalledWith(
         4,
+        'UNDER_REVIEW',
         state,
         'Plagio',
       );
@@ -318,5 +330,80 @@ describe('AdminChangeProjectStateUC', () => {
     ).rejects.toThrow('insert failed');
     expect(tutors.activate).not.toHaveBeenCalled();
     expect(notifications.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('clears the old reason when a rejected project is corrected to APPROVED', async () => {
+    const { uc, repo, changeLog } = setup({ state: 'REJECTED' });
+
+    await uc.execute({ ...base, state: 'APPROVED' });
+
+    expect(repo.changeStateIfCurrent).toHaveBeenCalledWith(
+      4,
+      'REJECTED',
+      'APPROVED',
+      null,
+    );
+    // The reason of the correction stays in the change log
+    expect(changeLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'Aprobado por error' }),
+    );
+  });
+
+  it('answers 409 and records nothing when another change saved a different state first', async () => {
+    const { uc, repo, changeLog, notifications, tutors } = setup({
+      state: 'REJECTED',
+    });
+    repo.changeStateIfCurrent.mockResolvedValue(null);
+
+    await expect(
+      uc.execute({ ...base, state: 'APPROVED', notify: true }),
+    ).rejects.toThrow(new ConflictError(STATE_CHANGED_MEANWHILE));
+    expect(changeLog.create).not.toHaveBeenCalled();
+    expect(tutors.activate).not.toHaveBeenCalled();
+    expect(notifications.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('answers with the saved project and TUTOR_ACTIVATION when the tutor activation fails, and still sends the emails', async () => {
+    const { uc, tutors, notifications } = setup({ state: 'REJECTED' });
+    tutors.activate.mockRejectedValue(new Error('auth-service unavailable'));
+
+    const result = await uc.execute({
+      ...base,
+      state: 'APPROVED',
+      notify: true,
+    });
+
+    expect(result.project.state).toBe('APPROVED');
+    expect(result.failedEffects).toEqual(['TUTOR_ACTIVATION']);
+    expect(result.warning).toContain('El estado se cambió');
+    expect(result.warning).toContain('tutores');
+    expect(notifications.sendEmail).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports NOTIFICATION when an email fails or the participants cannot be read', async () => {
+    const first = setup({ state: 'UNDER_REVIEW' });
+    first.notifications.sendEmail.mockRejectedValueOnce(new Error('smtp'));
+
+    const partial = await first.uc.execute({
+      ...base,
+      state: 'REJECTED',
+      notify: true,
+    });
+
+    expect(partial.failedEffects).toEqual(['NOTIFICATION']);
+    expect(first.notifications.sendEmail).toHaveBeenCalledTimes(2);
+
+    const second = setup({ state: 'UNDER_REVIEW' });
+    second.repo.listPendingParticipants.mockRejectedValue(new Error('db'));
+
+    const none = await second.uc.execute({
+      ...base,
+      state: 'REJECTED',
+      notify: true,
+    });
+
+    expect(none.project.state).toBe('REJECTED');
+    expect(none.failedEffects).toEqual(['NOTIFICATION']);
+    expect(none.warning).toContain('correos');
   });
 });

@@ -747,7 +747,7 @@ export class ProjectsController {
     force?: boolean;
   }) {
     try {
-      const project = await this.adminChangeProjectStateUC.execute({
+      const result = await this.adminChangeProjectStateUC.execute({
         projectId: req.id,
         actingUserId: req.actingUserId,
         // 0 (unspecified) stays undefined: protoToState would read it as UNDER_REVIEW
@@ -756,7 +756,11 @@ export class ProjectsController {
         notify: req.notify === true,
         force: req.force === true,
       });
-      return { project: toProtoProject(project) };
+      return {
+        project: toProtoProject(result.project),
+        failedEffects: result.failedEffects,
+        warning: result.warning ?? '',
+      };
     } catch (error) {
       // Nothing changed: the gateway answers 409 with the cause
       if (error instanceof ProjectStateChangeBlockedError) {

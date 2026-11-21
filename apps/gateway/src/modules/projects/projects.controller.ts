@@ -676,12 +676,16 @@ export class ProjectsController {
       '(none for UNDER_REVIEW). If the project has juror evaluations or the event has published results, ' +
       'nothing changes and the answer is 409 with code PROJECT_STATE_CHANGE_BLOCKED and the cause in ' +
       'details (hasEvaluations, evaluationCount, resultsPublished, leavesApproved); resend with force to apply it. ' +
-      'Leaving APPROVED takes the project out of the ranking and the juror import; evaluations are kept.',
+      'Leaving APPROVED takes the project out of the ranking and the juror import; evaluations are kept. ' +
+      'The project reason is set for REJECTED and REQUEST_CHANGES and cleared for the other states. ' +
+      'A 409 without code means another change was saved first: reload and retry.',
   })
   @ApiParam({ name: 'id', type: Number, description: 'Project ID', example: 1 })
   @ApiResponse({
     status: 200,
-    description: 'State changed; returns { project }',
+    description:
+      'State changed; returns { project, failedEffects, warning }. failedEffects lists what failed after the ' +
+      'change was saved (TUTOR_ACTIVATION, NOTIFICATION) and warning explains it in Spanish (null when nothing failed).',
   })
   @ApiResponse({
     status: 400,

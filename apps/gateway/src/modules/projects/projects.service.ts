@@ -541,7 +541,12 @@ export class ProjectsService implements OnModuleInit {
         details,
       });
     }
-    return { project: response.project };
+    // The change is saved even if work in other services failed afterwards
+    return {
+      project: response.project,
+      failedEffects: response.failedEffects ?? [],
+      warning: response.warning || null,
+    };
   }
 
   async changeToUnderReviewProject(projectId: number, actingUserId: number) {

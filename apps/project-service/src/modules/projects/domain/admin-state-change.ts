@@ -56,3 +56,32 @@ export class ProjectStateChangeBlockedError extends ConflictError {
     super(block.message);
   }
 }
+
+/**
+ * Work done after the state change is saved, in other services. Its failure does not undo
+ * the change: the answer lists it so the user knows what to retry.
+ * - TUTOR_ACTIVATION: Tutor role and invitations of the tutors when the project becomes APPROVED
+ * - NOTIFICATION: email of the new state to the pending participants (notify)
+ */
+export type AdminStateEffect = 'TUTOR_ACTIVATION' | 'NOTIFICATION';
+
+/** Spanish warning for the effects that failed, or null when none did. */
+export function failedEffectsWarning(
+  failed: readonly AdminStateEffect[],
+): string | null {
+  if (!failed.length) return null;
+  const parts: string[] = [];
+  if (failed.includes('TUTOR_ACTIVATION')) {
+    parts.push(
+      'no se pudo dar el rol de tutor ni enviar las invitaciones a los tutores (se reintenta aprobando de nuevo el proyecto)',
+    );
+  }
+  if (failed.includes('NOTIFICATION')) {
+    parts.push('no se pudieron enviar todos los correos a los integrantes');
+  }
+  return `El estado se cambió, pero ${parts.join(' y ')}.`;
+}
+
+/** The state changed after it was read: another change was saved first. */
+export const STATE_CHANGED_MEANWHILE =
+  'El estado del proyecto cambió mientras se aplicaba el cambio. Vuelve a cargar el proyecto e inténtalo de nuevo.';

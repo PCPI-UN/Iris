@@ -66,7 +66,12 @@ describe('PATCH /projects/:id/admin/state', () => {
 
   it('sends the change to project-service with notify and force false by default and returns the project', async () => {
     const project = { id: 4, state: 'UNDER_REVIEW' };
-    const { service, grpc } = buildService({ project, blocked: null });
+    const { service, grpc } = buildService({
+      project,
+      blocked: null,
+      failedEffects: [],
+      warning: '',
+    });
 
     await expect(
       service.adminChangeProjectState(
@@ -74,7 +79,7 @@ describe('PATCH /projects/:id/admin/state', () => {
         dto({ state: 'UNDER_REVIEW', reason: 'Aprobado por error' }),
         7,
       ),
-    ).resolves.toEqual({ project });
+    ).resolves.toEqual({ project, failedEffects: [], warning: null });
     expect(grpc.adminChangeProjectState).toHaveBeenCalledWith({
       id: 4,
       actingUserId: 7,
@@ -124,6 +129,30 @@ describe('PATCH /projects/:id/admin/state', () => {
         leavesApproved: true,
       },
       timestamp: expect.any(String) as unknown,
+    });
+  });
+
+  it('answers 200 with the failed effects and the warning when work after the change failed', async () => {
+    const project = { id: 4, state: 'APPROVED' };
+    const warning =
+      'El estado se cambió, pero no se pudo dar el rol de tutor ni enviar las invitaciones a los tutores (se reintenta aprobando de nuevo el proyecto).';
+    const { service } = buildService({
+      project,
+      blocked: null,
+      failedEffects: ['TUTOR_ACTIVATION'],
+      warning,
+    });
+
+    await expect(
+      service.adminChangeProjectState(
+        4,
+        dto({ state: 'APPROVED', reason: 'Aprobado por error' }),
+        7,
+      ),
+    ).resolves.toEqual({
+      project,
+      failedEffects: ['TUTOR_ACTIVATION'],
+      warning,
     });
   });
 });
