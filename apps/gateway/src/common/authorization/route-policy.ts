@@ -14,7 +14,7 @@
  * - `permission`: the permission(s) required; roles that hold them are in the auth-service
  *   migrations (Admin passes every check).
  *
- * There is no "pending" value: every endpoint has a decision (ClickUp 1dfnv12c650).
+ * There is no "pending" value: every endpoint has a decision.
  */
 export type RouteAccess =
   | { access: 'public' }
@@ -256,12 +256,12 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'PATCH /projects/reassign-juror': { permission: ['manage:events'] },
   // modules/reports/reports.controller.ts
   'GET /events/:eventId/my-project/report': {
-    access: 'session',
-    why: "report of the caller's own project, only once the admin publishes the results",
+    access: 'owner',
+    why: "EvaluationReportService (gateway): report of the caller's own project, only once the admin publishes the results",
   },
   'GET /events/:eventId/reports/evaluation': {
-    access: 'session',
-    why: 'the service checks read:grades (whole category) or read:academic_projects (only the projects in scope, once published); anyone else gets 403',
+    access: 'owner',
+    why: 'EvaluationReportService (gateway) checks read:grades (whole category) or read:academic_projects (only the projects in scope, once published); anyone else gets 403',
   },
   // modules/terms/terms.controller.ts
   'GET /terms': { permission: ['read:events'] },
