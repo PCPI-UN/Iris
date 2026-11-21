@@ -195,6 +195,32 @@ describe('ExecuteJurorImportUC', () => {
     expect(result.totals).toMatchObject({ assigned: 1, errors: 2, jurors: 1 });
   });
 
+  it('assigns a juror whose invitation failed but who is already in the event', async () => {
+    // e.g. the juror accepted an earlier invitation while the import was running
+    preview.execute.mockResolvedValue(
+      previewOf([assign(5, 'laura@x.co', 'EVENT_JUROR', { userId: 13 })]),
+    );
+
+    const result = await uc.execute({
+      eventId: EVENT_ID,
+      rows: ROWS,
+      failedInvitations: [
+        {
+          email: 'laura@x.co',
+          message: 'El usuario ya aceptó una invitación para este evento',
+        },
+      ],
+    });
+
+    expect(repo.createAssignments.mock.calls[0][0]).toEqual([
+      expect.objectContaining({ projectId: 105 }),
+    ]);
+    expect(result.rows[0]).toMatchObject({
+      outcome: 'ASSIGN',
+      message: 'Asignado.',
+    });
+  });
+
   it('does not assign a juror who still has no account', async () => {
     preview.execute.mockResolvedValue(
       previewOf([assign(5, 'nuevo@x.co', 'NEW_USER')]),

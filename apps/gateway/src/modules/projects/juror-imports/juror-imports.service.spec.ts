@@ -1,9 +1,12 @@
 import { BadRequestException } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
 import * as ExcelJS from 'exceljs';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { JurorImportsService } from './juror-imports.service';
-import { InvitationsService } from '../../invitations/invitations.service';
+import {
+  InvitationsService,
+  JurorInvitationsResult,
+} from '../../invitations/invitations.service';
 
 async function template(): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
@@ -266,8 +269,17 @@ describe('JurorImportsService.execute', () => {
   let previewJurorImport: jest.Mock;
   let executeJurorImport: jest.Mock;
   let getEvent: jest.Mock;
-  let inviteJurorToEvent: jest.Mock;
+  let inviteJurorsToEvent: jest.Mock;
   let service: JurorImportsService;
+
+  const invitationsResult = (
+    result: Partial<JurorInvitationsResult> = {},
+  ): JurorInvitationsResult => ({
+    sent: ['ana@x.co', 'laura@x.co'],
+    reused: [],
+    failed: [],
+    ...result,
+  });
 
   beforeEach(() => {
     previewJurorImport = jest.fn().mockReturnValue(of(PREVIEW));
@@ -275,46 +287,43 @@ describe('JurorImportsService.execute', () => {
     getEvent = jest
       .fn()
       .mockReturnValue(of({ event: { eventType: 'COMPETENCIA' } }));
-    inviteJurorToEvent = jest.fn().mockResolvedValue({});
+    inviteJurorsToEvent = jest.fn().mockResolvedValue(invitationsResult());
     service = new JurorImportsService(
       {
         getService: () => ({ previewJurorImport, executeJurorImport }),
       } as unknown as ClientGrpc,
       { getService: () => ({ getEvent }) } as unknown as ClientGrpc,
-      { inviteJurorToEvent } as unknown as InvitationsService,
+      { inviteJurorsToEvent } as unknown as InvitationsService,
     );
     service.onModuleInit();
   });
 
-  it('invites once each juror who is not in the event yet, with the name of the sheet', async () => {
+  it('invites in one batch each juror who is not in the event yet, with the name of the sheet', async () => {
     await service.execute(10, await sheet(FILE), 99);
 
-    expect(inviteJurorToEvent).toHaveBeenCalledTimes(2);
-    expect(inviteJurorToEvent).toHaveBeenCalledWith(
+    expect(inviteJurorsToEvent).toHaveBeenCalledTimes(1);
+    expect(inviteJurorsToEvent).toHaveBeenCalledWith(
       10,
-      {
-        email: 'ana@x.co',
-        firstName: 'Ana',
-        lastName: 'Pérez',
-        eventType: 'Competition',
-      },
-      99,
-    );
-    expect(inviteJurorToEvent).toHaveBeenCalledWith(
-      10,
-      {
-        email: 'laura@x.co',
-        firstName: 'Laura',
-        lastName: undefined,
-        eventType: 'Competition',
-      },
+      'Competition',
+      [
+        {
+          email: 'ana@x.co',
+          firstName: 'Ana',
+          lastName: 'Pérez',
+          isNewUser: true,
+        },
+        { email: 'laura@x.co', firstName: 'Laura', isNewUser: false },
+      ],
       99,
     );
   });
 
   it('assigns after inviting, sending the same rows of the file', async () => {
     const order: string[] = [];
-    inviteJurorToEvent.mockImplementation(async () => order.push('invite'));
+    inviteJurorsToEvent.mockImplementation(() => {
+      order.push('invite');
+      return Promise.resolve(invitationsResult());
+    });
     executeJurorImport.mockImplementation(() => {
       order.push('execute');
       return of(EXECUTION);
@@ -322,7 +331,7 @@ describe('JurorImportsService.execute', () => {
 
     await service.execute(10, await sheet(FILE), 99);
 
-    expect(order).toEqual(['invite', 'invite', 'execute']);
+    expect(order).toEqual(['invite', 'execute']);
     const request = executeJurorImport.mock.calls[0][0];
     expect(request.eventId).toBe(10);
     expect(request.failedInvitations).toEqual([]);
@@ -345,29 +354,79 @@ describe('JurorImportsService.execute', () => {
       errors: 0,
       jurors: 3,
       invitationsSent: 2,
+      invitationsReused: 0,
+      newUsers: 1,
+    });
+  });
+
+  it('counts apart the pending invitations that were reused: no email was sent to them', async () => {
+    inviteJurorsToEvent.mockResolvedValue(
+      invitationsResult({ sent: ['ana@x.co'], reused: ['laura@x.co'] }),
+    );
+
+    const result = await service.execute(10, await sheet(FILE), 99);
+
+    expect(result.totals).toMatchObject({
+      invitationsSent: 1,
+      invitationsReused: 1,
       newUsers: 1,
     });
   });
 
   it('reports the jurors whose invitation failed to project-service and assigns the rest', async () => {
-    inviteJurorToEvent.mockImplementation(async (_eventId, dto) => {
-      if (dto.email === 'laura@x.co') {
-        throw {
-          code: 6,
-          details: 'El usuario ya aceptó una invitación para este evento',
-        };
-      }
-    });
-
-    const result = await service.execute(10, await sheet(FILE), 99);
-
-    expect(executeJurorImport.mock.calls[0][0].failedInvitations).toEqual([
+    const failed = [
       {
         email: 'laura@x.co',
         message: 'El usuario ya aceptó una invitación para este evento',
       },
-    ]);
+    ];
+    inviteJurorsToEvent.mockResolvedValue(
+      invitationsResult({ sent: ['ana@x.co'], failed }),
+    );
+
+    const result = await service.execute(10, await sheet(FILE), 99);
+
+    expect(executeJurorImport.mock.calls[0][0].failedInvitations).toEqual(
+      failed,
+    );
     expect(result.totals).toMatchObject({ invitationsSent: 1, newUsers: 1 });
+  });
+
+  it('lists the jurors already invited when the assignment is refused after inviting', async () => {
+    executeJurorImport.mockReturnValue(
+      throwError(() => ({
+        code: 9,
+        details: 'No se puede ejecutar la asignación. El evento está inactivo.',
+      })),
+    );
+
+    const error = await service
+      .execute(10, await sheet(FILE), 99)
+      .catch((e: BadRequestException) => e);
+
+    expect(error).toBeInstanceOf(BadRequestException);
+    expect((error as BadRequestException).getResponse()).toEqual({
+      message:
+        'No se puede ejecutar la asignación. El evento está inactivo. ' +
+        'Ya se envió la invitación al evento a 2 jurado(s). ' +
+        'Puede volver a ejecutar el archivo: no se repiten las invitaciones ni las asignaciones.',
+      invitedJurors: ['ana@x.co', 'laura@x.co'],
+    });
+  });
+
+  it('keeps the error of project-service when nobody was invited', async () => {
+    const refusal = {
+      code: 9,
+      details: 'No se puede ejecutar la asignación. El evento está inactivo.',
+    };
+    inviteJurorsToEvent.mockResolvedValue(
+      invitationsResult({ sent: [], reused: ['ana@x.co', 'laura@x.co'] }),
+    );
+    executeJurorImport.mockReturnValue(throwError(() => refusal));
+
+    await expect(service.execute(10, await sheet(FILE), 99)).rejects.toBe(
+      refusal,
+    );
   });
 
   it('does nothing with a file that cannot be confirmed and answers with its preview', async () => {
@@ -391,7 +450,7 @@ describe('JurorImportsService.execute', () => {
         rows: [{ rowNumber: 5, outcome: 'ERROR' }],
       },
     });
-    expect(inviteJurorToEvent).not.toHaveBeenCalled();
+    expect(inviteJurorsToEvent).not.toHaveBeenCalled();
     expect(executeJurorImport).not.toHaveBeenCalled();
   });
 
@@ -406,7 +465,7 @@ describe('JurorImportsService.execute', () => {
     await service.execute(10, await sheet(FILE), 99);
 
     expect(getEvent).not.toHaveBeenCalled();
-    expect(inviteJurorToEvent).not.toHaveBeenCalled();
+    expect(inviteJurorsToEvent).not.toHaveBeenCalled();
     expect(executeJurorImport).toHaveBeenCalled();
   });
 

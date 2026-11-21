@@ -105,7 +105,9 @@ export class ExecuteJurorImportUC {
     failed: Map<string, string>,
   ): JurorImportRowResult {
     if (row.outcome !== 'ASSIGN') return row;
-    const failure = failed.get(row.email);
+    // A juror who joined the event meanwhile (e.g. accepted an earlier invitation) needs no invitation
+    const failure =
+      row.userStatus === 'EVENT_JUROR' ? undefined : failed.get(row.email);
     if (failure !== undefined) {
       return {
         ...row,

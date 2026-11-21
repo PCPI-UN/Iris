@@ -123,12 +123,15 @@ export class JurorImportsController {
     status: 200,
     description:
       'Summary: result per row (ASSIGN assigned now, SKIP already assigned, ERROR not assigned, with a message in Spanish) ' +
-      'and totals (rows, assigned, skipped, errors, jurors, invitationsSent, newUsers)',
+      'and totals (rows, assigned, skipped, errors, jurors, invitationsSent, invitationsReused, newUsers). ' +
+      'invitationsReused counts jurors who already had a pending invitation: no new email was sent to them.',
   })
   @ApiResponse({
     status: 400,
     description:
-      'Missing or invalid file, or a preview that cannot be confirmed (body: message and preview)',
+      'Missing or invalid file, or a preview that cannot be confirmed (body: message and preview). ' +
+      'If the assignment is refused after the invitations went out (the event or a project changed meanwhile), ' +
+      'the body is message and invitedJurors (emails already invited); running the file again is safe.',
   })
   @ApiResponse({ status: 404, description: 'Event not found' })
   @ApiResponse({ status: 413, description: 'File larger than the limit' })

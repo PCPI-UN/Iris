@@ -9,7 +9,6 @@ import { firstValueFrom } from 'rxjs';
 import {
   ExecuteJurorImportResponse,
   JurorImportExecutionTotals,
-  JurorImportFailedInvitation,
   JurorImportRow,
   JurorImportRowResult,
   JurorImportTotals,
@@ -21,7 +20,12 @@ import {
   EVENT_SERVICE_NAME,
   EventServiceClient,
 } from '@app/common/generated/event';
-import { InvitationsService } from '../../invitations/invitations.service';
+import { status } from '@grpc/grpc-js';
+import {
+  InvitationsService,
+  JurorInvitationsResult,
+  JurorInvitee,
+} from '../../invitations/invitations.service';
 import { parseJurorImportSheet } from './parse-juror-import-sheet';
 import { buildJurorImportTemplate } from './build-juror-import-template';
 
@@ -51,52 +55,23 @@ export interface JurorImportExecutionResult {
   /** ASSIGN: assigned now, SKIP: already assigned, ERROR: not assigned */
   rows: JurorImportPreviewRow[];
   totals: JurorImportExecutionTotals & {
-    /** Jurors invited to the event, new accounts included */
+    /** Invitation emails sent now, new accounts included */
     invitationsSent: number;
+    /** Jurors not in the event who already had a pending invitation: no new email */
+    invitationsReused: number;
     /** Invited jurors who had no account: it was created with the invitation */
     newUsers: number;
   };
 }
 
 const UNSET_USER_STATUS = 'JUROR_IMPORT_USER_STATUS_UNSPECIFIED';
-const INVITATION_CONCURRENCY = 5;
 
-interface JurorToInvite {
-  email: string;
-  firstName: string;
-  lastName?: string;
+interface JurorToInvite extends JurorInvitee {
   isNewUser: boolean;
 }
 
-/** The message of a failed gRPC call: RpcException, gRPC error or plain Error */
-const grpcErrorMessage = (error: unknown): string => {
-  const e = error as {
-    details?: string;
-    message?: string;
-    getError?: () => unknown;
-  };
-  const rpc = e?.getError?.() as { message?: string } | string | undefined;
-  return (
-    (typeof rpc === 'string' ? rpc : rpc?.message) ||
-    e?.details ||
-    e?.message ||
-    'error inesperado'
-  );
-};
-
-async function forEachWithConcurrency<T>(
-  items: T[],
-  limit: number,
-  fn: (item: T) => Promise<void>,
-): Promise<void> {
-  let next = 0;
-  const worker = async () => {
-    while (next < items.length) await fn(items[next++]);
-  };
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, worker),
-  );
-}
+const isFailedPrecondition = (error: unknown): boolean =>
+  (error as { code?: number })?.code === status.FAILED_PRECONDITION;
 
 /**
  * The project client loads enums as strings, fills defaults and adds a virtual
@@ -153,7 +128,8 @@ export class JurorImportsService implements OnModuleInit {
    * the event the jurors who are not in it yet (creating the account of new ones) and assigns every
    * juror to their project. A file that cannot be confirmed assigns nothing and is answered with
    * its preview. A juror whose invitation fails is reported as an error and not assigned; the rest
-   * are assigned anyway.
+   * are assigned anyway. If project-service refuses the assignment after the invitations went out
+   * (the event or a project changed meanwhile), the error lists the jurors already invited.
    */
   async execute(
     eventId: number,
@@ -171,47 +147,41 @@ export class JurorImportsService implements OnModuleInit {
     }
 
     const jurors = this.jurorsToInvite(preview, rows);
-    const failedInvitations: JurorImportFailedInvitation[] = [];
-    if (jurors.length) {
-      const eventType = await this.eventType(eventId);
-      await forEachWithConcurrency(
-        jurors,
-        INVITATION_CONCURRENCY,
-        async (juror) => {
-          try {
-            await this.invitations.inviteJurorToEvent(
-              eventId,
-              {
-                email: juror.email,
-                firstName: juror.firstName,
-                lastName: juror.lastName,
-                eventType,
-              },
-              invitedByUserId,
-            );
-          } catch (error) {
-            failedInvitations.push({
-              email: juror.email,
-              message: grpcErrorMessage(error),
-            });
-          }
-        },
+    const invitations: JurorInvitationsResult = jurors.length
+      ? await this.invitations.inviteJurorsToEvent(
+          eventId,
+          await this.eventType(eventId),
+          jurors,
+          invitedByUserId,
+        )
+      : { sent: [], reused: [], failed: [] };
+
+    let res: ExecuteJurorImportResponse;
+    try {
+      res = await firstValueFrom(
+        this.projectsService.executeJurorImport({
+          eventId,
+          rows,
+          failedInvitations: invitations.failed,
+        }),
       );
+    } catch (error) {
+      if (!isFailedPrecondition(error) || !invitations.sent.length) throw error;
+      throw new BadRequestException({
+        message:
+          `${(error as { details?: string }).details ?? 'No se puede ejecutar la asignación.'} ` +
+          `Ya se envió la invitación al evento a ${invitations.sent.length} jurado(s). ` +
+          'Puede volver a ejecutar el archivo: no se repiten las invitaciones ni las asignaciones.',
+        invitedJurors: invitations.sent,
+      });
     }
 
-    const res: ExecuteJurorImportResponse = await firstValueFrom(
-      this.projectsService.executeJurorImport({
-        eventId,
-        rows,
-        failedInvitations,
-      }),
-    );
-
-    const failed = new Set(failedInvitations.map((f) => f.email));
-    const invited = jurors.filter((j) => !failed.has(j.email));
     // Once invited a new juror has an account: still tell the front it was created now
+    const sent = new Set(invitations.sent);
     const newUsers = new Set(
-      invited.filter((j) => j.isNewUser).map((j) => j.email),
+      jurors
+        .filter((j) => j.isNewUser && sent.has(j.email))
+        .map((j) => j.email),
     );
     return {
       rows: (res.rows ?? [])
@@ -223,7 +193,8 @@ export class JurorImportsService implements OnModuleInit {
         ),
       totals: {
         ...(res.totals as JurorImportExecutionTotals),
-        invitationsSent: invited.length,
+        invitationsSent: invitations.sent.length,
+        invitationsReused: invitations.reused.length,
         newUsers: newUsers.size,
       },
     };
