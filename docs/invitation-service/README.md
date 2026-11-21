@@ -48,14 +48,14 @@ Accepting an invitation grants its roles, so creating one is as sensitive as gra
 
 | Target | The inviter needs | Roles the invitation may carry |
 | --- | --- | --- |
-| `PLATFORM` | `create:invitations`, and not inviting their own email | Platform roles that `auth-service` lets the inviter grant (`CheckPlatformRoleGrant`): `Admin` and `FacultyAdmin` only with `manage:admins` |
+| `PLATFORM` | `create:invitations`, and not inviting their own email | Platform roles that `auth-service` lets the inviter grant (`CheckPlatformRoleGrant`): `Admin` and `FacultyAdmin` only with `manage:admins`. Without roles the invitee joins with the base role only |
 | `EVENT` | `manage:events` | Event roles (`event-service` rejects the rest on acceptance) |
 | `PROJECT` | To be a participant of the project, or `manage:events` (`project-service` `CheckProjectAccess`) | `Participant` only |
 | `PROJECT_TUTOR` | Same as `PROJECT` | `Tutor` only |
 
 Errors from `auth-service` and `project-service` keep their gRPC code (403, 404). Invitations that services create themselves (participants when a project is submitted, tutors when it is approved, jurors through `POST /invitations/events/:eventId/jurors`) do not go through this check.
 
-When a `PLATFORM` invitation is accepted, `AssignPlatformRoles` receives the inviter as `actorUserId`, so `auth-service` applies the administrator rules again: an invitation created before these rules cannot give `Admin` to someone the inviter could not make Admin.
+When a `PLATFORM` invitation with roles is accepted, the grant is checked again with the inviter as actor (`CheckPlatformRoleGrant`) before the account is activated. If the inviter can no longer give those roles (the permission was removed, or the invitation asks for more than the inviter could ever give), the acceptance fails with `FAILED_PRECONDITION`, the account stays as it was and the invitee needs a new invitation. `AssignPlatformRoles` also receives the inviter as `actorUserId`.
 
 ## Dependencies
 

@@ -54,6 +54,7 @@ describe('AcceptInvitationUseCase', () => {
       updateUser: jest.fn(),
       assignPlatformRoles: jest.fn(),
       getRolesByIds: jest.fn(),
+      checkPlatformRoleGrant: jest.fn(),
     };
 
     const mockEventService = {
@@ -162,6 +163,54 @@ describe('AcceptInvitationUseCase', () => {
       });
       expect(invitation.status).toBe(InvitationStatus.ACCEPTED);
       expect(invitationRepository.save).toHaveBeenCalledWith(invitation);
+    });
+
+    it('checks the grant before activating and leaves the account untouched when it is refused', async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 7);
+      const invitation = new Invitation(
+        'inv-123',
+        'token-abc',
+        'user@example.com',
+        InvitationTargetType.PLATFORM,
+        1,
+        InvitationStatus.PENDING,
+        futureDate,
+        100,
+        200,
+        new Date(),
+        new Date(),
+      );
+      invitationRepository.findByToken.mockResolvedValue(invitation);
+      invitationRoleRepository.findByInvitationId.mockResolvedValue([
+        new InvitationRole('inv-123', 1),
+      ]);
+      (authService.getUser as jest.Mock).mockResolvedValue({
+        status: 'PENDING',
+      });
+      // the inviter (100) no longer holds manage:admins
+      const checkPlatformRoleGrant = (
+        authService as unknown as { checkPlatformRoleGrant: jest.Mock }
+      ).checkPlatformRoleGrant;
+      checkPlatformRoleGrant.mockRejectedValue({
+        code: status.PERMISSION_DENIED,
+        details: 'admin only',
+      });
+
+      await expect(
+        useCase.execute({ token: 'token-abc', password: 'securePassword123' }),
+      ).rejects.toMatchObject({
+        error: expect.objectContaining({ code: status.FAILED_PRECONDITION }),
+      });
+
+      expect(checkPlatformRoleGrant).toHaveBeenCalledWith({
+        actorUserId: 100,
+        roleIds: [1],
+        targetUserId: 200,
+      });
+      expect(authService.activateUser).not.toHaveBeenCalled();
+      expect(authService.assignPlatformRoles).not.toHaveBeenCalled();
+      expect(invitationRepository.save).not.toHaveBeenCalled();
     });
 
     it('should accept platform invitation without password (existing user)', async () => {
