@@ -20,16 +20,18 @@ describe('GET /projects/:id/change-log', () => {
               email: 'l@uni.edu',
             },
           ],
-          // Placeholder returned when auth-service cannot find the user
+          // Placeholder returned when auth-service fails or cannot find the user
           [8, { id: 'user-8', firstName: '', lastName: '', email: '' }],
         ]),
       ),
     };
+    const logger = { warn: jest.fn() };
     Object.assign(service, {
       projectsService: grpc,
       fetchUserProfilesUseCase: fetchUserProfiles,
+      logger,
     });
-    return { service, grpc, fetchUserProfiles };
+    return { service, grpc, fetchUserProfiles, logger };
   };
 
   it('requires manage:projects', () => {
@@ -89,6 +91,28 @@ describe('GET /projects/:id/change-log', () => {
         reason: null,
       },
     ]);
+  });
+
+  it('logs the entry id and returns empty before/after when the JSON is invalid', async () => {
+    const { service, logger } = buildService([
+      {
+        id: 5,
+        projectId: 4,
+        actorUserId: 7,
+        action: 'INFO',
+        beforeJson: '{not json',
+        afterJson: '["not an object"]',
+        createdAt: '2026-11-20T10:00:00.000Z',
+      },
+    ]);
+
+    const result = await service.listProjectChangeLog(4);
+
+    expect(result.entries[0]).toMatchObject({ id: 5, before: {}, after: {} });
+    expect(logger.warn).toHaveBeenCalledTimes(2);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Change log entry 5 of project 4'),
+    );
   });
 
   it('returns an empty list for a project without changes', async () => {

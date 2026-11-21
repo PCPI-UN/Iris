@@ -19,7 +19,8 @@ export class ProjectChangeLogActorDto {
     example: 'Laura Gómez',
     nullable: true,
     type: String,
-    description: 'Null when the account no longer exists in auth-service',
+    description:
+      'Null when the name could not be resolved (account deleted or auth-service failed)',
   })
   name: string | null;
 }

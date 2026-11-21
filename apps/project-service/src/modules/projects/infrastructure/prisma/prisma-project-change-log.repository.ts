@@ -22,25 +22,25 @@ const toEntry = (row: ProjectChangeLog): ProjectChangeLogEntry => ({
   createdAt: row.createdAt,
 });
 
+/**
+ * Data of a project_change_log row, for the repository methods that make an administrative
+ * edit: they add `prisma.projectChangeLog.create({ data })` to the same $transaction as the
+ * edit (as replaceTutors groups its writes), so the edit and its entry are saved together.
+ */
+export const toProjectChangeLogData = (
+  entry: NewProjectChangeLogEntry,
+): Prisma.ProjectChangeLogUncheckedCreateInput => ({
+  projectId: entry.projectId,
+  actorUserId: entry.actorUserId,
+  action: entry.action,
+  before: entry.before as Prisma.InputJsonObject,
+  after: entry.after as Prisma.InputJsonObject,
+  reason: entry.reason,
+});
+
 @Injectable()
 export class PrismaProjectChangeLogRepository implements ProjectChangeLogRepository {
   constructor(private readonly prisma: PrismaService) {}
-
-  async create(
-    entry: NewProjectChangeLogEntry,
-  ): Promise<ProjectChangeLogEntry> {
-    const row = await this.prisma.projectChangeLog.create({
-      data: {
-        projectId: entry.projectId,
-        actorUserId: entry.actorUserId,
-        action: entry.action,
-        before: entry.before as Prisma.InputJsonObject,
-        after: entry.after as Prisma.InputJsonObject,
-        reason: entry.reason,
-      },
-    });
-    return toEntry(row);
-  }
 
   async listByProject(projectId: number): Promise<ProjectChangeLogEntry[]> {
     const rows = await this.prisma.projectChangeLog.findMany({

@@ -799,15 +799,22 @@ export class ProjectsService implements OnModuleInit {
     const profiles = await this.fetchUserProfilesUseCase.execute(
       new Set(entries.map((entry) => entry.actorUserId)),
     );
-    const parseValues = (json: string): Record<string, unknown> => {
+    const parseValues = (
+      entryId: number,
+      json: string,
+    ): Record<string, unknown> => {
       try {
         const value: unknown = JSON.parse(json || '{}');
-        return value && typeof value === 'object' && !Array.isArray(value)
-          ? (value as Record<string, unknown>)
-          : {};
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          return value as Record<string, unknown>;
+        }
       } catch {
-        return {};
+        // logged below, like a value that is not an object
       }
+      this.logger.warn(
+        `Change log entry ${entryId} of project ${projectId} has invalid before/after JSON`,
+      );
+      return {};
     };
     return {
       entries: entries.map((entry) => {
@@ -819,8 +826,8 @@ export class ProjectsService implements OnModuleInit {
           action: entry.action as ProjectChangeAction,
           actor: { id: entry.actorUserId, name: name || null },
           createdAt: entry.createdAt,
-          before: parseValues(entry.beforeJson),
-          after: parseValues(entry.afterJson),
+          before: parseValues(entry.id, entry.beforeJson),
+          after: parseValues(entry.id, entry.afterJson),
           reason: entry.reason ?? null,
         };
       }),

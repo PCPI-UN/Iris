@@ -1,4 +1,7 @@
-import { PrismaProjectChangeLogRepository } from '../prisma-project-change-log.repository';
+import {
+  PrismaProjectChangeLogRepository,
+  toProjectChangeLogData,
+} from '../prisma-project-change-log.repository';
 
 describe('PrismaProjectChangeLogRepository', () => {
   const row = {
@@ -27,27 +30,26 @@ describe('PrismaProjectChangeLogRepository', () => {
     });
     expect(result).toEqual([row]);
   });
+});
 
-  it('creates an entry and maps it back', async () => {
-    const prisma = {
-      projectChangeLog: { create: jest.fn().mockResolvedValue(row) },
-    };
-    const entry = {
-      projectId: row.projectId,
-      actorUserId: row.actorUserId,
-      action: row.action,
-      before: row.before,
-      after: row.after,
-      reason: row.reason,
-    };
-
-    const result = await new PrismaProjectChangeLogRepository(
-      prisma as any,
-    ).create(entry as any);
-
-    expect(prisma.projectChangeLog.create).toHaveBeenCalledWith({
-      data: entry,
+describe('toProjectChangeLogData', () => {
+  it('maps a new entry to the data of a project_change_log row', () => {
+    expect(
+      toProjectChangeLogData({
+        projectId: 4,
+        actorUserId: 1,
+        action: 'TUTORS',
+        before: { tutorUserIds: [3] },
+        after: { tutorUserIds: [3, 5] },
+        reason: 'Faltaba un tutor',
+      }),
+    ).toEqual({
+      projectId: 4,
+      actorUserId: 1,
+      action: 'TUTORS',
+      before: { tutorUserIds: [3] },
+      after: { tutorUserIds: [3, 5] },
+      reason: 'Faltaba un tutor',
     });
-    expect(result).toEqual(row);
   });
 });

@@ -241,7 +241,7 @@ Tutors typed in at submission who have no account yet; marked `JOINED` when thei
 
 ### `project_change_log` (`ProjectChangeLog`)
 
-Administrative corrections of a project (state, data, category, participants, tutors, documents): who made them, when, the values before and after, and why. Written by the administrative edit endpoints; read through `GET /projects/:id/change-log`, most recent first.
+Administrative corrections of a project (state, data, category, participants, tutors, documents): who made them, when, the values before and after, and why. Each row is inserted in the same transaction as the edit it describes; read through `GET /projects/:id/change-log`, most recent first.
 
 | Column | Type | Null | Default / constraint |
 | --- | --- | --- | --- |

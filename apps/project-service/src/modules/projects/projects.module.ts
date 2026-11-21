@@ -57,7 +57,6 @@ import { AUTH_SERVICE_PORT } from './application/ports/auth-service.port';
 import { AuthServiceAdapter } from './infrastructure/grpc-client/auth-service.adapter';
 import { PROJECT_CHANGE_LOG_REPOSITORY } from './domain/repositories/project-change-log.repository';
 import { PrismaProjectChangeLogRepository } from './infrastructure/prisma/prisma-project-change-log.repository';
-import { ProjectChangeLogService } from './application/services/project-change-log.service';
 import { ListProjectChangeLogUC } from './application/use-cases/list-project-change-log.uc';
 
 @Module({
@@ -75,7 +74,6 @@ import { ListProjectChangeLogUC } from './application/use-cases/list-project-cha
       provide: PROJECT_CHANGE_LOG_REPOSITORY,
       useClass: PrismaProjectChangeLogRepository,
     },
-    ProjectChangeLogService,
     ListProjectChangeLogUC,
 
     CreateProjectUC,
