@@ -95,6 +95,11 @@ spec:
                 configMapKeyRef:
                   name: pcpi-config
                   key: EVENT_SERVICE_URL
+            - name: EVALUATION_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: EVALUATION_SERVICE_URL
             - name: INVITATION_SERVICE_URL
               valueFrom:
                 configMapKeyRef:

@@ -73,6 +73,9 @@ import { GetJurorImportTemplateUC } from '../../application/use-cases/get-juror-
 import { PreviewJurorImportUC } from '../../application/use-cases/preview-juror-import.uc';
 import { ExecuteJurorImportUC } from '../../application/use-cases/execute-juror-import.uc';
 import { ListProjectChangeLogUC } from '../../application/use-cases/list-project-change-log.uc';
+import { AdminChangeProjectStateUC } from '../../application/use-cases/admin-change-project-state.uc';
+import { ProjectApprovalEffects } from '../../application/services/project-approval-effects.service';
+import { ProjectStateChangeBlockedError } from '../../domain/admin-state-change';
 
 interface InvitationGrpcService {
   CreateInvitation(data: {
@@ -133,6 +136,8 @@ export class ProjectsController {
     private readonly getProjectInScopeUC: GetProjectInScopeUC,
     private readonly listEventIdsInScopeUC: ListEventIdsInScopeUC,
     private readonly listProjectChangeLogUC: ListProjectChangeLogUC,
+    private readonly adminChangeProjectStateUC: AdminChangeProjectStateUC,
+    private readonly approvalEffects: ProjectApprovalEffects,
     @Inject(INVITATION_SERVICE_NAME) private readonly client: ClientGrpc,
   ) {}
 
@@ -247,7 +252,7 @@ export class ProjectsController {
       eventType: req.eventType,
     });
     // Approving an approved project changes nothing, so approving again retries a failed activation
-    await this.setProjectTutorsUC.activate(req.id, req.eventType);
+    await this.approvalEffects.activateTutors(req.id, req.eventType);
     return { project: toProtoProject(updated) };
   }
 
@@ -730,5 +735,38 @@ export class ProjectsController {
   async listProjectChangeLogRpc(req: { projectId: number }) {
     const entries = await this.listProjectChangeLogUC.execute(req.projectId);
     return { entries: entries.map(toProtoProjectChangeLogEntry) };
+  }
+
+  @GrpcMethod('ProjectsService', 'AdminChangeProjectState')
+  async adminChangeProjectStateRpc(req: {
+    id: number;
+    actingUserId: number;
+    state?: number;
+    reason?: string;
+    notify?: boolean;
+    force?: boolean;
+  }) {
+    try {
+      const result = await this.adminChangeProjectStateUC.execute({
+        projectId: req.id,
+        actingUserId: req.actingUserId,
+        // 0 (unspecified) stays undefined: protoToState would read it as UNDER_REVIEW
+        state: req.state ? protoToState(req.state) : undefined,
+        reason: req.reason,
+        notify: req.notify === true,
+        force: req.force === true,
+      });
+      return {
+        project: toProtoProject(result.project),
+        failedEffects: result.failedEffects,
+        warning: result.warning ?? '',
+      };
+    } catch (error) {
+      // Nothing changed: the gateway answers 409 with the cause
+      if (error instanceof ProjectStateChangeBlockedError) {
+        return { blocked: error.block };
+      }
+      throw error;
+    }
   }
 }

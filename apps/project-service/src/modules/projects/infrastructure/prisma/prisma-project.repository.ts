@@ -197,6 +197,20 @@ export class PrismaProjectRepository implements ProjectRepository {
     })) as unknown as Project;
   }
 
+  async changeStateIfCurrent(
+    id: number,
+    from: ProjectState,
+    to: ProjectState,
+    reason: string | null,
+  ): Promise<Project | null> {
+    const { count } = await this.prisma.db.project.updateMany({
+      where: { id, state: from },
+      data: { state: to, reason },
+    });
+    if (!count) return null;
+    return this.prisma.db.project.findUnique({ where: { id } });
+  }
+
   async delete(id: number): Promise<void> {
     await this.prisma.db.project.delete({ where: { id } });
   }

@@ -66,6 +66,17 @@ export interface ProjectRepository {
   setProjectState(id: number, state: ProjectState): Promise<Project>;
   setProjectStateWithReason(id: number, state: ProjectState, reason?: string): Promise<Project>;
 
+  /**
+   * Sets the state and the reason (null clears it) only if the project is still in `from`.
+   * Returns null when its state is no longer `from`: another change got there first.
+   */
+  changeStateIfCurrent(
+    id: number,
+    from: ProjectState,
+    to: ProjectState,
+    reason: string | null,
+  ): Promise<Project | null>;
+
   delete(id: number): Promise<void>;
 
   addDocument(projectId: number, url: string, type: TypedDocument ): Promise<ProjectDocument>;
