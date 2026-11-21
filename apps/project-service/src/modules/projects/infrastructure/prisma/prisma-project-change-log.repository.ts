@@ -43,7 +43,7 @@ export class PrismaProjectChangeLogRepository implements ProjectChangeLogReposit
   constructor(private readonly prisma: PrismaService) {}
 
   async listByProject(projectId: number): Promise<ProjectChangeLogEntry[]> {
-    const rows = await this.prisma.projectChangeLog.findMany({
+    const rows = await this.prisma.db.projectChangeLog.findMany({
       where: { projectId },
       // id breaks ties between entries written in the same instant
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],

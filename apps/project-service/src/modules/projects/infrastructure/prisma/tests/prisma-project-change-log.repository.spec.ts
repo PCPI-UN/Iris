@@ -17,14 +17,16 @@ describe('PrismaProjectChangeLogRepository', () => {
 
   it('lists the entries of the project, most recent first', async () => {
     const prisma = {
-      projectChangeLog: { findMany: jest.fn().mockResolvedValue([row]) },
+      db: {
+        projectChangeLog: { findMany: jest.fn().mockResolvedValue([row]) },
+      },
     };
 
     const result = await new PrismaProjectChangeLogRepository(
       prisma as any,
     ).listByProject(4);
 
-    expect(prisma.projectChangeLog.findMany).toHaveBeenCalledWith({
+    expect(prisma.db.projectChangeLog.findMany).toHaveBeenCalledWith({
       where: { projectId: 4 },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });

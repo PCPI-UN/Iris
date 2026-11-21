@@ -17,7 +17,7 @@ export class CheckActiveSubmissionByEmailsUC {
 
     if (!normalized.length) return { hasConflict: false, conflictEmails: [] };
 
-    const rows = await this.prisma.pendingProjectParticipant.findMany({
+    const rows = await this.prisma.db.pendingProjectParticipant.findMany({
       where: {
         email: { in: normalized },
         project: {

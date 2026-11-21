@@ -82,7 +82,7 @@ export class PrismaProjectRepository implements ProjectRepository {
   constructor(private readonly prisma: PrismaService) { }
 
   async create(data: CreateProjectInput): Promise<Project> {
-    return this.prisma.project.create({
+    return this.prisma.db.project.create({
       data: {
         eventId: data.eventId,
         courseId: data.courseId,
@@ -97,7 +97,7 @@ export class PrismaProjectRepository implements ProjectRepository {
   }
 
   async findAcademicCourseId(termId: number, nrc: string): Promise<number | null> {
-    const course = await this.prisma.academicCourse.findUnique({
+    const course = await this.prisma.db.academicCourse.findUnique({
       where: { termId_nrc: { termId, nrc } },
       select: { id: true },
     });
@@ -105,22 +105,22 @@ export class PrismaProjectRepository implements ProjectRepository {
   }
 
   async findById(id: number): Promise<Project | null> {
-    return (await this.prisma.project.findUnique({ where: { id } })) as unknown as Project | null;
+    return (await this.prisma.db.project.findUnique({ where: { id } })) as unknown as Project | null;
   }
 
   async findManyByIds(ids: number[]): Promise<Project[]> {
     if (!ids.length) return [];
-    return (await this.prisma.project.findMany({ where: { id: { in: ids } } })) as unknown as Project[];
+    return (await this.prisma.db.project.findMany({ where: { id: { in: ids } } })) as unknown as Project[];
   }
 
   async findProject(eventId: number, courseId: number, name: string): Promise<Project | null> {
-    return (await this.prisma.project.findFirst({
+    return (await this.prisma.db.project.findFirst({
       where: { eventId, courseId, name },
     })) as unknown as Project | null;
   }
 
   async findProjectWithEvent(projectId: number): Promise<Project | null> {
-    return this.prisma.project.findUnique({
+    return this.prisma.db.project.findUnique({
       where: { id: projectId },
     });
   }
@@ -135,8 +135,8 @@ export class PrismaProjectRepository implements ProjectRepository {
       ...(opts?.state ? { state: opts.state } : {}),
     };
 
-    const [items, total] = await this.prisma.$transaction([
-      this.prisma.project.findMany({
+    const [items, total] = await Promise.all([
+      this.prisma.db.project.findMany({
         where,
         orderBy: { createdAt: 'desc' }, // camelCase
         skip: (currentPage - 1) * itemsPerPage,
@@ -147,14 +147,14 @@ export class PrismaProjectRepository implements ProjectRepository {
           pendingParticipants: true,
         },
       }),
-      this.prisma.project.count({ where }),
+      this.prisma.db.project.count({ where }),
     ]);
 
     return { items: items as unknown as Project[], total, currentPage, itemsPerPage };
   }
 
   async countAll(): Promise<number> {
-    return this.prisma.project.count();
+    return this.prisma.db.project.count();
   }
 
   async updateProject(input: {
@@ -174,21 +174,21 @@ export class PrismaProjectRepository implements ProjectRepository {
     if (input.courseId !== undefined) data.courseId = input.courseId;
     if (input.state !== undefined) data.state = input.state;
 
-    return (await this.prisma.project.update({
+    return (await this.prisma.db.project.update({
       where: { id: input.id },
       data,
     })) as unknown as Project;
   }
 
   async setProjectState(id: number, state: ProjectState): Promise<Project> {
-    return (await this.prisma.project.update({
+    return (await this.prisma.db.project.update({
       where: { id },
       data: { state },
     })) as unknown as Project;
   }
 
   async setProjectStateWithReason(id: number, state: ProjectState, reason?: string): Promise<Project> {
-    return (await this.prisma.project.update({
+    return (await this.prisma.db.project.update({
       where: { id },
       data: {
         state,
@@ -198,25 +198,25 @@ export class PrismaProjectRepository implements ProjectRepository {
   }
 
   async delete(id: number): Promise<void> {
-    await this.prisma.project.delete({ where: { id } });
+    await this.prisma.db.project.delete({ where: { id } });
   }
 
   async addDocument(projectId: number, url: string, type: TypedDocument): Promise<ProjectDocument> {
 
-    return (await this.prisma.projectDocument.create({
+    return (await this.prisma.db.projectDocument.create({
       data: { projectId, url, type },
     })) as unknown as ProjectDocument;
   }
 
   async listDocuments(projectId: number): Promise<ProjectDocument[]> {
-    return (await this.prisma.projectDocument.findMany({
+    return (await this.prisma.db.projectDocument.findMany({
       where: { projectId },
       orderBy: { createdAt: 'desc' },
     })) as unknown as ProjectDocument[];
   }
 
   async upsertAssignment(projectId: number, juror: JurorKey): Promise<void> {
-    await this.prisma.projectAssignment.upsert({
+    await this.prisma.db.projectAssignment.upsert({
       where: {
         projectId_memberUserId_memberEventId_memberRoleId: {
           projectId,
@@ -243,7 +243,7 @@ export class PrismaProjectRepository implements ProjectRepository {
       memberRoleId: juror.memberRoleId,
     }));
 
-    await this.prisma.projectAssignment.createMany({
+    await this.prisma.db.projectAssignment.createMany({
       data,
       skipDuplicates: true, // Skip if assignment already exists for efficient insertion!
     });
@@ -254,7 +254,7 @@ export class PrismaProjectRepository implements ProjectRepository {
   ): Promise<number> {
     if (!assignments.length) return 0;
     // One INSERT: all the assignments are written or none
-    const { count } = await this.prisma.projectAssignment.createMany({
+    const { count } = await this.prisma.db.projectAssignment.createMany({
       data: assignments.map(({ projectId, juror }) => ({
         projectId,
         memberUserId: juror.memberUserId,
@@ -267,7 +267,7 @@ export class PrismaProjectRepository implements ProjectRepository {
   }
 
   async removeAssignment(projectId: number, juror: JurorKey): Promise<boolean> {
-    const res = await this.prisma.projectAssignment.deleteMany({
+    const res = await this.prisma.db.projectAssignment.deleteMany({
       where: {
         projectId,
         memberUserId: juror.memberUserId,
@@ -279,7 +279,7 @@ export class PrismaProjectRepository implements ProjectRepository {
   }
 
   async listAssignments(projectId: number): Promise<JurorKey[]> {
-    const rows = await this.prisma.projectAssignment.findMany({
+    const rows = await this.prisma.db.projectAssignment.findMany({
       where: { projectId },
       select: { memberUserId: true, memberEventId: true, memberRoleId: true },
       orderBy: [{ memberUserId: 'asc' }, { memberRoleId: 'asc' }],
@@ -292,14 +292,14 @@ export class PrismaProjectRepository implements ProjectRepository {
   }
 
   isUserParticipant(projectId: number, userId: number): Promise<boolean> {
-    return this.prisma.projectParticipant.count({
+    return this.prisma.db.projectParticipant.count({
       where: { projectId, userId },
     }).then(count => count > 0);
   }
 
   async addParticipant(input: { projectId: number; userId: number; studentCode: string }): Promise<ProjectParticipant> {
     // Idempotente: si ya existe (PK compuesta), actualiza solo studentCode cuando venga
-    return (await this.prisma.projectParticipant.upsert({
+    return (await this.prisma.db.projectParticipant.upsert({
       where: {
         userId_projectId: { userId: input.userId, projectId: input.projectId }, // Prisma crea este where único por la PK compuesta
       },
@@ -315,7 +315,7 @@ export class PrismaProjectRepository implements ProjectRepository {
   }
 
   async listParticipants(projectId: number): Promise<ProjectParticipant[]> {
-    return (await this.prisma.projectParticipant.findMany({
+    return (await this.prisma.db.projectParticipant.findMany({
       where: { projectId },
       orderBy: { userId: 'asc' },
       select: { userId: true, projectId: true, studentCode: true },
@@ -323,7 +323,7 @@ export class PrismaProjectRepository implements ProjectRepository {
   }
 
   async addPendingParticipant(input: AddPendingParticipantInput): Promise<PendingProjectParticipant> {
-    const existing = await this.prisma.pendingProjectParticipant.findFirst({
+    const existing = await this.prisma.db.pendingProjectParticipant.findFirst({
       where: {
         projectId: input.projectId,
         email: input.email,
@@ -333,7 +333,7 @@ export class PrismaProjectRepository implements ProjectRepository {
     // console.log('Input data:', input);
     if (existing) {
       // Actualizar
-      return this.prisma.pendingProjectParticipant.update({
+      return this.prisma.db.pendingProjectParticipant.update({
         where: { pendingId: existing.pendingId },
         data: {
           firstName: input.firstName,
@@ -346,7 +346,7 @@ export class PrismaProjectRepository implements ProjectRepository {
       });
     } else {
       // Crear
-      return this.prisma.pendingProjectParticipant.create({
+      return this.prisma.db.pendingProjectParticipant.create({
         data: {
           projectId: input.projectId,
           firstName: input.firstName,
@@ -362,7 +362,7 @@ export class PrismaProjectRepository implements ProjectRepository {
   }
 
   async listPendingParticipants(projectId: number): Promise<PendingProjectParticipant[]> {
-    return (await this.prisma.pendingProjectParticipant.findMany({
+    return (await this.prisma.db.pendingProjectParticipant.findMany({
       where: { projectId },
       orderBy: { firstName: 'asc' },
     })) as unknown as PendingProjectParticipant[];
@@ -370,7 +370,7 @@ export class PrismaProjectRepository implements ProjectRepository {
 
   async markPendingsInvited(projectId: number, emails: string[], invitedAt: Date) {
     if (!emails.length) return 0;
-    const res = await this.prisma.pendingProjectParticipant.updateMany({
+    const res = await this.prisma.db.pendingProjectParticipant.updateMany({
       where: {
         projectId,
         email: { in: emails.map(normalizeEmail) },
@@ -384,7 +384,7 @@ export class PrismaProjectRepository implements ProjectRepository {
   }
 
   async addTutor(projectId: number, userId: number): Promise<void> {
-    await this.prisma.projectTutor.upsert({
+    await this.prisma.db.projectTutor.upsert({
       where: { projectId_userId: { projectId, userId } },
       update: {},
       create: { projectId, userId },
@@ -392,7 +392,7 @@ export class PrismaProjectRepository implements ProjectRepository {
   }
 
   async listTutorUserIds(projectId: number): Promise<number[]> {
-    const rows = await this.prisma.projectTutor.findMany({
+    const rows = await this.prisma.db.projectTutor.findMany({
       where: { projectId },
       select: { userId: true },
       orderBy: { createdAt: 'asc' },
@@ -402,28 +402,28 @@ export class PrismaProjectRepository implements ProjectRepository {
 
   async replaceTutors(projectId: number, userIds: number[], pendings: PendingProjectTutorInput[]): Promise<void> {
     const normalized = pendings.map((p) => ({ ...p, email: normalizeEmail(p.email) }));
-    await this.prisma.$transaction([
-      this.prisma.projectTutor.deleteMany({ where: { projectId, userId: { notIn: userIds } } }),
-      this.prisma.projectTutor.createMany({
+    await this.prisma.transaction(async (tx) => {
+      await tx.projectTutor.deleteMany({ where: { projectId, userId: { notIn: userIds } } });
+      await tx.projectTutor.createMany({
         data: userIds.map((userId) => ({ projectId, userId })),
         skipDuplicates: true,
-      }),
-      this.prisma.pendingProjectTutor.deleteMany({
+      });
+      await tx.pendingProjectTutor.deleteMany({
         where: { projectId, email: { notIn: normalized.map((p) => p.email) } },
-      }),
-      ...normalized.map((p) =>
-        this.prisma.pendingProjectTutor.upsert({
+      });
+      for (const p of normalized) {
+        await tx.pendingProjectTutor.upsert({
           where: { projectId_email: { projectId, email: p.email } },
           update: { firstName: p.firstName, lastName: p.lastName ?? null },
           create: { projectId, email: p.email, firstName: p.firstName, lastName: p.lastName ?? null },
-        }),
-      ),
-    ]);
+        });
+      }
+    });
   }
 
   async addPendingTutor(projectId: number, input: PendingProjectTutorInput): Promise<PendingProjectTutor> {
     const email = normalizeEmail(input.email);
-    const row = await this.prisma.pendingProjectTutor.upsert({
+    const row = await this.prisma.db.pendingProjectTutor.upsert({
       where: { projectId_email: { projectId, email } },
       update: { firstName: input.firstName, lastName: input.lastName ?? null },
       create: { projectId, email, firstName: input.firstName, lastName: input.lastName ?? null },
@@ -432,7 +432,7 @@ export class PrismaProjectRepository implements ProjectRepository {
   }
 
   async listPendingTutors(projectId: number): Promise<PendingProjectTutor[]> {
-    const rows = await this.prisma.pendingProjectTutor.findMany({
+    const rows = await this.prisma.db.pendingProjectTutor.findMany({
       where: { projectId },
       orderBy: { pendingId: 'asc' },
     });
@@ -441,7 +441,7 @@ export class PrismaProjectRepository implements ProjectRepository {
 
   async listTutorLinksByProjects(projectIds: number[]): Promise<{ projectId: number; userId: number }[]> {
     if (!projectIds.length) return [];
-    return this.prisma.projectTutor.findMany({
+    return this.prisma.db.projectTutor.findMany({
       where: { projectId: { in: projectIds } },
       select: { projectId: true, userId: true },
       orderBy: { createdAt: 'asc' },
@@ -450,7 +450,7 @@ export class PrismaProjectRepository implements ProjectRepository {
 
   async listPendingTutorsByProjects(projectIds: number[]): Promise<PendingProjectTutor[]> {
     if (!projectIds.length) return [];
-    const rows = await this.prisma.pendingProjectTutor.findMany({
+    const rows = await this.prisma.db.pendingProjectTutor.findMany({
       where: { projectId: { in: projectIds } },
       orderBy: { pendingId: 'asc' },
     });
@@ -459,7 +459,7 @@ export class PrismaProjectRepository implements ProjectRepository {
 
   async markPendingTutorsInvited(projectId: number, emails: string[], invitedAt: Date): Promise<number> {
     if (!emails.length) return 0;
-    const res = await this.prisma.pendingProjectTutor.updateMany({
+    const res = await this.prisma.db.pendingProjectTutor.updateMany({
       where: { projectId, email: { in: emails.map(normalizeEmail) } },
       data: { status: 'INVITED', invitedAt },
     });
@@ -467,7 +467,7 @@ export class PrismaProjectRepository implements ProjectRepository {
   }
 
   async markPendingTutorJoined(projectId: number, email: string, joinedAt: Date): Promise<boolean> {
-    const res = await this.prisma.pendingProjectTutor.updateMany({
+    const res = await this.prisma.db.pendingProjectTutor.updateMany({
       where: { projectId, email: normalizeEmail(email) },
       data: { status: 'JOINED', joinedAt },
     });
@@ -482,7 +482,7 @@ export class PrismaProjectRepository implements ProjectRepository {
     const skip = (page - 1) * pageSize;
 
     const [items, total] = await Promise.all([
-      this.prisma.project.findMany({
+      this.prisma.db.project.findMany({
         where: {
           jurorsAssigned: {
             some: {
@@ -501,7 +501,7 @@ export class PrismaProjectRepository implements ProjectRepository {
         take: pageSize,
         orderBy: { id: 'asc' },
       }),
-      this.prisma.project.count({
+      this.prisma.db.project.count({
         where: {
           jurorsAssigned: {
             some: {
@@ -518,7 +518,7 @@ export class PrismaProjectRepository implements ProjectRepository {
   }
 
   async markPendingJoined(projectId: number, studentCode: string, joinedAt: Date): Promise<boolean> {
-    const res = await this.prisma.pendingProjectParticipant.updateMany({
+    const res = await this.prisma.db.pendingProjectParticipant.updateMany({
       where: {
         projectId,
         studentCode,
@@ -532,7 +532,7 @@ export class PrismaProjectRepository implements ProjectRepository {
   }
 
   async findDocumentById(id: number): Promise<ProjectDocument | null> {
-    return (await this.prisma.projectDocument.findUnique({
+    return (await this.prisma.db.projectDocument.findUnique({
       where: { id },
     })) as unknown as ProjectDocument | null;
   }
@@ -546,14 +546,14 @@ export class PrismaProjectRepository implements ProjectRepository {
     if (input.url !== undefined) data.url = input.url;
     if (input.type !== undefined) data.type = input.type;
     if (input.state !== undefined) data.state = input.state;
-    return (await this.prisma.projectDocument.update({
+    return (await this.prisma.db.projectDocument.update({
       where: { id: input.id },
       data,
     })) as unknown as ProjectDocument;
   }
 
   async findByEventIdAndUserId(eventId: number, userId: number): Promise<Project | null> {
-    const project = await this.prisma.project.findFirst({
+    const project = await this.prisma.db.project.findFirst({
       where: {
         eventId,
         participants: {
@@ -567,7 +567,7 @@ export class PrismaProjectRepository implements ProjectRepository {
   }
 
   async listWithJurorsByEvent(eventId: number): Promise<ProjectWithJurorIds[]> {
-    const projects = await this.prisma.project.findMany({
+    const projects = await this.prisma.db.project.findMany({
       where: { eventId },
       include: {
         jurorsAssigned: {
@@ -583,7 +583,7 @@ export class PrismaProjectRepository implements ProjectRepository {
     }));
   }
   async listParticipationsByUser(userId: number, email: string): Promise<UserParticipation[]> {
-    const participations = await this.prisma.projectParticipant.findMany({
+    const participations = await this.prisma.db.projectParticipant.findMany({
       where: { userId },
       include: { project: true },
       orderBy: { project: { createdAt: 'desc' } },
@@ -592,7 +592,7 @@ export class PrismaProjectRepository implements ProjectRepository {
 
     // career and semester only exist on the pending participant row captured at
     // submission. (project_id, email) is unique there, so each project matches at most one row
-    const pendings = await this.prisma.pendingProjectParticipant.findMany({
+    const pendings = await this.prisma.db.pendingProjectParticipant.findMany({
       where: {
         projectId: { in: participations.map(p => p.projectId) },
         email: { equals: email.trim(), mode: 'insensitive' },
@@ -613,7 +613,7 @@ export class PrismaProjectRepository implements ProjectRepository {
   }
 
   async listProjectsByParticipant(userId: number, states: ProjectState[]): Promise<Project[]> {
-    const rows = await this.prisma.project.findMany({
+    const rows = await this.prisma.db.project.findMany({
       where: {
         participants: { some: { userId } },
         ...(states.length ? { state: { in: states } } : {}),
@@ -636,22 +636,22 @@ export class PrismaProjectRepository implements ProjectRepository {
     if (opts.q) filters.push({ name: { contains: opts.q, mode: 'insensitive' } });
     const where = { AND: filters };
 
-    const [rows, total] = await this.prisma.$transaction([
-      this.prisma.project.findMany({
+    const [rows, total] = await Promise.all([
+      this.prisma.db.project.findMany({
         where,
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip: (opts.currentPage - 1) * opts.itemsPerPage,
         take: opts.itemsPerPage,
         include: IN_SCOPE_INCLUDE,
       }),
-      this.prisma.project.count({ where }),
+      this.prisma.db.project.count({ where }),
     ]);
     return { items: rows.map(toProjectInScope), total };
   }
 
   async findInScope(scope: ProjectReadScope, projectId: number): Promise<ProjectInScope | null> {
     const inScope = scopeWhere(scope);
-    const row = await this.prisma.project.findFirst({
+    const row = await this.prisma.db.project.findFirst({
       where: { AND: [{ id: projectId }, ...(inScope ? [inScope] : [])] },
       include: IN_SCOPE_INCLUDE,
     });
@@ -659,7 +659,7 @@ export class PrismaProjectRepository implements ProjectRepository {
   }
 
   async listEventIdsInScope(scope: ProjectReadScope): Promise<number[]> {
-    const rows = await this.prisma.project.findMany({
+    const rows = await this.prisma.db.project.findMany({
       where: scopeWhere(scope),
       distinct: ['eventId'],
       select: { eventId: true },
