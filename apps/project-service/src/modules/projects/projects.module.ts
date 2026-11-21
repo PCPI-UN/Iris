@@ -58,6 +58,8 @@ import { AuthServiceAdapter } from './infrastructure/grpc-client/auth-service.ad
 import { PROJECT_CHANGE_LOG_REPOSITORY } from './domain/repositories/project-change-log.repository';
 import { PrismaProjectChangeLogRepository } from './infrastructure/prisma/prisma-project-change-log.repository';
 import { ListProjectChangeLogUC } from './application/use-cases/list-project-change-log.uc';
+import { UNIT_OF_WORK } from './application/ports/unit-of-work.port';
+import { PrismaUnitOfWork } from './infrastructure/prisma/prisma-unit-of-work';
 
 @Module({
   controllers: [ProjectsController],
@@ -74,6 +76,8 @@ import { ListProjectChangeLogUC } from './application/use-cases/list-project-cha
       provide: PROJECT_CHANGE_LOG_REPOSITORY,
       useClass: PrismaProjectChangeLogRepository,
     },
+    // Same module as the repositories, so it shares their PrismaService instance (and its transaction).
+    { provide: UNIT_OF_WORK, useClass: PrismaUnitOfWork },
     ListProjectChangeLogUC,
 
     CreateProjectUC,
