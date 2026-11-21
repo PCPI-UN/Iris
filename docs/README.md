@@ -6,6 +6,10 @@ This directory contains service-level documentation for the PCPI microservice ar
 
 - [CI/CD Pipeline & Coolify Deployments](./cicd.md)
 
+## Patterns
+
+- [Writes that go together](./transactions.md): `UnitOfWork.run` to save several writes of a use case together or not at all
+
 ## Language
 
 - [Glossary (Spanish terms)](./glossary.md): the Spanish word for each concept in API messages and emails
