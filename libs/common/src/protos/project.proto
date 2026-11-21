@@ -73,6 +73,10 @@ service ProjectsService {
   // or the event has published results and force is false, nothing changes and the answer carries `blocked`
   rpc AdminChangeProjectState (AdminChangeProjectStateRequest) returns (AdminChangeProjectStateResponse);
 
+  // Administrative edit of the basic data and the category; never the state. A taken name or a
+  // category change with evaluations (without force) changes nothing and the answer carries `conflict`
+  rpc AdminUpdateProject (AdminUpdateProjectRequest) returns (AdminUpdateProjectResponse);
+
 }
 
 enum ProjectState {
@@ -270,7 +274,9 @@ message UpdateProjectRequest {
   optional string description = 3;
   optional string eventNumber = 4;
   optional int32 courseId = 5;
-  optional ProjectState state = 6;
+  // The state only changes through AdminChangeProjectState and the review RPCs
+  reserved 6;
+  reserved "state";
   optional string projectCode = 7;
 }
 
@@ -767,4 +773,41 @@ message AdminChangeProjectStateResponse {
   repeated string failedEffects = 3;
   // Spanish warning for failedEffects; empty when nothing failed
   string warning = 4;
+}
+
+/************** Administrative edit of basic data and category **************/
+// Only the fields that are set are edited; an empty string clears description, projectCode and eventNumber
+message AdminUpdateProjectRequest {
+  int32 id = 1;
+  // auth-service user making the change
+  int32 actingUserId = 2;
+  optional string name = 3;
+  optional string description = 4;
+  optional string projectCode = 5;
+  optional string eventNumber = 6;
+  // A category (course) of the project's event
+  optional int32 courseId = 7;
+  // Stored in the change log entries
+  string reason = 8;
+  // true: change the category even if the project has juror evaluations
+  bool force = 9;
+}
+
+// Why nothing changed
+message AdminProjectEditConflict {
+  // PROJECT_NAME_TAKEN: another project of the event has that name
+  // PROJECT_CATEGORY_CHANGE_BLOCKED: the project has juror evaluations; resend with force
+  string code = 1;
+  // Spanish message for the user
+  string message = 2;
+  // PROJECT_CATEGORY_CHANGE_BLOCKED: juror evaluations of the project
+  int32 evaluationCount = 3;
+  // PROJECT_NAME_TAKEN: the name that is taken
+  string name = 4;
+}
+
+// Exactly one of project (edited, or unchanged when no field differed) or conflict (nothing changed) is set
+message AdminUpdateProjectResponse {
+  optional Project project = 1;
+  optional AdminProjectEditConflict conflict = 2;
 }

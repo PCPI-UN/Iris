@@ -54,13 +54,20 @@ export interface ProjectRepository {
     opts?: { courseId?: number; q?: string; currentPage?: number; itemsPerPage?: number; state?: ProjectState } 
   ): Promise<{ items: Project[]; total: number }>;
 
+  /** The project of the event with exactly that name, or null. */
+  findByEventAndName(eventId: number, name: string): Promise<Project | null>;
+
+  /**
+   * Writes the given basic data and category; the state is not editable here. Throws
+   * ProjectNameTakenError when another project of the event already has the name.
+   */
   updateProject(input: {
     id: number;
     name?: string;
+    projectCode?: string | null;
     description?: string | null;
     eventNumber?: string | null;
     courseId?: number;
-    state?: ProjectState;
   }): Promise<Project>;
 
   setProjectState(id: number, state: ProjectState): Promise<Project>;

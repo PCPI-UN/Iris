@@ -58,6 +58,7 @@ import { TutorCandidatesQueryDto } from './dto/tutor-candidates-query.dto';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { ProjectChangeLogResponseDto } from './dto/project-change-log-response.dto';
 import { AdminChangeProjectStateDto } from './dto/admin-change-project-state.dto';
+import { AdminUpdateProjectDto } from './dto/admin-update-project.dto';
 
 @ApiTags('projects')
 @ApiSecurity('JWT-auth')
@@ -720,6 +721,54 @@ export class ProjectsController {
     @GetUser() user: AppUser,
   ) {
     return this.projectsService.adminChangeProjectState(id, dto, user.id);
+  }
+
+  @RequirePermission('manage:projects')
+  @Patch(':id/admin')
+  @ApiOperation({
+    summary:
+      'Edit the basic data and the category of a project (administrative correction)',
+    description:
+      'Changes only the fields sent: name, description, projectCode, eventNumber and courseId (category); ' +
+      'null or an empty text clears description, projectCode and eventNumber. The state is not editable here ' +
+      '(PATCH /projects/:id/admin/state); a state field in the body is ignored. The changed fields are recorded ' +
+      'in the change log with their values before and after (INFO for the basic data, CATEGORY for courseId) ' +
+      'and the optional reason; an edit that changes nothing records nothing. The category must be an active ' +
+      "category of the project's event (400 otherwise). A 409 changes nothing and its code says why: " +
+      'PROJECT_NAME_TAKEN (another project of the event has the name; details.name) or ' +
+      'PROJECT_CATEGORY_CHANGE_BLOCKED (the project has juror evaluations, scored with the rubrics of its ' +
+      'category; details.evaluationCount); resend with force: true to change the category anyway.',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Project ID', example: 1 })
+  @ApiResponse({ status: 200, description: 'The project with its new values' })
+  @ApiResponse({
+    status: 400,
+    description:
+      'No editable field, an invalid value, or a category that is not an active category of the event',
+  })
+  @ApiResponse({ status: 403, description: 'The user lacks manage:projects' })
+  @ApiResponse({ status: 404, description: 'Project not found' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Not changed: the name is taken in the event, or the category change needs force because the project has evaluations',
+    schema: {
+      example: {
+        statusCode: 409,
+        message:
+          'No se cambió la categoría porque el proyecto ya tiene 2 evaluaciones de jurados, calificadas con las rúbricas de la categoría actual. Confirma el cambio para aplicarlo de todas formas.',
+        code: 'PROJECT_CATEGORY_CHANGE_BLOCKED',
+        details: { evaluationCount: 2 },
+        timestamp: '2026-11-21T15:00:00.000Z',
+      },
+    },
+  })
+  adminUpdateProject(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AdminUpdateProjectDto,
+    @GetUser() user: AppUser,
+  ) {
+    return this.projectsService.adminUpdateProject(id, dto, user.id);
   }
 
   @Get(':id/jurors')
