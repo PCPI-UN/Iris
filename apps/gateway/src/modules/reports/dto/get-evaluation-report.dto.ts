@@ -7,20 +7,8 @@ export enum EvaluationReportFormat {
   EXCEL = 'excel',
 }
 
-/**
- * The report is always of one category (department), as the approved format: the
- * positions are inside the category.
- */
-export class GetEvaluationReportDto {
-  @ApiProperty({
-    description: 'Category (department) of the event the report is about',
-    example: 3,
-  })
-  @Type(() => Number)
-  @IsInt()
-  @IsPositive()
-  categoryId!: number;
-
+/** The student's report: the category is the one of their project */
+export class GetMyProjectReportDto {
   @ApiPropertyOptional({
     description:
       'excel (default) downloads the XLSX; json returns the same data',
@@ -30,4 +18,19 @@ export class GetEvaluationReportDto {
   @IsOptional()
   @IsEnum(EvaluationReportFormat)
   format?: EvaluationReportFormat = EvaluationReportFormat.EXCEL;
+}
+
+/**
+ * The report is always of one category (department), as the approved format: the
+ * positions are inside the category.
+ */
+export class GetEvaluationReportDto extends GetMyProjectReportDto {
+  @ApiProperty({
+    description: 'Category (department) of the event the report is about',
+    example: 3,
+  })
+  @Type(() => Number)
+  @IsInt()
+  @IsPositive()
+  categoryId!: number;
 }

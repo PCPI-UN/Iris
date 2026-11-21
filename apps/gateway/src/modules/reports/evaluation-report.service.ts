@@ -1,23 +1,38 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { status } from '@grpc/grpc-js';
 import { GetProjectResultResponse } from '@app/common/generated/evaluation';
 import { EventService } from '../events/events.service';
 import { EvaluationsService } from '../evaluations/evaluations.service';
+import { ProjectsService } from '../projects/projects.service';
 import { assignRankingPositions } from '../events/ranking/ranking-positions';
+import { canReadUnpublishedGrades } from '../academic/academic.service';
+import { AppUser } from '../auth/types/app-user.type';
 import {
   EvaluationReport,
   EvaluationReportComponent,
   EvaluationReportProject,
+  EvaluationReportScope,
 } from './evaluation-report.types';
 
 /** Separator evaluation-service uses to join the jurors' comments in one text */
 const FEEDBACK_SEPARATOR = '\n\n';
+
+/** Permission of the academic roles whose projects project-service limits to their scope */
+const ACADEMIC_READ_PERMISSION = 'read:academic_projects';
+
+const NOT_PUBLISHED = 'The results of the event have not been published yet';
 
 /** Rounds a weight to 4 decimals, enough to show 0.057 and still add up to 1 */
 const roundWeight = (weight: number): number =>
   Math.round(weight * 10000) / 10000;
 
 /**
- * Evaluation report of one category of an event (CU-86e3vmz0b).
+ * Evaluation report of one category of an event (CU-86e3vmz0b) and who may download it
+ * (CU-86e3vmz0c).
  *
  * - Every approved project of the category is listed; the ones without evaluations go
  *   last, without grade nor position.
@@ -25,18 +40,120 @@ const roundWeight = (weight: number): number =>
  *   (GetProjectResult), the same source as the student results, so the report and IRIS
  *   always agree.
  * - Positions use the ranking rule (dense positions over the rounded averages): projects
- *   with the same average are co-winners and share the position (CU-86e3vmz0h). The
- *   grades are never changed.
- * - It does not check who asks: the endpoint requires `read:grades`.
+ *   with the same average are co-winners and share the position (CU-86e3vmz0h). They are
+ *   computed over the whole category even when only some rows are shown. The grades are
+ *   never changed. The reports filtered to a scope or to the student's project carry no
+ *   position when the event has no ranking configuration, as the student results.
+ *
+ * Who sees which rows:
+ * - `read:grades` (Admin, EventManager, FacultyAdmin, Dean): every project, at any time.
+ * - `read:academic_projects` (Tutor, Professor, DepartmentDirector): only the projects
+ *   project-service puts in their scope (tutored, of their course sections, of their
+ *   department), and only once the admin publishes the event results.
+ * - Student: only their own project, once published, without the number of jurors.
  */
 @Injectable()
 export class EvaluationReportService {
   constructor(
     private readonly eventsService: EventService,
     private readonly evaluationsService: EvaluationsService,
+    private readonly projectsService: ProjectsService,
   ) {}
 
-  async build(eventId: number, categoryId: number): Promise<EvaluationReport> {
+  /** Report of a category for a staff or academic user, with the rows of their scope */
+  async buildForUser(
+    user: AppUser,
+    eventId: number,
+    categoryId: number,
+  ): Promise<EvaluationReport> {
+    if (canReadUnpublishedGrades(user)) {
+      return this.build(eventId, categoryId);
+    }
+
+    if (!(user.platformPermissions ?? []).includes(ACADEMIC_READ_PERMISSION)) {
+      throw new ForbiddenException(
+        'You are not allowed to download this report',
+      );
+    }
+
+    const event = await this.eventsService.getEventById(eventId);
+    if (!event) throw new NotFoundException(`Event ${eventId} not found`);
+    if (!event.resultsPublished) throw new ForbiddenException(NOT_PUBLISHED);
+
+    const [inScope, showPositions] = await Promise.all([
+      this.projectsService.listAllProjectsInScope({ userId: user.id, eventId }),
+      this.hasRanking(eventId),
+    ]);
+    const projectIds = inScope
+      .filter((project) => project.courseId === categoryId)
+      .map((project) => project.id);
+    const noProjects = new NotFoundException(
+      `You have no approved projects in category ${categoryId} of event ${eventId}`,
+    );
+    if (!projectIds.length) throw noProjects;
+
+    const report = await this.build(eventId, categoryId, {
+      projectIds,
+      showPositions,
+    });
+    // Projects of the scope that were not approved are not graded nor listed
+    if (!report.projects.length) throw noProjects;
+    return report;
+  }
+
+  /** Report of the caller's own project in the event, once the results are published */
+  async buildForStudent(
+    userId: number,
+    eventId: number,
+  ): Promise<EvaluationReport> {
+    const [{ project }, event] = await Promise.all([
+      // NOT_FOUND (404) when the user has no project in the event
+      this.projectsService.getMyProjectByEvent(userId, eventId),
+      this.eventsService.getEventById(eventId),
+    ]);
+    if (!event) throw new NotFoundException(`Event ${eventId} not found`);
+    if (!event.resultsPublished) throw new ForbiddenException(NOT_PUBLISHED);
+
+    const report = await this.build(eventId, project!.courseId, {
+      projectIds: [project!.id],
+      showJurorCount: false,
+      showPositions: await this.hasRanking(eventId),
+    });
+    // Only approved projects are graded and ranked
+    if (!report.projects.length) {
+      throw new NotFoundException(
+        `Project ${project!.id} is not part of the results of event ${eventId}`,
+      );
+    }
+    return report;
+  }
+
+  /**
+   * Whether the event has a ranking configuration, the same rule as the student results
+   * (StudentResultsService.ownRanking): without one, the reports filtered to a scope or to
+   * the student's project carry no position. event-service answers NOT_FOUND when the
+   * event has none; any other error fails the report instead of hiding the positions.
+   */
+  private async hasRanking(eventId: number): Promise<boolean> {
+    try {
+      const { rankingEvent } =
+        await this.eventsService.getRankingEventByEventId(eventId);
+      return !!rankingEvent;
+    } catch (error: unknown) {
+      if ((error as { code?: number } | null)?.code === status.NOT_FOUND) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  async build(
+    eventId: number,
+    categoryId: number,
+    scope: EvaluationReportScope = {},
+  ): Promise<EvaluationReport> {
+    const showJurorCount = scope.showJurorCount ?? true;
+    const showPositions = scope.showPositions ?? true;
     const [event, { category }] = await Promise.all([
       this.eventsService.getEventById(eventId),
       this.eventsService.getCategory(categoryId),
@@ -55,17 +172,20 @@ export class EvaluationReportService {
       eventId,
       categoryId,
     );
-    const projectIds = projects.map((p) => p.id);
+    const visible = scope.projectIds ? new Set(scope.projectIds) : undefined;
+    const isVisible = (id: number) => !visible || visible.has(id);
+    const visibleIds = projects.map((p) => p.id).filter(isVisible);
 
+    // Averages of the whole category, so the positions are the real ones
     const [averages, results] = await Promise.all([
-      this.evaluationsService.getAverageGrades(projectIds),
+      this.evaluationsService.getAverageGrades(projects.map((p) => p.id)),
       Promise.all(
-        projectIds.map((id) => this.evaluationsService.getProjectResult(id)),
+        visibleIds.map((id) => this.evaluationsService.getProjectResult(id)),
       ),
     ]);
 
     const resultById = new Map<number, GetProjectResultResponse>(
-      projectIds.map((id, index) => [id, results[index]]),
+      visibleIds.map((id, index) => [id, results[index]]),
     );
     const averageById = new Map(averages.map((a) => [a.projectId, a]));
 
@@ -78,10 +198,13 @@ export class EvaluationReportService {
     );
 
     const projectById = new Map(projects.map((p) => [p.id, p]));
-    const notEvaluated = projectIds
+    const notEvaluated = visibleIds
       .filter((id) => !positionById.has(id))
       .sort((a, b) => a - b);
-    const orderedIds = [...ranked.map((row) => row.projectId), ...notEvaluated];
+    const orderedIds = [
+      ...ranked.map((row) => row.projectId).filter(isVisible),
+      ...notEvaluated,
+    ];
 
     const rows: EvaluationReportProject[] = orderedIds.map((id, index) => {
       const project = projectById.get(id)!;
@@ -99,8 +222,8 @@ export class EvaluationReportService {
         evaluated,
         // The ranking average, so the grade shown is the one the position comes from
         finalScore: average?.averageGrade ?? null,
-        position: positionById.get(id) ?? null,
-        jurorCount: average?.evaluationCount ?? 0,
+        position: showPositions ? (positionById.get(id) ?? null) : null,
+        jurorCount: showJurorCount ? (average?.evaluationCount ?? 0) : null,
         comments: splitFeedback(result.consolidatedFeedback),
         components: evaluated ? groupByComponent(result) : [],
       };
@@ -113,6 +236,8 @@ export class EvaluationReportService {
       categoryName: category.name?.trim() || 'Sin categoria',
       maxScore: results.find((r) => r.maxScore > 0)?.maxScore ?? 0,
       generatedAt: new Date(),
+      showJurorCount,
+      showPositions,
       projects: rows,
     };
   }
