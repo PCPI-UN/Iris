@@ -24,6 +24,7 @@ import {
   toGetJurorImportTemplateResponse,
   toProtoStudentParticipationStats,
   toProtoProjectInScope,
+  toProtoProjectChangeLogEntry,
 } from './mappers';
 import { UpdateProjectUC } from '../../application/use-cases/update-project.uc';
 import { ApproveProjectUC } from '../../application/use-cases/approve-project.uc';
@@ -71,6 +72,7 @@ import {
 import { GetJurorImportTemplateUC } from '../../application/use-cases/get-juror-import-template.uc';
 import { PreviewJurorImportUC } from '../../application/use-cases/preview-juror-import.uc';
 import { ExecuteJurorImportUC } from '../../application/use-cases/execute-juror-import.uc';
+import { ListProjectChangeLogUC } from '../../application/use-cases/list-project-change-log.uc';
 
 interface InvitationGrpcService {
   CreateInvitation(data: {
@@ -130,6 +132,7 @@ export class ProjectsController {
     private readonly listProjectsInScopeUC: ListProjectsInScopeUC,
     private readonly getProjectInScopeUC: GetProjectInScopeUC,
     private readonly listEventIdsInScopeUC: ListEventIdsInScopeUC,
+    private readonly listProjectChangeLogUC: ListProjectChangeLogUC,
     @Inject(INVITATION_SERVICE_NAME) private readonly client: ClientGrpc,
   ) {}
 
@@ -721,5 +724,11 @@ export class ProjectsController {
   @GrpcMethod('ProjectsService', 'ListEventIdsInScope')
   async listEventIdsInScopeRpc(req: ListEventIdsInScopeDTO) {
     return { eventIds: await this.listEventIdsInScopeUC.execute(req) };
+  }
+
+  @GrpcMethod('ProjectsService', 'ListProjectChangeLog')
+  async listProjectChangeLogRpc(req: { projectId: number }) {
+    const entries = await this.listProjectChangeLogUC.execute(req.projectId);
+    return { entries: entries.map(toProtoProjectChangeLogEntry) };
   }
 }

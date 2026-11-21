@@ -1,5 +1,6 @@
 import { TypedDocument ,ProjectState, ProjectDocument, Project, JurorKey, Status, ProjectTutorView } from '../../domain/entities/project.entity';
 import { AcademicCourseView } from '../../domain/repositories/project.repository';
+import { ProjectChangeLogEntry } from '../../domain/entities/project-change-log.entity';
 import {
   JurorImportOutcome as ProtoJurorImportOutcome,
   JurorImportUserStatus as ProtoJurorImportUserStatus,
@@ -295,3 +296,16 @@ export const toProtoStudentParticipationStats = (stats: StudentDashboardData) =>
       }
     : undefined,
 });
+
+export function toProtoProjectChangeLogEntry(entry: ProjectChangeLogEntry) {
+  return {
+    id: entry.id,
+    projectId: entry.projectId,
+    actorUserId: entry.actorUserId,
+    action: entry.action,
+    beforeJson: JSON.stringify(entry.before),
+    afterJson: JSON.stringify(entry.after),
+    reason: entry.reason ?? undefined,
+    createdAt: entry.createdAt.toISOString(),
+  };
+}

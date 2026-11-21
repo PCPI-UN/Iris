@@ -66,6 +66,9 @@ service ProjectsService {
   rpc GetProjectInScope (GetProjectInScopeRequest) returns (ProjectComplete);
   rpc ListEventIdsInScope (ListEventIdsInScopeRequest) returns (ListEventIdsInScopeResponse);
 
+  // Administrative changes of a project, most recent first; NOT_FOUND when the project does not exist
+  rpc ListProjectChangeLog (ListProjectChangeLogRequest) returns (ListProjectChangeLogResponse);
+
 }
 
 enum ProjectState {
@@ -707,3 +710,23 @@ message GetProjectInScopeRequest {
 
 message ListEventIdsInScopeRequest { int32 userId = 1; }
 message ListEventIdsInScopeResponse { repeated int32 eventIds = 1; }
+
+/************** Administrative change log **************/
+message ListProjectChangeLogRequest { int32 projectId = 1; }
+
+message ProjectChangeLogEntry {
+  int32 id = 1;
+  int32 projectId = 2;
+  // auth-service user who made the change
+  int32 actorUserId = 3;
+  // STATE, INFO, CATEGORY, PARTICIPANTS, TUTORS or DOCUMENTS
+  string action = 4;
+  // JSON object with the changed fields only, before and after the change
+  string beforeJson = 5;
+  string afterJson = 6;
+  optional string reason = 7;
+  // ISO 8601
+  string createdAt = 8;
+}
+
+message ListProjectChangeLogResponse { repeated ProjectChangeLogEntry entries = 1; }
