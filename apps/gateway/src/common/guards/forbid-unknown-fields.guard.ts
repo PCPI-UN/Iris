@@ -32,7 +32,7 @@ export function ForbidUnknownFields(dto: Type<object>): Type<CanActivate> {
 
       if (rejected.length > 0) {
         throw new BadRequestException(
-          `These fields cannot be edited: ${rejected.join(', ')}`,
+          `Estos campos no se pueden editar: ${rejected.join(', ')}`,
         );
       }
       return true;

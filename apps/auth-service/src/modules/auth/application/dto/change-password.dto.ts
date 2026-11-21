@@ -16,7 +16,7 @@ export class ChangePasswordDto {
   @Matches(
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
       {
-        message: 'Password must contain at least 1 uppercase, 1 lowercase, 1 number, and 1 special character',
+        message: 'La contraseña debe tener al menos 1 mayúscula, 1 minúscula, 1 número y 1 carácter especial',
       },
     )
   newPassword: string;

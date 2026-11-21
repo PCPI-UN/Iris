@@ -43,11 +43,11 @@ export class EvaluationReportService {
     ]);
 
     if (!event) {
-      throw new NotFoundException(`Event ${eventId} not found`);
+      throw new NotFoundException(`No se encontró el evento con ID ${eventId}`);
     }
     if (!category || category.eventId !== eventId) {
       throw new NotFoundException(
-        `Category ${categoryId} not found in event ${eventId}`,
+        `No se encontró la categoría con ID ${categoryId} en el evento ${eventId}`,
       );
     }
 

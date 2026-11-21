@@ -9,7 +9,7 @@ export class UpdateProjectUC {
 
   async execute(input: UpdateProjectDTO) {
     const exists = await this.repo.findById(input.id);
-    if (!exists) throw new NotFoundError('Project not found');
+    if (!exists) throw new NotFoundError('No se encontró el proyecto');
 
     // Si actualizas courseId/state podrías agregar políticas aquí
     return this.repo.updateProject(input);

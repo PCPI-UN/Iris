@@ -14,7 +14,7 @@ export class GetUserUseCase {
     if (!user) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: `User with ID #${id} not found`,
+        message: `No se encontró el usuario con ID #${id}`,
       });
     }
     return user;

@@ -26,8 +26,16 @@ export class UsersService implements OnModuleInit {
     );
   }
 
-  findAll(query: FindUsersQueryDto) {
-    return firstValueFrom(this.authService.getUsers(query));
+  async findAll(query: FindUsersQueryDto) {
+    const response = await firstValueFrom(this.authService.getUsers(query));
+    // gRPC omits empty repeated fields: a user without roles gets []
+    return {
+      ...response,
+      users: (response.users ?? []).map((user) => ({
+        ...user,
+        roles: user.roles ?? [],
+      })),
+    };
   }
 
   findOne(id: number) {

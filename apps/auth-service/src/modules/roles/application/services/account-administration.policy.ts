@@ -41,7 +41,7 @@ export class AccountAdministrationPolicy {
     if (!actorUserId) {
       throw new RpcException({
         code: status.PERMISSION_DENIED,
-        message: 'The user performing the operation is required',
+        message: 'Se requiere el usuario que realiza la operación',
       });
     }
 
@@ -64,7 +64,7 @@ export class AccountAdministrationPolicy {
     if (administratorRoles.length > 0 && !actor.canManageAdmins) {
       throw new RpcException({
         code: status.PERMISSION_DENIED,
-        message: `Only the principal administrator can grant the roles ${administratorRoles
+        message: `Solo el administrador principal puede asignar los roles ${administratorRoles
           .map((role) => role.name)
           .join(', ')}`,
       });
@@ -80,7 +80,7 @@ export class AccountAdministrationPolicy {
     if (isAdministrator && !actor.canManageAdmins) {
       throw new RpcException({
         code: status.PERMISSION_DENIED,
-        message: 'Only the principal administrator can modify an administrator account',
+        message: 'Solo el administrador principal puede modificar una cuenta de administrador',
       });
     }
     return targetRoles;
@@ -98,7 +98,7 @@ export class AccountAdministrationPolicy {
     if (otherAdmins === 0) {
       throw new RpcException({
         code: status.FAILED_PRECONDITION,
-        message: 'The platform cannot be left without an active Admin',
+        message: 'La plataforma no puede quedar sin un administrador activo',
       });
     }
   }
@@ -107,7 +107,7 @@ export class AccountAdministrationPolicy {
     if (actor.userId === targetUserId) {
       throw new RpcException({
         code: status.PERMISSION_DENIED,
-        message: `A user cannot ${operation} their own account`,
+        message: `Un usuario no puede ${operation} su propia cuenta`,
       });
     }
   }

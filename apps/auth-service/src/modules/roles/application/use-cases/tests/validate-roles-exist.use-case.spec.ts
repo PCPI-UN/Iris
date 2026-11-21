@@ -37,7 +37,7 @@ describe('ValidateRolesExistUseCase', () => {
         expect.objectContaining({
           error: expect.objectContaining({
             code: status.INVALID_ARGUMENT,
-            message: 'At least one role must be provided',
+            message: 'Se debe indicar al menos un rol',
           }),
         }),
       );
@@ -55,7 +55,7 @@ describe('ValidateRolesExistUseCase', () => {
         expect.objectContaining({
           error: expect.objectContaining({
             code: status.NOT_FOUND,
-            message: 'One or more of the provided roles do not exist',
+            message: 'Uno o más de los roles indicados no existen',
           }),
         }),
       );

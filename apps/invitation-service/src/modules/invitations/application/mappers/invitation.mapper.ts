@@ -11,6 +11,7 @@ import {
   InvitationTargetType,
 } from '@invitations/domain/entities/invitation.entity';
 import { InvitationRole } from '@invitations/domain/entities/invitation-role.entity';
+import { EmailStatus } from '@invitations/infrastructure/ports/notification-service.port';
 
 export class InvitationMapper {
   /**
@@ -19,6 +20,7 @@ export class InvitationMapper {
   static toProto(
     invitation: Invitation,
     invitationRoles: InvitationRole[],
+    emailStatus?: EmailStatus,
   ): InvitationProto {
     return {
       id: invitation.id,
@@ -32,6 +34,7 @@ export class InvitationMapper {
       invitedUserId: invitation.invitedUserId,
       roleIds: invitationRoles.map((ir) => ir.roleId),
       createdAt: invitation.createdAt.toISOString(),
+      emailStatus,
     };
   }
 
@@ -66,11 +69,12 @@ export class InvitationMapper {
     page: number,
     limit: number,
     roles: InvitationRole[] = [],
+    emailStatuses: Map<string, EmailStatus> = new Map(),
   ): GetEventInvitationsResponse {
     return {
       invitations: invitations.map((inv) => {
         const invRoles = roles.filter((r) => r.invitationId === inv.id);
-        return this.toProto(inv, invRoles);
+        return this.toProto(inv, invRoles, emailStatuses.get(inv.id));
       }),
       meta: {
         total,

@@ -8,6 +8,9 @@ import { ProjectAwardMapper } from '@events/application/mappers/project-award.ma
 import { ListCategoriesByIdsUC } from '@events/application/use-cases/list-categories-by-ids.uc';
 import { ListCategoriesByIdsDTO } from '@events/application/dto/list-categories-by-ids.dto';
 import { EventCategoryMapper } from '@events/application/mappers/event-category.mapper';
+import { ListPublishedWinnersUC } from '@events/application/use-cases/list-published-winners.uc';
+import { ListPublishedWinnersDTO } from '@events/application/dto/list-published-winners.dto';
+import { PublishedWinnersMapper } from '@events/application/mappers/published-winners.mapper';
 
 @Controller()
 export class EventCatalogController {
@@ -15,6 +18,7 @@ export class EventCatalogController {
     private readonly catalogService: EventCatalogService,
     private readonly listAwardsByProjectsUC: ListAwardsByProjectsUC,
     private readonly listCategoriesByIdsUC: ListCategoriesByIdsUC,
+    private readonly listPublishedWinnersUC: ListPublishedWinnersUC,
   ) {}
 
   @GrpcMethod(EVENT_SERVICE_NAME, 'CreateCategory')
@@ -157,5 +161,11 @@ export class EventCatalogController {
   async listCategoriesByIds(request: ListCategoriesByIdsDTO) {
     const categories = await this.listCategoriesByIdsUC.execute(request);
     return EventCategoryMapper.toListResponse(categories);
+  }
+
+  @GrpcMethod(EVENT_SERVICE_NAME, 'ListPublishedWinners')
+  async listPublishedWinners(request: ListPublishedWinnersDTO) {
+    const page = await this.listPublishedWinnersUC.execute(request);
+    return PublishedWinnersMapper.toListResponse(page);
   }
 }

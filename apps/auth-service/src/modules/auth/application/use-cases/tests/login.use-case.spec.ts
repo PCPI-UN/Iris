@@ -113,7 +113,7 @@ describe('LoginUseCase', () => {
         expect.objectContaining({
           error: expect.objectContaining({
             code: status.NOT_FOUND,
-            message: 'No user found with the provided email',
+            message: 'No existe un usuario con el correo indicado',
           }),
         }),
       );
@@ -146,7 +146,7 @@ describe('LoginUseCase', () => {
         expect.objectContaining({
           error: expect.objectContaining({
             code: status.PERMISSION_DENIED,
-            message: 'This user account is inactive',
+            message: 'La cuenta de este usuario está inactiva',
           }),
         }),
       );
@@ -180,7 +180,7 @@ describe('LoginUseCase', () => {
         expect.objectContaining({
           error: expect.objectContaining({
             code: status.UNAUTHENTICATED,
-            message: 'Invalid credentials provided',
+            message: 'Las credenciales no son válidas',
           }),
         }),
       );

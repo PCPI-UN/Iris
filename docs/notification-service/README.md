@@ -1,28 +1,32 @@
 # Notification Service
 
-Sends the platform's transactional emails. Other services ask for an email by template and parameters; this service renders the template and delivers it through an email provider.
+Sends the platform's transactional emails. Other services ask for an email by template and parameters; this service records the request, renders the template, delivers it through an email provider and retries it if every provider fails.
 
 - **Transport**: gRPC (`NotificationService`). The contract is `libs/common/src/protos/notification.proto`.
-- **Database**: none.
+- **Database**: PostgreSQL (`notification_service`), see [schema.md](./schema.md).
 - **HTTP**: none. The gateway does not expose this service.
 
 ## Boundaries
 
 | Notification service does | Notification service does not |
 | --- | --- |
+| Record every request with its status (pending, sent, failed), provider, attempts and last error, and expose it by gRPC | Decide what a caller does when an email fails |
 | Render an HTML template with the parameters it receives (Handlebars; the subject comes from the template's front matter) | Decide which email to send or to whom: the calling service decides |
-| Deliver the email through a primary provider and, if it fails, a fallback provider, both chosen by configuration | Store a history of sent emails or queue them for retry |
+| Deliver the email through a primary provider and, if it fails, a fallback provider, both chosen by configuration; retry later with a growing wait | Keep the template parameters after the delivery ends |
 | Keep the HTML templates for every email type | Know about users, roles or permissions |
 
 ## Modules
 
-The service follows the layering described in `LLM_RULES.md`, without a `domain` layer: it has no entities, so it only uses `application`, `infrastructure` and `interface`.
+The service follows the layering described in `LLM_RULES.md`.
 
 | Area | Responsibility |
 | --- | --- |
-| `interface/grpc` | gRPC controller for sending an email |
-| `application` | Send-email use case, request DTO and the email service port (`application/ports`) |
+| `domain` | `EmailDelivery` and the retry policy |
+| `interface/grpc` | gRPC controller: send an email and look up delivery status |
+| `application` | Use cases (send, attempt, retry due deliveries, get status), request DTO and ports (`application/ports`) |
 | `infrastructure/email` | Template renderer, the dispatcher that tries providers in order, one adapter per provider (`providers/`) and the HTML templates |
+| `infrastructure/persistence` | Prisma repository of `email_deliveries` |
+| `infrastructure/scheduling` | Retry worker that polls for due retries |
 
 ## Templates
 
@@ -34,12 +38,58 @@ Every provider implements `EmailProvider` (`application/ports/email-provider.por
 
 | Provider | Variables | Behavior |
 | --- | --- | --- |
-| `acs` | `ACS_CONNECTION_STRING`, `ACS_SENDER_ADDRESS` | Waits for Azure's final status; a send that is not `Succeeded` is a failure. Sends an HTML and a plain-text body. |
+| `acs` | `ACS_CONNECTION_STRING`, `ACS_SENDER_ADDRESS` | Sends with the delivery's operation id and returns once Azure accepts the email (`202`); the final status is read later. Azure rejects a repeated operation id, so a repeated attempt never sends a second email. Sends an HTML and a plain-text body. |
 | `emailjs` | `EMAILJS_SERVICE_ID`, `EMAILJS_TEMPLATE_ID`, `EMAILJS_PUBLIC_KEY`, `EMAILJS_PRIVATE_KEY` | At most 1 request per second, as primary or fallback. A `429` is retried with a growing wait (1 s, 2 s, 4 s) before it counts as a failure. |
 
-- A listed provider whose variables are missing is skipped with a warning, so the service runs with only one provider. The startup log states the primary and the fallback, or that there is no fallback.
-- The service does not start if `EMAIL_PROVIDERS` names an unknown provider or if none of the listed providers is configured.
+- A listed provider whose variables are missing, or that cannot be built (a malformed ACS connection string, for example), is skipped and logged, so the service runs with the others. The startup log states the primary and the fallback, or that there is no fallback.
+- The service does not start if `EMAIL_PROVIDERS` names an unknown provider or if no listed provider is left after skipping.
 - Adding a provider means a new adapter and one entry in the registry of `providers/email-providers.ts`.
+
+## Send log, retries and idempotency
+
+- Every `SendEmail` creates a row in `email_deliveries` and starts the first attempt without waiting for the provider. The response carries the delivery as recorded (`PENDING`) and `success`, which is `true` unless the delivery is `FAILED`. It does not say whether the email went out: the real status (`SENT`, `PENDING` with its next retry, or `FAILED`) is read with `GetEmailStatus`. The row is created with a lease (`ATTEMPT_LEASE_MS`), so if the service stops mid-attempt the worker takes the row when the lease expires and reuses its operation id. An error of the attempt in the background is logged and does not reach the caller. On `SIGTERM`/`SIGINT` the service waits up to 20 s for the attempts in the background before closing; any left keeps its lease for the worker.
+- A failed attempt leaves the row `PENDING` with `next_attempt_at` set to 1, 2, 4... times `EMAIL_RETRY_BASE_DELAY_MS`. The retry worker polls every `EMAIL_RETRY_POLL_MS`, claims each due row and runs the whole provider chain again. After `EMAIL_MAX_ATTEMPTS` attempts (first one included) the row is `FAILED`.
+- **Idempotency**: a request may carry an `idempotencyKey`. A second request with the same key returns the first delivery and sends nothing. `invitation-service` uses `invitation:<invitationId>:<expiresAt>`, so a resend (new expiry) sends a new email while a repeated call does not. Requests without a key always send.
+- `GetEmailStatus` returns deliveries by id and/or idempotency key.
+- Requests are validated by the same `ValidationPipe` as the other services; for example an `idempotencyKey` over 255 characters answers `INVALID_ARGUMENT`.
+
+### What each provider answer does
+
+| Provider answer | Row after the attempt |
+| --- | --- |
+| Sent (EmailJS `200`, or ACS already reports `Succeeded`) | `SENT` |
+| Accepted (ACS `202`) | `PENDING` with `accepted_at`; its final status is read later |
+| Rejected: an error before the provider took the email (`4xx`, connection refused) | The next provider in the chain is tried; if every one rejects, `PENDING` with the next retry, or `FAILED` |
+| No answer: ACS timeout, `5xx` or connection lost after the request left | `PENDING` with the next retry and the same `provider_ref`; the fallback is not used in this attempt, unless it is the last one |
+
+### ACS limits and 429
+
+- Azure limits ACS: with its own domain, 30 sends per minute and 100 per hour, and 60 status reads (`Get Email Status`) per minute and 200 per hour; with an Azure-managed domain (`*.azurecomm.net`), 5 sends per minute, 10 per hour, and 10 status reads per minute and 20 per hour, with no increase. A failure rate above 1 % can make Azure lower or suspend the quota.
+- `ACS_MAX_RETRIES` (default `0`) sets the SDK's own retries per request. The SDK retries `429` and `503` waiting the `Retry-After` of the response, and `5xx`, `408` and network errors with backoff. Each retry counts against the quota, and a long `Retry-After` exceeds the 10 s timeout of a call and leaves the email "in doubt". With `0`, a `429` is rejected at once.
+- A `429` on send is a rejection: the same attempt goes on with the next provider. The adapter also pauses ACS for the `Retry-After` of the response (60 s without it, 15 minutes at most): during the pause `send` rejects without calling Azure. The pause is in memory and per process.
+- Status reads have no pause. Each accepted email costs one read at the first confirmation and one more per rescheduling while the status is `Running`; a read that fails, a `429` included, is rescheduled without sending again.
+
+### No duplicates with ACS
+
+- Before the first ACS send the row saves a new `provider_ref` (a UUID), sent to Azure as the `Operation-Id` header. If it cannot be saved, nothing is sent and the worker takes the row when its lease expires.
+- Azure answers a repeated id with `400 OperationIdAlreadyExists` and does not send again. So when an attempt got no answer, the next one reuses the same id: if Azure already had the email, the adapter reads its status instead of sending it twice. A new id is created only after ACS rejected the email or reported it `Failed`.
+- If ACS gives no answer twice in a row, or on the last attempt, the email goes to the fallback provider in that attempt. It arrives twice only if the earlier send reached Azure and Azure then stopped answering; on the last attempt a possible duplicate is preferred to no email.
+- Azure keeps an operation id for at least several hours (about 7 h when measured), far beyond the default retry delays. A row that waits longer than that before its next attempt (a much larger `EMAIL_RETRY_BASE_DELAY_MS`, or the service down for hours while a send was in doubt) could reuse an id Azure no longer knows, and that send would go out again.
+
+### Confirming an accepted email
+
+An accepted email is never sent again nor handed to another provider. Every `EMAIL_CONFIRM_DELAY_MS` the worker reads its status from the provider that accepted it:
+
+- `Succeeded`: `SENT`.
+- `Failed` or `Canceled`: Azure did not send it, so the same attempt goes on with the next provider in the chain (it cannot arrive twice). If that one sends it, `SENT` with the ACS error kept in `last_error`; if not, `PENDING` with the next retry and a new id, or `FAILED` when no attempts are left. It is not counted again.
+- Still running, or the read fails: read again later.
+- No final status after `EMAIL_CONFIRM_TIMEOUT_MS` since it was accepted: `SENT`, with the reason in `last_error`.
+
+### Saving the outcome
+
+- Sending and saving are separate steps. Once a provider takes the email (sent or accepted), a failure to save the status is tried again twice (after 200 ms and 1 s) and then only logged; it never schedules a retry.
+- The row then keeps its lease and its `provider_ref`. With ACS, the next attempt is rejected as repeated and reads the status. EmailJS has no way to ask about an earlier send, so with EmailJS delivery is at least once: if the service stops after EmailJS sent the email and before `SENT` is saved, the worker may send it once more when the lease expires.
+- Each row's lease (`ATTEMPT_LEASE_MS`, 5 minutes) starts when the worker claims that row, not when the batch started.
 
 ## Dependencies
 
@@ -57,21 +107,29 @@ sequenceDiagram
     participant P as Primary provider
     participant F as Fallback provider
 
-    C->>N: SendEmail {to, template, params}
-    N->>T: load template for the email type
-    N->>N: render subject, HTML and plain text with params
-    N->>P: send
-    alt primary succeeds
-        N-->>C: success
-    else primary fails and fallback configured
-        N->>F: send
-        N-->>C: success, or error if it also fails
-    else no fallback
-        N-->>C: error
+    C->>N: SendEmail {to, template, params, idempotencyKey}
+    alt key already used
+        N-->>C: existing delivery, nothing sent
+    else new request
+        N->>N: record delivery (PENDING)
+        N->>T: load template for the email type
+        N->>N: render subject, HTML and plain text with params
+        N-->>C: success and delivery (PENDING), without waiting
+        N->>P: in the background: send (ACS: with the delivery's operation id)
+        alt primary sent it
+            N->>N: SENT
+        else primary accepted it (ACS 202)
+            N->>N: PENDING, final status read later
+        else primary gave no answer
+            N->>N: PENDING with next retry, same operation id
+        else primary rejected it
+            N->>F: send (if a fallback is configured)
+            N->>N: SENT, or PENDING with next retry, or FAILED
+        end
     end
 ```
 
-- Each request is one delivery attempt per provider (EmailJS adds its own retries on `429`); the caller receives an error if no provider accepts the email.
+The retry worker repeats the provider chain for due `PENDING` deliveries, or reads the final status of the accepted ones.
 
 ## Related
 

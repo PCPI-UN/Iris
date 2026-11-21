@@ -37,7 +37,7 @@ export class UpdateEventDTO {
   @IsOptional()
   @IsString()
   @Matches(/^[a-zA-Z0-9-]+$/, {
-    message: 'accessCode must contain only alphanumeric characters and hyphens',
+    message: 'accessCode solo puede tener letras, números y guiones',
   })
   @MinLength(3)
   @MaxLength(50)

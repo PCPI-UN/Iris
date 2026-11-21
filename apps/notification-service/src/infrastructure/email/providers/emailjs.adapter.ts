@@ -2,6 +2,7 @@ import emailjs from '@emailjs/nodejs';
 import {
   EmailContent,
   EmailProvider,
+  SendOutcome,
 } from '../../../application/ports/email-provider.port';
 
 export interface EmailJsConfig {
@@ -55,12 +56,12 @@ export class EmailJsAdapter implements EmailProvider {
     this.retryDelayMs = config.retryDelayMs ?? 1_000;
   }
 
-  async send(email: EmailContent): Promise<void> {
+  async send(email: EmailContent): Promise<SendOutcome> {
     for (let attempt = 0; ; attempt++) {
       try {
         await this.waitForSlot();
         await this.request(email);
-        return;
+        return 'sent';
       } catch (error: unknown) {
         if (!isTooManyRequests(error) || attempt >= this.maxRetries) {
           throw toError(error);

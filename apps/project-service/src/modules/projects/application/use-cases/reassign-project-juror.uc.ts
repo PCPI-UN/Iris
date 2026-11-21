@@ -17,7 +17,7 @@ export class ReassignProjectJurorUC {
     // 1. Obtener el proyecto para saber el eventId
     const project = await this.repo.findById(projectId);
     if (!project) {
-      throw new NotFoundError('Project not found');
+      throw new NotFoundError('No se encontró el proyecto');
     }
 
     const eventId = project.eventId;

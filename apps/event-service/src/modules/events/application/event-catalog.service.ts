@@ -31,7 +31,7 @@ export class EventCatalogService {
   private notFound(entity: string, id: number): never {
     throw new RpcException({
       code: 5,
-      message: `${entity} with id ${id} not found`,
+      message: `No se encontró ${entity} con ID ${id}`,
     });
   }
 

@@ -16,7 +16,7 @@ export class RemoveJurorFromProjectUC {
 
     const project = await this.repo.findById(projectId);
     if (!project) {
-      throw new NotFoundError('Project not found');
+      throw new NotFoundError('No se encontró el proyecto');
     }
 
     const juror: JurorKey = {
@@ -27,14 +27,14 @@ export class RemoveJurorFromProjectUC {
 
     const removed = await this.repo.removeAssignment(projectId, juror);
     if (!removed) {
-      throw new NotFoundError('Juror assignment not found');
+      throw new NotFoundError('No se encontró la asignación del jurado');
     }
 
     return {
       ok: true,
       projectId,
       userId,
-      message: 'Juror successfully removed from project',
+      message: 'Jurado quitado del proyecto correctamente',
     };
   }
 }

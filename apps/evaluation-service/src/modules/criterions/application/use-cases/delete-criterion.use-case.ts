@@ -17,7 +17,7 @@ export class DeleteCriterionUseCase {
     if (!existingCriterion) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: 'Criterion not found with the provided ID',
+        message: 'No se encontró el criterio con el ID indicado',
       });
     }
 
@@ -34,7 +34,7 @@ export class DeleteCriterionUseCase {
     if (!existingCriterion) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: 'Criterion not found with the provided ID',
+        message: 'No se encontró el criterio con el ID indicado',
       });
     }
 
@@ -50,7 +50,7 @@ export class DeleteCriterionUseCase {
       if (error instanceof RpcException) throw error;
       throw new RpcException({
         code: status.INTERNAL,
-        message: 'Failed to delete criterion. Please try again later.',
+        message: 'No se pudo eliminar el criterio. Intenta de nuevo más tarde.',
       });
     }
   }

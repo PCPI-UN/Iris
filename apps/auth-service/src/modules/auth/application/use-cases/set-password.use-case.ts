@@ -30,7 +30,7 @@ export class SetPasswordUseCase {
     if (!user) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: 'User not found',
+        message: 'No se encontró el usuario',
       });
     }
 

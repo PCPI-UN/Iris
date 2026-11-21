@@ -57,7 +57,7 @@ describe('GetUserByEmailUseCase', () => {
         expect.objectContaining({
           error: expect.objectContaining({
             code: status.NOT_FOUND,
-            message: 'User with email nonexistent@example.com not found',
+            message: 'No se encontró el usuario con el correo nonexistent@example.com',
           }),
         }),
       );

@@ -26,14 +26,14 @@ export class ChangePasswordUseCase {
     if (!user || !user.active || user.status === 'PENDING') {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: 'User not found or inactive',
+        message: 'No se encontró el usuario o está inactivo',
       });
     }
 
     if (!user.password) {
       throw new RpcException({
         code: status.PERMISSION_DENIED,
-        message: 'User does not have a password set',
+        message: 'El usuario no tiene una contraseña configurada',
       });
     }
 
@@ -45,7 +45,7 @@ export class ChangePasswordUseCase {
     if (!isValid) {
       throw new RpcException({
         code: status.PERMISSION_DENIED,
-        message: 'Current password is incorrect',
+        message: 'La contraseña actual es incorrecta',
       });
     }
 

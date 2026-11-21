@@ -15,7 +15,7 @@ export async function getJurorImportEvent(
   eventId: number,
 ): Promise<JurorImportEvent> {
   if (!Number.isInteger(eventId) || eventId <= 0) {
-    throw new ValidationError('eventId must be a positive integer');
+    throw new ValidationError('eventId debe ser un entero positivo');
   }
   try {
     const event = (await events.getEventById(

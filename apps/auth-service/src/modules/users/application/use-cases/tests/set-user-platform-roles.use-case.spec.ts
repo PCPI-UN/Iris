@@ -19,7 +19,7 @@ describe('SetUserPlatformRolesUseCase', () => {
   beforeEach(() => {
     userRepository = {
       findById: jest.fn((id: number) =>
-        Promise.resolve(id === 999 ? null : new User(id, 'Name', null, `u${id}@iris.local`, 'x', null, true, UserStatus.CONFIRMED)),
+        Promise.resolve(id === 999 ? null : new User(id, 'Name', '', `u${id}@iris.local`, 'x', undefined, true, UserStatus.CONFIRMED)),
       ),
     } as unknown as jest.Mocked<UserRepositoryPort>;
     administration = buildAdministration();
@@ -44,14 +44,14 @@ describe('SetUserPlatformRolesUseCase', () => {
     ['change the roles of the principal admin', 1, [ROLES.User.id]],
   ])('does not let a faculty admin %s', async (_case, userId, roleIds) => {
     await expect(build().execute({ userId, roleIds, actorUserId: 2 })).rejects.toEqual(
-      rpcError(status.PERMISSION_DENIED, 'principal administrator'),
+      rpcError(status.PERMISSION_DENIED, 'administrador principal'),
     );
     expect(administration.platformStaffRepository.setActiveRoles).not.toHaveBeenCalled();
   });
 
   it('does not let anyone change their own roles', async () => {
     await expect(build().execute({ userId: 2, roleIds: [ROLES.Admin.id], actorUserId: 2 })).rejects.toEqual(
-      rpcError(status.PERMISSION_DENIED, 'their own account'),
+      rpcError(status.PERMISSION_DENIED, 'su propia cuenta'),
     );
   });
 
@@ -61,13 +61,13 @@ describe('SetUserPlatformRolesUseCase', () => {
     administration.platformStaffRepository.countActiveAdminsByRoleId.mockResolvedValue(0);
 
     await expect(build().execute({ userId: 5, roleIds: [ROLES.User.id], actorUserId: 1 })).rejects.toEqual(
-      rpcError(status.FAILED_PRECONDITION, 'without an active Admin'),
+      rpcError(status.FAILED_PRECONDITION, 'sin un administrador activo'),
     );
   });
 
   it('rejects event roles', async () => {
     await expect(build().execute({ userId: 4, roleIds: [ROLES.Participant.id], actorUserId: 1 })).rejects.toEqual(
-      rpcError(status.INVALID_ARGUMENT, 'event roles'),
+      rpcError(status.INVALID_ARGUMENT, 'son roles de evento'),
     );
   });
 

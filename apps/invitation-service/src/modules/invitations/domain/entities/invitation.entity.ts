@@ -44,7 +44,7 @@ export class Invitation {
 
   accept(invitedUserId: number): void {
     if (!this.canBeAccepted()) {
-      throw new Error('Invitation cannot be accepted');
+      throw new Error('La invitación no se puede aceptar');
     }
     this.status = InvitationStatus.ACCEPTED;
     this.invitedUserId = invitedUserId;
@@ -52,7 +52,7 @@ export class Invitation {
 
   reject(): void {
     if (!this.canBeRejected()) {
-      throw new Error('Invitation cannot be rejected');
+      throw new Error('La invitación no se puede rechazar');
     }
     this.status = InvitationStatus.REJECTED;
   }

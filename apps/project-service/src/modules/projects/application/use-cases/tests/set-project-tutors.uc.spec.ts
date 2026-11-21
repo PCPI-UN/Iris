@@ -110,7 +110,7 @@ describe('SetProjectTutorsUC', () => {
 
     await expect(
       uc.execute({ projectId: 3, tutorUserIds: [1, 2] }),
-    ).rejects.toThrow('Users 2 are not');
+    ).rejects.toThrow('Los usuarios 2 no son');
     expect(repo.replaceTutors).not.toHaveBeenCalled();
   });
 

@@ -587,7 +587,7 @@ export class ProjectsController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Project code updated successfully',
+    description: 'Código del proyecto actualizado correctamente',
   })
   @ApiResponse({
     status: 400,
@@ -611,7 +611,7 @@ export class ProjectsController {
       updateProjectCodeDto.projectCode,
       user.id,
     );
-    return { message: 'Project code updated successfully' };
+    return { message: 'Código del proyecto actualizado correctamente' };
   }
 
   @Get(':id/jurors')
