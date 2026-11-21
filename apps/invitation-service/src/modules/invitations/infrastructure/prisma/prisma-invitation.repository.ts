@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@common/prisma/prisma.service';
+import { PrismaService } from '../../../../common/prisma/prisma.service';
 import { InvitationRepositoryPort } from '@invitations/domain/repositories/invitation.repository.port';
-import { Invitation } from '@invitations/domain/entities/invitation.entity';
+import {
+  Invitation,
+  InvitationTargetType,
+} from '@invitations/domain/entities/invitation.entity';
 import { InvitationMapper } from './mappers/invitation.mapper';
 import { normalizeEmail } from '@app/common/utils/email.util';
 
@@ -94,7 +97,9 @@ export class PrismaInvitationRepository implements InvitationRepositoryPort {
 
   async findByEventId(eventId: number, page: number, limit: number, roleId?: number): Promise<{ invitations: Invitation[]; total: number }> {
     const skip = (page - 1) * limit;
+    // targetId alone also matches projects with the same id
     const where: any = {
+      targetType: InvitationTargetType.EVENT,
       targetId: eventId,
     };
 

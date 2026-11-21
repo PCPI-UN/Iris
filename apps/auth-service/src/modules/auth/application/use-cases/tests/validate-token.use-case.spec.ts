@@ -1,6 +1,9 @@
 import { ValidateTokenUseCase } from '../validate-token.use-case';
 import { UserTokenRepositoryPort } from '../../../../users/domain/repositories/user-token.repository.port';
-import { UserToken, UserTokenType } from '../../../../users/domain/entities/user-token.entity';
+import {
+  UserToken,
+  UserTokenType,
+} from '../../../../users/domain/entities/user-token.entity';
 import { RpcException } from '@nestjs/microservices';
 import { status } from '@grpc/grpc-js';
 
@@ -38,6 +41,7 @@ describe('ValidateTokenUseCase', () => {
       expect(result).toEqual({
         valid: true,
         userId: 1,
+        tokenType: UserTokenType.ACCOUNT_SETUP,
       });
       expect(mockUserTokenRepository.findByToken).toHaveBeenCalledWith(token);
     });
@@ -52,13 +56,13 @@ describe('ValidateTokenUseCase', () => {
         expect.objectContaining({
           error: expect.objectContaining({
             code: status.NOT_FOUND,
-            message: 'Token not found',
+            message: 'El enlace no existe, expiró o ya se usó',
           }),
         }),
       );
     });
 
-    it('should throw FAILED_PRECONDITION when token has already been used', async () => {
+    it('should throw NOT_FOUND, without saying why, when token has already been used', async () => {
       const token = 'used-token';
       const mockUserToken = new UserToken(
         'token-id',
@@ -75,14 +79,14 @@ describe('ValidateTokenUseCase', () => {
       await expect(useCase.execute(token)).rejects.toThrow(
         expect.objectContaining({
           error: expect.objectContaining({
-            code: status.FAILED_PRECONDITION,
-            message: 'Token has already been used',
+            code: status.NOT_FOUND,
+            message: 'El enlace no existe, expiró o ya se usó',
           }),
         }),
       );
     });
 
-    it('should throw DEADLINE_EXCEEDED when token has expired', async () => {
+    it('should throw NOT_FOUND, without saying why, when token has expired', async () => {
       const token = 'expired-token';
       const mockUserToken = new UserToken(
         'token-id',
@@ -99,8 +103,8 @@ describe('ValidateTokenUseCase', () => {
       await expect(useCase.execute(token)).rejects.toThrow(
         expect.objectContaining({
           error: expect.objectContaining({
-            code: status.DEADLINE_EXCEEDED,
-            message: 'Token has expired',
+            code: status.NOT_FOUND,
+            message: 'El enlace no existe, expiró o ya se usó',
           }),
         }),
       );

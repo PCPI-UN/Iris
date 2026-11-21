@@ -77,7 +77,7 @@ export class JwtServiceAdapter implements TokenServicePort {
       // Handle token verification errors (e.g., expired, invalid)
       throw new RpcException({
         code: status.UNAUTHENTICATED,
-        message: 'Invalid or expired refresh token',
+        message: 'La sesión no es válida o expiró; inicia sesión de nuevo',
       });
     }
   }

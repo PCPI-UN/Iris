@@ -39,7 +39,7 @@ export class GetProjectResultUseCase {
     if (!project) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: `Project ${dto.projectId} not found`,
+        message: `No se encontró el proyecto con ID ${dto.projectId}`,
       });
     }
 

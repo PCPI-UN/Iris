@@ -1,7 +1,10 @@
 import { GetUserUseCase } from '../get-user.use-case';
 import { UserRepositoryPort } from '../../../../users/domain/repositories/user.repository.port';
 import { GetUserDto } from '../../../../users/application/dto/get-user.dto';
-import { User, UserStatus } from '../../../../users/domain/entities/user.entity';
+import {
+  User,
+  UserStatus,
+} from '../../../../users/domain/entities/user.entity';
 import { RpcException } from '@nestjs/microservices';
 import { status } from '@grpc/grpc-js';
 
@@ -57,7 +60,7 @@ describe('GetUserUseCase', () => {
         expect.objectContaining({
           error: expect.objectContaining({
             code: status.NOT_FOUND,
-            message: 'User with ID #999 not found',
+            message: 'No se encontró el usuario con ID #999',
           }),
         }),
       );

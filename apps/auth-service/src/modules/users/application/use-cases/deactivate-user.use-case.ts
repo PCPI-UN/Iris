@@ -17,14 +17,14 @@ export class DeactivateUserUseCase {
     if (!userExists) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: `User with ID #${id} not found`,
+        message: `No se encontró el usuario con ID #${id}`,
       });
     }
 
     // IRIS-V3-ADM-02: only the principal administrator deactivates administrators,
     // nobody deactivates their own account and the last Admin is never deactivated
     const actor = await this.administrationPolicy.loadActor(actorUserId);
-    this.administrationPolicy.assertNotSelf(actor, id, 'deactivate');
+    this.administrationPolicy.assertNotSelf(actor, id, 'desactivar');
     const targetRoles = await this.administrationPolicy.assertCanManageAccount(actor, id);
     await this.administrationPolicy.assertKeepsAnAdmin(id, targetRoles);
 

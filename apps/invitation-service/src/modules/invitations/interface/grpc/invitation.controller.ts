@@ -71,13 +71,14 @@ export class InvitationController {
 
   @GrpcMethod(INVITATION_SERVICE_NAME, 'GetEventInvitations')
   async getEventInvitations(request: GetEventInvitationsDto): Promise<GetEventInvitationsResponse> {
-    const { invitations, total, roles } = await this.listEventInvitationsUseCase.execute(request);
+    const { invitations, total, roles, emailStatuses } = await this.listEventInvitationsUseCase.execute(request);
     return InvitationMapper.toGetEventInvitationsResponse(
       invitations,
       total,
       request.page,
       request.limit,
       roles,
+      emailStatuses,
     );
   }
 

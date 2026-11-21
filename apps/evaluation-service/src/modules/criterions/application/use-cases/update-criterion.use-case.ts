@@ -26,7 +26,7 @@ export class UpdateCriterionUseCase {
     if (!existingCriterion) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: 'Criterion not found with the provided ID',
+        message: 'No se encontró el criterio con el ID indicado',
       });
     }
 
@@ -52,21 +52,21 @@ export class UpdateCriterionUseCase {
     if (!existingCriterion) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: 'Criterion not found with the provided ID',
+        message: 'No se encontró el criterio con el ID indicado',
       });
     }
 
     if (name !== undefined && (!name || name.trim().length === 0)) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: 'Name cannot be empty',
+        message: 'El nombre no puede estar vacío',
       });
     }
 
     if (weight !== undefined && !(weight > 0)) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: 'Weight must be greater than 0',
+        message: 'El peso debe ser mayor que 0',
       });
     }
 
@@ -76,7 +76,7 @@ export class UpdateCriterionUseCase {
     if (!finalComponentId) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: 'A criterion must belong to a component',
+        message: 'Un criterio debe pertenecer a un componente',
       });
     }
 
@@ -85,7 +85,7 @@ export class UpdateCriterionUseCase {
     if (finalEventId !== existingCriterion.eventId && courseIds === undefined) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: `The categories of event ${finalEventId} (courseIds) are required to move a criterion to it`,
+        message: `Para mover un criterio al evento ${finalEventId} se deben indicar sus categorías (courseIds)`,
       });
     }
 
@@ -129,7 +129,7 @@ export class UpdateCriterionUseCase {
       } catch {
         throw new RpcException({
           code: status.NOT_FOUND,
-          message: `Event with ID ${finalEventId} not found`,
+          message: `No se encontró el evento con ID ${finalEventId}`,
         });
       }
     }
@@ -138,13 +138,13 @@ export class UpdateCriterionUseCase {
     if (!component) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: `Component with ID ${finalComponentId} not found`,
+        message: `No se encontró el componente con ID ${finalComponentId}`,
       });
     }
     if (component.eventId !== finalEventId) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: `Component ${finalComponentId} does not belong to event ${finalEventId}`,
+        message: `El componente ${finalComponentId} no pertenece al evento ${finalEventId}`,
       });
     }
 
@@ -157,7 +157,7 @@ export class UpdateCriterionUseCase {
       if (!valid) {
         throw new RpcException({
           code: status.INVALID_ARGUMENT,
-          message: `Courses [${invalidCourses.join(', ')}] do not belong to event ${finalEventId}`,
+          message: `Las categorías [${invalidCourses.join(', ')}] no pertenecen al evento ${finalEventId}`,
         });
       }
     }
@@ -192,7 +192,7 @@ export class UpdateCriterionUseCase {
       if (error instanceof RpcException) throw error;
       throw new RpcException({
         code: status.INTERNAL,
-        message: 'Failed to update criterion. Please try again later.',
+        message: 'No se pudo actualizar el criterio. Intenta de nuevo más tarde.',
       });
     }
   }

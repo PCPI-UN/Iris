@@ -18,7 +18,7 @@ export class UpdateEventUC {
     if (!existing) {
       throw new RpcException({
         code: 5, // NOT_FOUND
-        message: `Event with id ${input.id} not found`,
+        message: `No se encontró el evento con ID ${input.id}`,
       });
     }
 
@@ -38,14 +38,14 @@ export class UpdateEventUC {
       throw new RpcException({
         code: 3,
         message:
-          'Validation failed: inscriptionDeadline must be before startDate',
+          'Validación fallida: inscriptionDeadline debe ser anterior a startDate',
       });
     }
 
     if (startDate >= endDate) {
       throw new RpcException({
         code: 3,
-        message: 'Validation failed: startDate must be before endDate',
+        message: 'Validación fallida: startDate debe ser anterior a endDate',
       });
     }
 
@@ -60,7 +60,7 @@ export class UpdateEventUC {
       if (existingEvent) {
         throw new RpcException({
           code: 6,
-          message: `Event with accessCode "${input.accessCode}" already exists`,
+          message: `Ya existe un evento con el código de acceso "${input.accessCode}"`,
         });
       }
     }

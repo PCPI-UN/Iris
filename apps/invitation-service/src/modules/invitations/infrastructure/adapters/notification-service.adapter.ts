@@ -1,7 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { NotificationServicePort } from '../ports/notification-service.port';
+import { EmailStatus, NotificationServicePort } from '../ports/notification-service.port';
 import { NotificationGrpcClient } from '../../../../common/grpc-client/notification.grpc-client';
-import { EmailTemplate } from '@app/common/generated/notification';
+import { EmailDeliveryStatus, EmailTemplate } from '@app/common/generated/notification';
+
+/** notification-service rejects more lookups than this per call */
+const MAX_LOOKUPS = 100;
+
+/** Only these statuses leave the service; anything else (UNRECOGNIZED, new values) is unknown */
+const EMAIL_STATUS: Partial<Record<EmailDeliveryStatus, EmailStatus>> = {
+  [EmailDeliveryStatus.PENDING]: 'PENDING',
+  [EmailDeliveryStatus.SENT]: 'SENT',
+  [EmailDeliveryStatus.FAILED]: 'FAILED',
+};
 
 @Injectable()
 export class NotificationServiceAdapter implements NotificationServicePort {
@@ -9,13 +19,42 @@ export class NotificationServiceAdapter implements NotificationServicePort {
 
   constructor(private readonly grpc: NotificationGrpcClient) { }
 
+  async getEmailStatuses(keys: string[]): Promise<Map<string, EmailStatus>> {
+    const statuses = new Map<string, EmailStatus>();
+    for (let i = 0; i < keys.length; i += MAX_LOOKUPS) {
+      try {
+        const res = await this.grpc.getEmailStatus(
+          keys.slice(i, i + MAX_LOOKUPS),
+        );
+        for (const delivery of res.deliveries) {
+          const status = EMAIL_STATUS[delivery.status];
+          if (delivery.idempotencyKey && status) {
+            statuses.set(delivery.idempotencyKey, status);
+          }
+        }
+      } catch (err) {
+        // A failed batch only leaves its own keys without status
+        this.logger.warn(
+          `Could not load email statuses for a batch of ${keys.slice(i, i + MAX_LOOKUPS).length} keys: ${(err as Error).message}`,
+        );
+      }
+    }
+    return statuses;
+  }
+
   async sendEmail(params: {
     to: string;
     template: EmailTemplate;
     params: Record<string, any>;
+    idempotencyKey?: string;
   }): Promise<{ success: boolean }> {
     try {
-      const res = await this.grpc.sendEmail(params.to, params.template, params.params);
+      const res = await this.grpc.sendEmail(
+        params.to,
+        params.template,
+        params.params,
+        params.idempotencyKey,
+      );
       return { success: res.success };
     } catch (err) {
       // Don't break the invitation flow if email fails
@@ -30,9 +69,11 @@ export class NotificationServiceAdapter implements NotificationServicePort {
     lastName?: string;
     invitationLink: string;
     roles: string;
+    idempotencyKey?: string;
   }): Promise<{ success: boolean }> {
     return this.sendEmail({
       to: params.to,
+      idempotencyKey: params.idempotencyKey,
       template: EmailTemplate.PLATFORM_INVITATION,
       params: {
         firstName: params.firstName,
@@ -70,9 +111,11 @@ export class NotificationServiceAdapter implements NotificationServicePort {
     eventName: string;
     eventDescription: string;
     roles: string;
+    idempotencyKey?: string;
   }): Promise<{ success: boolean }> {
     return this.sendEmail({
       to: params.to,
+      idempotencyKey: params.idempotencyKey,
       template: EmailTemplate.JUROR_INVITATION,
       params: {
         firstName: params.firstName,
@@ -93,6 +136,7 @@ export class NotificationServiceAdapter implements NotificationServicePort {
     invitationLink: string;
     projectName: string;
     eventName: string;
+    idempotencyKey?: string;
   }): Promise<{ success: boolean }> {
     const template = params.eventType === 'Exposition'
       ? EmailTemplate.PROJECT_SUBMITTED
@@ -100,6 +144,7 @@ export class NotificationServiceAdapter implements NotificationServicePort {
 
     return this.sendEmail({
       to: params.to,
+      idempotencyKey: params.idempotencyKey,
       template,
       params: {
         firstName: params.firstName,

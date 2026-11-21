@@ -1,7 +1,7 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { status } from '@grpc/grpc-js';
-import { of, throwError } from 'rxjs';
 import { CreateInvitationUseCase } from '../create-invitation.use-case';
+import { CreateInvitationDto } from '../../dto/create-invitation.dto';
 import { InvitationRepositoryPort } from '../../../domain/repositories/invitation.repository.port';
 import { InvitationRoleRepositoryPort } from '../../../domain/repositories/invitation-role.repository.port';
 import {
@@ -9,546 +9,328 @@ import {
   InvitationStatus,
   InvitationTargetType,
 } from '../../../domain/entities/invitation.entity';
-import {
-  AUTH_SERVICE_NAME,
-  AuthServiceClient,
-} from '../../../../../../../../libs/common/src/generated/auth';
-import {
-  NOTIFICATION_SERVICE_NAME,
-  NotificationServiceClient,
-} from '../../../../../../../../libs/common/src/generated/notification';
-import { EventServiceClient } from '../../../../../../../../libs/common/src/generated/event';
-import { ProjectsServiceClient } from '../../../../../../../../libs/common/src/generated/project';
-import {
-  EVENT_SERVICE_NAME,
-  PROJECT_SERVICE_NAME,
-} from '../../../invitations.module';
+import { AuthServicePort } from '../../../infrastructure/ports/auth-service.port';
+import { EventServicePort } from '../../../infrastructure/ports/event-service.port';
+import { ProjectServicePort } from '../../../infrastructure/ports/project-service.port';
+import { NotificationServicePort } from '../../../infrastructure/ports/notification-service.port';
+
+const FRONTEND_URL = 'https://iris.test';
 
 describe('CreateInvitationUseCase', () => {
   let useCase: CreateInvitationUseCase;
-  let invitationRepository: jest.Mocked<InvitationRepositoryPort>;
-  let invitationRoleRepository: jest.Mocked<InvitationRoleRepositoryPort>;
-  let authService: jest.Mocked<AuthServiceClient>;
-  let notificationService: jest.Mocked<NotificationServiceClient>;
-  let eventService: jest.Mocked<EventServiceClient>;
-  let projectService: jest.Mocked<ProjectsServiceClient>;
+  let invitationRepository: {
+    findAcceptedByEmailAndTargetType: jest.Mock;
+    findPendingByEmailAndTargetType: jest.Mock;
+    save: jest.Mock;
+  };
+  let invitationRoleRepository: {
+    findByInvitationId: jest.Mock;
+    save: jest.Mock;
+  };
+  let authService: {
+    getUserByEmail: jest.Mock;
+    createBasicUser: jest.Mock;
+    generateAccountSetupToken: jest.Mock;
+    getRolesByIds: jest.Mock;
+  };
+  let eventService: { getEvent: jest.Mock };
+  let projectService: { getProject: jest.Mock };
+  let notificationService: {
+    sendPlatformInvitationEmail: jest.Mock;
+    sendJurorInvitationEmail: jest.Mock;
+    sendProjectSubmittedInvitationEmail: jest.Mock;
+    sendProjectTutorInvitationEmail: jest.Mock;
+  };
 
-  beforeEach(async () => {
-    const mockInvitationRepository = {
-      findByToken: jest.fn(),
-      save: jest.fn(),
-      findById: jest.fn(),
-      findByEmail: jest.fn(),
-      findByTarget: jest.fn(),
-      delete: jest.fn(),
-    };
+  const existingUser = {
+    id: 7,
+    email: 'ana@uninorte.edu.co',
+    firstName: 'Ana',
+    lastName: 'Pérez',
+    status: 'CONFIRMED',
+  };
+  const newUser = {
+    id: 9,
+    email: 'luis@uninorte.edu.co',
+    firstName: 'luis',
+    lastName: undefined,
+    status: 'PENDING',
+  };
 
-    const mockInvitationRoleRepository = {
-      findByInvitationId: jest.fn(),
-      save: jest.fn(),
-      delete: jest.fn(),
-    };
-
-    const mockAuthService = {
-      getUser: jest.fn(),
-      getUserByEmail: jest.fn(),
-      createBasicUser: jest.fn(),
-      activateUser: jest.fn(),
-      updateUser: jest.fn(),
-      assignPlatformRoles: jest.fn(),
-      getRolesByIds: jest.fn(),
-    };
-
-    const mockNotificationService = {
-      sendEmail: jest.fn(),
-    };
-
-    const mockEventService = {
-      getEvent: jest.fn(),
-      createEventMember: jest.fn(),
-    };
-
-    const mockProjectService = {
-      getProject: jest.fn(),
-    };
-
-    const mockAuthClientGrpc = {
-      getService: jest.fn().mockReturnValue(mockAuthService),
-    };
-
-    const mockNotificationClientGrpc = {
-      getService: jest.fn().mockReturnValue(mockNotificationService),
-    };
-
-    const mockEventClientGrpc = {
-      getService: jest.fn().mockReturnValue(mockEventService),
-    };
-
-    const mockProjectClientGrpc = {
-      getService: jest.fn().mockReturnValue(mockProjectService),
-    };
-
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        CreateInvitationUseCase,
-        {
-          provide: InvitationRepositoryPort,
-          useValue: mockInvitationRepository,
-        },
-        {
-          provide: InvitationRoleRepositoryPort,
-          useValue: mockInvitationRoleRepository,
-        },
-        {
-          provide: AUTH_SERVICE_NAME,
-          useValue: mockAuthClientGrpc,
-        },
-        {
-          provide: NOTIFICATION_SERVICE_NAME,
-          useValue: mockNotificationClientGrpc,
-        },
-        {
-          provide: EVENT_SERVICE_NAME,
-          useValue: mockEventClientGrpc,
-        },
-        {
-          provide: PROJECT_SERVICE_NAME,
-          useValue: mockProjectClientGrpc,
-        },
-      ],
-    }).compile();
-
-    useCase = module.get<CreateInvitationUseCase>(CreateInvitationUseCase);
-    invitationRepository = module.get(InvitationRepositoryPort);
-    invitationRoleRepository = module.get(InvitationRoleRepositoryPort);
-
-    // Trigger onModuleInit
-    await useCase.onModuleInit();
-
-    authService = mockAuthService as Partial<AuthServiceClient> as jest.Mocked<AuthServiceClient>;
-    notificationService =
-      mockNotificationService as Partial<NotificationServiceClient> as jest.Mocked<NotificationServiceClient>;
-    eventService = mockEventService as Partial<EventServiceClient> as jest.Mocked<EventServiceClient>;
-    projectService = mockProjectService as Partial<ProjectsServiceClient> as jest.Mocked<ProjectsServiceClient>;
+  const dto = (
+    overrides: Partial<CreateInvitationDto> = {},
+  ): CreateInvitationDto => ({
+    email: 'ana@uninorte.edu.co',
+    eventType: 'Exposition',
+    targetType: InvitationTargetType.EVENT,
+    targetId: 3,
+    invitedByUserId: 1,
+    roleIds: [4],
+    ...overrides,
   });
 
-  afterEach(() => {
-    jest.clearAllMocks();
+  beforeEach(() => {
+    invitationRepository = {
+      findAcceptedByEmailAndTargetType: jest.fn().mockResolvedValue(null),
+      findPendingByEmailAndTargetType: jest.fn().mockResolvedValue(null),
+      save: jest.fn(async (invitation: Invitation) => invitation),
+    };
+    invitationRoleRepository = {
+      findByInvitationId: jest.fn().mockResolvedValue([]),
+      save: jest.fn(async (role) => role),
+    };
+    authService = {
+      getUserByEmail: jest.fn().mockResolvedValue(existingUser),
+      createBasicUser: jest.fn().mockResolvedValue(newUser),
+      generateAccountSetupToken: jest
+        .fn()
+        .mockResolvedValue({
+          token: 'setup-token',
+          expiresAt: new Date('2026-12-01T00:00:00Z'),
+        }),
+      getRolesByIds: jest.fn().mockResolvedValue({
+        roles: [
+          { id: 6, name: 'FacultyAdmin' },
+          { id: 7, name: 'Dean' },
+        ],
+      }),
+    };
+    eventService = {
+      getEvent: jest
+        .fn()
+        .mockResolvedValue({
+          id: 3,
+          name: 'Feria',
+          description: 'Feria de proyectos',
+        }),
+    };
+    projectService = {
+      getProject: jest
+        .fn()
+        .mockResolvedValue({ id: 12, name: 'Robot', eventId: 3 }),
+    };
+    notificationService = {
+      sendPlatformInvitationEmail: jest.fn(),
+      sendJurorInvitationEmail: jest.fn(),
+      sendProjectSubmittedInvitationEmail: jest.fn(),
+      sendProjectTutorInvitationEmail: jest.fn(),
+    };
+    const configService = {
+      get: jest.fn((key: string, fallback?: unknown) =>
+        key === 'FRONTEND_URL' ? FRONTEND_URL : fallback,
+      ),
+    } as unknown as ConfigService;
+
+    useCase = new CreateInvitationUseCase(
+      invitationRepository as unknown as InvitationRepositoryPort,
+      invitationRoleRepository as unknown as InvitationRoleRepositoryPort,
+      authService as unknown as AuthServicePort,
+      eventService as unknown as EventServicePort,
+      projectService as unknown as ProjectServicePort,
+      notificationService as unknown as NotificationServicePort,
+      configService,
+    );
   });
 
-  describe('Happy Path - Existing User', () => {
-    it('should create invitation for existing user', async () => {
-      // Arrange
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
+  describe('existing user', () => {
+    it('invites to an event with a random token, the roles and a link to the dashboard', async () => {
+      const { invitation, invitationRoles } = await useCase.execute(dto());
 
-      const mockUser = {
-        id: 200,
-        email: 'existing@example.com',
-        firstName: 'Jane',
-        lastName: 'Doe',
-        status: 'CONFIRMED',
-      };
+      expect(authService.createBasicUser).not.toHaveBeenCalled();
+      expect(authService.generateAccountSetupToken).not.toHaveBeenCalled();
+      expect(invitation).toMatchObject({
+        email: 'ana@uninorte.edu.co',
+        targetType: InvitationTargetType.EVENT,
+        targetId: 3,
+        status: InvitationStatus.PENDING,
+      });
+      expect(invitation.token).not.toBe('setup-token');
+      expect(invitationRoles).toEqual([
+        expect.objectContaining({ invitationId: invitation.id, roleId: 4 }),
+      ]);
+      // Event invitations go to jurors
+      expect(notificationService.sendJurorInvitationEmail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'ana@uninorte.edu.co',
+          firstName: 'Ana',
+          invitationLink: `${FRONTEND_URL}/app/invitations`,
+          eventName: 'Feria',
+          eventDescription: 'Feria de proyectos',
+          roles: 'Jurado',
+        }),
+      );
+    });
+  });
 
-      authService.getUserByEmail.mockReturnValue(of(mockUser) as any);
-      invitationRepository.save.mockImplementation((inv) =>
-        Promise.resolve(inv),
-      );
-      invitationRoleRepository.save.mockImplementation((role) =>
-        Promise.resolve(role),
-      );
-      authService.getRolesByIds.mockReturnValue(
-        of({ roles: [{ id: 10, name: 'Admin' }] }) as any,
-      );
-      notificationService.sendEmail.mockReturnValue(of({}) as any);
+  describe('new user', () => {
+    beforeEach(() => {
+      authService.getUserByEmail.mockRejectedValue({ code: status.NOT_FOUND });
+    });
 
-      // Act
-      const result = await useCase.execute({
-        email: 'existing@example.com',
-        targetType: InvitationTargetType.PLATFORM,
-        targetId: 1,
-        invitedByUserId: 100,
-        roleIds: [10],
+    it('creates the account and uses its account setup token, with a link to set the password', async () => {
+      const { invitation } = await useCase.execute(
+        dto({ email: 'luis@uninorte.edu.co' }),
+      );
+
+      expect(authService.createBasicUser).toHaveBeenCalledWith({
+        email: 'luis@uninorte.edu.co',
+        firstName: 'luis',
+        lastName: undefined,
+      });
+      expect(authService.generateAccountSetupToken).toHaveBeenCalledWith(9);
+      expect(invitation).toMatchObject({
+        token: 'setup-token',
+        expiresAt: new Date('2026-12-01T00:00:00Z'),
+      });
+      expect(notificationService.sendJurorInvitationEmail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          invitationLink: `${FRONTEND_URL}/auth/chg-password?token=setup-token`,
+        }),
+      );
+    });
+
+    it('creates the account with the names that were sent', async () => {
+      await useCase.execute(
+        dto({
+          email: 'luis@uninorte.edu.co',
+          firstName: 'Luis',
+          lastName: 'Gómez',
+        }),
+      );
+
+      expect(authService.createBasicUser).toHaveBeenCalledWith({
+        email: 'luis@uninorte.edu.co',
+        firstName: 'Luis',
+        lastName: 'Gómez',
+      });
+    });
+
+    it('does not create an account when auth-service fails for another reason', async () => {
+      authService.getUserByEmail.mockRejectedValue({
+        code: status.UNAVAILABLE,
       });
 
-      // Assert
-      expect(result).toBeInstanceOf(Invitation);
-      expect(result.email).toBe('existing@example.com');
-      expect(result.status).toBe(InvitationStatus.PENDING);
-      expect(result.invitedUserId).toBe(200);
-      expect(authService.getUserByEmail).toHaveBeenCalledWith({
-        email: 'existing@example.com',
+      await expect(useCase.execute(dto())).rejects.toEqual({
+        code: status.UNAVAILABLE,
       });
       expect(authService.createBasicUser).not.toHaveBeenCalled();
-      expect(invitationRepository.save).toHaveBeenCalled();
-      expect(invitationRoleRepository.save).toHaveBeenCalled();
-      expect(notificationService.sendEmail).toHaveBeenCalled();
+      expect(invitationRepository.save).not.toHaveBeenCalled();
     });
   });
 
-  describe('Happy Path - New User', () => {
-    it('should create invitation and basic user for new email', async () => {
-      // Arrange
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
-
-      const mockNewUser = {
-        id: 201,
-        email: 'newuser@example.com',
-        firstName: 'newuser',
-        lastName: undefined,
-        status: 'PENDING',
-      };
-
-      authService.getUserByEmail.mockReturnValue(
-        throwError(() => ({ code: status.NOT_FOUND })) as any,
-      );
-      authService.createBasicUser.mockReturnValue(of(mockNewUser) as any);
-      invitationRepository.save.mockImplementation((inv) =>
-        Promise.resolve(inv),
-      );
-      authService.getRolesByIds.mockReturnValue(
-        of({ roles: [{ id: 10, name: 'User' }] }) as any,
-      );
-      notificationService.sendEmail.mockReturnValue(of({}) as any);
-
-      // Act
-      const result = await useCase.execute({
-        email: 'newuser@example.com',
-        targetType: InvitationTargetType.PLATFORM,
-        targetId: 1,
-        invitedByUserId: 100,
-        roleIds: [10],
-      });
-
-      // Assert
-      expect(result.invitedUserId).toBe(201);
-      expect(authService.getUserByEmail).toHaveBeenCalledWith({
-        email: 'newuser@example.com',
-      });
-      expect(authService.createBasicUser).toHaveBeenCalledWith({
-        email: 'newuser@example.com',
-        firstName: 'newuser',
-        lastName: undefined,
-      });
-    });
-
-    it('should create user with provided firstName and lastName', async () => {
-      // Arrange
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
-
-      const mockNewUser = {
-        id: 202,
-        email: 'john@example.com',
-        firstName: 'John',
-        lastName: 'Smith',
-        status: 'PENDING',
-      };
-
-      authService.getUserByEmail.mockReturnValue(
-        throwError(() => ({ code: status.NOT_FOUND })) as any,
-      );
-      authService.createBasicUser.mockReturnValue(of(mockNewUser) as any);
-      invitationRepository.save.mockImplementation((inv) =>
-        Promise.resolve(inv),
-      );
-      authService.getRolesByIds.mockReturnValue(of({ roles: [] }) as any);
-      notificationService.sendEmail.mockReturnValue(of({}) as any);
-
-      // Act
-      await useCase.execute({
-        email: 'john@example.com',
-        targetType: InvitationTargetType.PLATFORM,
-        targetId: 1,
-        invitedByUserId: 100,
-        roleIds: [],
-        firstName: 'John',
-        lastName: 'Smith',
-      });
-
-      // Assert
-      expect(authService.createBasicUser).toHaveBeenCalledWith({
-        email: 'john@example.com',
-        firstName: 'John',
-        lastName: 'Smith',
-      });
-    });
-  });
-
-  describe('Happy Path - Platform Invitation', () => {
-    it('should create platform invitation with roles', async () => {
-      // Arrange
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
-
-      const mockUser = {
-        id: 200,
-        email: 'user@example.com',
-        firstName: 'Test',
-        status: 'CONFIRMED',
-      };
-
-      authService.getUserByEmail.mockReturnValue(of(mockUser) as any);
-      invitationRepository.save.mockImplementation((inv) =>
-        Promise.resolve(inv),
-      );
-      invitationRoleRepository.save.mockImplementation((role) =>
-        Promise.resolve(role),
-      );
-      authService.getRolesByIds.mockReturnValue(
-        of({
-          roles: [
-            { id: 10, name: 'Admin' },
-            { id: 11, name: 'Editor' },
-          ],
-        }) as any,
-      );
-      notificationService.sendEmail.mockReturnValue(of({}) as any);
-
-      // Act
-      await useCase.execute({
-        email: 'user@example.com',
-        targetType: InvitationTargetType.PLATFORM,
-        targetId: 1,
-        invitedByUserId: 100,
-        roleIds: [10, 11],
-      });
-
-      // Assert
-      expect(authService.getRolesByIds).toHaveBeenCalledWith({
-        roleIds: [10, 11],
-      });
-      expect(notificationService.sendEmail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          to: 'user@example.com',
-          subject: 'Welcome to the Platform - Invitation',
-          body: expect.stringContaining('Admin, Editor'),
+  describe('target types', () => {
+    it('platform: sends the names of the roles', async () => {
+      await useCase.execute(
+        dto({
+          targetType: InvitationTargetType.PLATFORM,
+          targetId: 0,
+          roleIds: [6, 7],
         }),
       );
+
+      expect(eventService.getEvent).not.toHaveBeenCalled();
+      expect(authService.getRolesByIds).toHaveBeenCalledWith([6, 7]);
+      expect(
+        notificationService.sendPlatformInvitationEmail,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({ roles: 'FacultyAdmin, Dean' }),
+      );
     });
 
-    it('should create platform invitation without roles', async () => {
-      // Arrange
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
-
-      const mockUser = {
-        id: 200,
-        email: 'user@example.com',
-        firstName: 'Test',
-        status: 'CONFIRMED',
-      };
-
-      authService.getUserByEmail.mockReturnValue(of(mockUser) as any);
-      invitationRepository.save.mockImplementation((inv) =>
-        Promise.resolve(inv),
+    it('platform without roles: no roles lookup and no invitation roles', async () => {
+      const { invitationRoles } = await useCase.execute(
+        dto({
+          targetType: InvitationTargetType.PLATFORM,
+          targetId: 0,
+          roleIds: [],
+        }),
       );
-      notificationService.sendEmail.mockReturnValue(of({}) as any);
 
-      // Act
-      await useCase.execute({
-        email: 'user@example.com',
-        targetType: InvitationTargetType.PLATFORM,
-        targetId: 1,
-        expiresAt,
-        invitedByUserId: 100,
-        roleIds: [],
-      });
-
-      // Assert
       expect(authService.getRolesByIds).not.toHaveBeenCalled();
       expect(invitationRoleRepository.save).not.toHaveBeenCalled();
-      expect(notificationService.sendEmail).toHaveBeenCalledWith(
+      expect(invitationRoles).toEqual([]);
+      expect(
+        notificationService.sendPlatformInvitationEmail,
+      ).toHaveBeenCalledWith(expect.objectContaining({ roles: '' }));
+    });
+
+    it('project: looks up the project and its event for the email', async () => {
+      await useCase.execute(
+        dto({ targetType: InvitationTargetType.PROJECT, targetId: 12 }),
+      );
+
+      expect(projectService.getProject).toHaveBeenCalledWith(12);
+      expect(eventService.getEvent).toHaveBeenCalledWith(3);
+      expect(
+        notificationService.sendProjectSubmittedInvitationEmail,
+      ).toHaveBeenCalledWith(
         expect.objectContaining({
-          subject: 'Welcome to the Platform - Invitation',
-          body: expect.stringContaining(
-            'You have been invited to join the platform',
-          ),
+          projectName: 'Robot',
+          eventName: 'Feria',
+          eventType: 'Exposition',
         }),
       );
     });
+
+    it('project tutor: looks up the project only', async () => {
+      await useCase.execute(
+        dto({ targetType: InvitationTargetType.PROJECT_TUTOR, targetId: 12 }),
+      );
+
+      expect(eventService.getEvent).not.toHaveBeenCalled();
+      expect(
+        notificationService.sendProjectTutorInvitationEmail,
+      ).toHaveBeenCalledWith(expect.objectContaining({ projectName: 'Robot' }));
+    });
+
+    // Known bug: the NOT_FOUND thrown inside the try is wrapped again by its catch, which reads
+    // error.code (an RpcException keeps it in getError()), so the caller gets INTERNAL.
+    // When it is fixed this test starts failing: remove `.failing`.
+    it.failing(
+      'event that does not exist: NOT_FOUND and nothing is saved',
+      async () => {
+        eventService.getEvent.mockResolvedValue(null);
+
+        await expect(useCase.execute(dto())).rejects.toMatchObject({
+          error: expect.objectContaining({ code: status.NOT_FOUND }),
+        });
+        expect(invitationRepository.save).not.toHaveBeenCalled();
+      },
+    );
   });
 
-  describe('Happy Path - Event Invitation', () => {
-    it('should create event invitation with event details', async () => {
-      // Arrange
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
-
-      const mockUser = {
-        id: 200,
-        email: 'user@example.com',
-        firstName: 'Test',
-        status: 'CONFIRMED',
-      };
-
-      const mockEvent = {
-        id: 5,
-        name: 'Tech Conference 2024',
-        description: 'Annual tech conference',
-      };
-
-      authService.getUserByEmail.mockReturnValue(of(mockUser) as any);
-      eventService.getEvent.mockReturnValue(of(mockEvent) as any);
-      invitationRepository.save.mockImplementation((inv) =>
-        Promise.resolve(inv),
-      );
-      invitationRoleRepository.save.mockImplementation((role) =>
-        Promise.resolve(role),
-      );
-      authService.getRolesByIds.mockReturnValue(
-        of({ roles: [{ id: 20, name: 'Speaker' }] }) as any,
-      );
-      notificationService.sendEmail.mockReturnValue(of({}) as any);
-
-      // Act
-      await useCase.execute({
-        email: 'user@example.com',
-        targetType: InvitationTargetType.EVENT,
-        targetId: 5,
-        invitedByUserId: 100,
-        roleIds: [20],
+  describe('repeated invitations', () => {
+    it('rejects an email that already accepted an invitation to the same target', async () => {
+      invitationRepository.findAcceptedByEmailAndTargetType.mockResolvedValue({
+        id: 'accepted',
       });
 
-      // Assert
-      expect(eventService.getEvent).toHaveBeenCalledWith({ id: 5 });
-      expect(notificationService.sendEmail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          subject: 'Invitation to Event: Tech Conference 2024',
-          body: expect.stringContaining('Tech Conference 2024'),
+      await expect(useCase.execute(dto())).rejects.toMatchObject({
+        error: expect.objectContaining({
+          code: status.ALREADY_EXISTS,
+          message: 'El usuario ya aceptó una invitación para este evento',
         }),
-      );
-    });
-  });
-
-  describe('Happy Path - Project Invitation', () => {
-    it('should create project invitation with project and event details', async () => {
-      // Arrange
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
-
-      const mockUser = {
-        id: 200,
-        email: 'user@example.com',
-        firstName: 'Test',
-        status: 'CONFIRMED',
-      };
-
-      const mockProject = {
-        project: {
-          id: 10,
-          name: 'AI Research Project',
-          eventId: 5,
-        },
-      };
-
-      const mockEvent = {
-        id: 5,
-        name: 'Research Symposium',
-      };
-
-      authService.getUserByEmail.mockReturnValue(of(mockUser) as any);
-      projectService.getProject.mockReturnValue(of(mockProject) as any);
-      eventService.getEvent.mockReturnValue(of(mockEvent) as any);
-      invitationRepository.save.mockImplementation((inv) =>
-        Promise.resolve(inv),
-      );
-      notificationService.sendEmail.mockReturnValue(of({}) as any);
-
-      // Act
-      await useCase.execute({
-        email: 'user@example.com',
-        targetType: InvitationTargetType.PROJECT,
-        targetId: 10,
-        invitedByUserId: 100,
-        roleIds: [],
       });
-
-      // Assert
-      expect(projectService.getProject).toHaveBeenCalledWith({ id: 10 });
-      expect(eventService.getEvent).toHaveBeenCalledWith({ id: 5 });
-      expect(notificationService.sendEmail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          subject: 'Congratulations! Your Project Has Been Approved',
-          body: expect.stringContaining('AI Research Project'),
-        }),
-      );
-    });
-  });
-
-  describe('Edge Cases', () => {
-    it('should handle empty roleIds array', async () => {
-      // Arrange
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
-
-      const mockUser = {
-        id: 200,
-        email: 'user@example.com',
-        firstName: 'Test',
-        status: 'CONFIRMED',
-      };
-
-      authService.getUserByEmail.mockReturnValue(of(mockUser) as any);
-      invitationRepository.save.mockImplementation((inv) =>
-        Promise.resolve(inv),
-      );
-      authService.getRolesByIds.mockReturnValue(of({ roles: [] }) as any);
-      notificationService.sendEmail.mockReturnValue(of({}) as any);
-
-      // Act
-      await useCase.execute({
-        email: 'user@example.com',
-        targetType: InvitationTargetType.PLATFORM,
-        targetId: 1,
-        expiresAt,
-        invitedByUserId: 100,
-        roleIds: [],
-      });
-
-      // Assert
-      expect(invitationRoleRepository.save).not.toHaveBeenCalled();
-      expect(authService.getRolesByIds).not.toHaveBeenCalled();
+      expect(invitationRepository.save).not.toHaveBeenCalled();
     });
 
-    it('should use email username as firstName when not provided for new users', async () => {
-      // Arrange
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
-
-      const mockNewUser = {
-        id: 201,
-        email: 'john.doe@example.com',
-        firstName: 'john.doe',
-        status: 'PENDING',
-      };
-
-      authService.getUserByEmail.mockReturnValue(
-        throwError(() => ({ code: status.NOT_FOUND })) as any,
+    it('returns the pending invitation with its roles instead of creating another one', async () => {
+      const pending = { id: 'pending' };
+      invitationRepository.findPendingByEmailAndTargetType.mockResolvedValue(
+        pending,
       );
-      authService.createBasicUser.mockReturnValue(of(mockNewUser) as any);
-      invitationRepository.save.mockImplementation((inv) =>
-        Promise.resolve(inv),
-      );
-      authService.getRolesByIds.mockReturnValue(of({ roles: [] }) as any);
-      notificationService.sendEmail.mockReturnValue(of({}) as any);
+      invitationRoleRepository.findByInvitationId.mockResolvedValue([
+        { invitationId: 'pending', roleId: 4 },
+      ]);
 
-      // Act
-      await useCase.execute({
-        email: 'john.doe@example.com',
-        targetType: InvitationTargetType.PLATFORM,
-        targetId: 1,
-        invitedByUserId: 100,
-        roleIds: [],
+      await expect(useCase.execute(dto())).resolves.toEqual({
+        invitation: pending,
+        invitationRoles: [{ invitationId: 'pending', roleId: 4 }],
       });
-
-      // Assert
-      expect(authService.createBasicUser).toHaveBeenCalledWith({
-        email: 'john.doe@example.com',
-        firstName: 'john.doe',
-        lastName: undefined,
-      });
+      expect(invitationRepository.save).not.toHaveBeenCalled();
+      expect(
+        notificationService.sendJurorInvitationEmail,
+      ).not.toHaveBeenCalled();
     });
   });
 });

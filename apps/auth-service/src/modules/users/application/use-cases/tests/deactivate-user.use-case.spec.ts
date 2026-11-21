@@ -15,7 +15,7 @@ describe('DeactivateUserUseCase', () => {
   beforeEach(() => {
     userRepository = {
       findById: jest.fn((id: number) =>
-        Promise.resolve(id === 999 ? null : new User(id, 'Name', null, `u${id}@iris.local`, 'x', null, true, UserStatus.CONFIRMED)),
+        Promise.resolve(id === 999 ? null : new User(id, 'Name', '', `u${id}@iris.local`, 'x', undefined, true, UserStatus.CONFIRMED)),
       ),
       deactivate: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<UserRepositoryPort>;
@@ -32,14 +32,14 @@ describe('DeactivateUserUseCase', () => {
 
   it('does not let a faculty admin deactivate the principal admin', async () => {
     await expect(build().execute({ id: 1, actorUserId: 2 })).rejects.toEqual(
-      rpcError(status.PERMISSION_DENIED, 'administrator account'),
+      rpcError(status.PERMISSION_DENIED, 'cuenta de administrador'),
     );
     expect(userRepository.deactivate).not.toHaveBeenCalled();
   });
 
   it('does not let a user deactivate their own account', async () => {
     await expect(build().execute({ id: 1, actorUserId: 1 })).rejects.toEqual(
-      rpcError(status.PERMISSION_DENIED, 'their own account'),
+      rpcError(status.PERMISSION_DENIED, 'su propia cuenta'),
     );
   });
 
@@ -54,7 +54,7 @@ describe('DeactivateUserUseCase', () => {
     platformStaffRepository.countActiveAdminsByRoleId.mockResolvedValue(0);
 
     await expect(new DeactivateUserUseCase(userRepository, policy).execute({ id: 5, actorUserId: 1 })).rejects.toEqual(
-      rpcError(status.FAILED_PRECONDITION, 'without an active Admin'),
+      rpcError(status.FAILED_PRECONDITION, 'sin un administrador activo'),
     );
   });
 });

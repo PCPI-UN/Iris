@@ -29,7 +29,7 @@ export class CreateBasicUserUseCase {
 
       throw new RpcException({
         code: status.ALREADY_EXISTS,
-        message: 'An active user with this email already exists',
+        message: 'Ya existe un usuario activo con este correo',
       });
     }
 
@@ -38,7 +38,7 @@ export class CreateBasicUserUseCase {
       if (phoneExists) {
         throw new RpcException({
           code: status.ALREADY_EXISTS,
-          message: 'Another user with this phone number already exists',
+          message: 'Ya existe otro usuario con este número de teléfono',
         });
       }
     }

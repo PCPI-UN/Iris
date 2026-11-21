@@ -311,6 +311,8 @@ message User {
   optional string phone = 5;
   bool active = 6;
   string status = 7;
+  // Active platform roles; only GetUsers fills it
+  repeated Role roles = 8;
 }
 
 message PaginationMeta {

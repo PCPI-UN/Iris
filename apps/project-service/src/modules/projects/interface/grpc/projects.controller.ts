@@ -3,6 +3,7 @@ import { GrpcMethod, RpcException } from '@nestjs/microservices';
 import { CreateProjectUC } from '../../application/use-cases/create-project.uc';
 import { ListProjectsByEventUC } from '../../application/use-cases/list-projects-by-event.uc';
 import { GetProjectUC } from '../../application/use-cases/get-project.uc';
+import { ListProjectsByIdsUC } from '../../application/use-cases/list-projects-by-ids.uc';
 import { AddProjectDocumentUC } from '../../application/use-cases/add-document.uc';
 import { ListDocumentsUC } from '../../application/use-cases/list-documents.uc';
 import { DeleteProjectUC } from '../../application/use-cases/delete-project.uc';
@@ -86,6 +87,7 @@ export class ProjectsController {
   constructor(
     private readonly createProject: CreateProjectUC,
     private readonly getProject: GetProjectUC,
+    private readonly listProjectsByIdsUC: ListProjectsByIdsUC,
     private readonly listByEvent: ListProjectsByEventUC,
     private readonly addDoc: AddProjectDocumentUC,
     private readonly listDocs: ListDocumentsUC,
@@ -155,6 +157,20 @@ export class ProjectsController {
   async getProjectRpc(req: { id: number }) {
     const p = await this.getProject.execute({ id: req.id });
     return { project: toProtoProject(p) };
+  }
+
+  @GrpcMethod('ProjectsService', 'ListProjectsByIds')
+  async listProjectsByIdsRpc(req: { ids?: number[] }) {
+    // Project fields only: participants, documents and tutors stay empty
+    const projects = await this.listProjectsByIdsUC.execute(req);
+    return {
+      items: projects.map(toProtoProject),
+      total: projects.length,
+      currentPage: 1,
+      itemsOnCurrentPage: projects.length,
+      itemsPerPage: projects.length,
+      totalPages: 1,
+    };
   }
 
   @GrpcMethod('ProjectsService', 'ListProjectsByEvent')
@@ -393,7 +409,7 @@ export class ProjectsController {
       if (hasConflict) {
         throw new RpcException({
           code: status.ALREADY_EXISTS,
-          message: `Conflicting active submissions found for emails: ${conflictEmails.join(', ')}`,
+          message: `Estos correos ya tienen un proyecto activo en conflicto: ${conflictEmails.join(', ')}`,
         });
       }
     }

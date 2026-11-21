@@ -14,7 +14,7 @@ export class GetMyProjectByEventUC {
     async execute(input: { eventId: number; userId: number }) {
         const project = await this.repo.findByEventIdAndUserId(input.eventId, input.userId);
         if (!project) {
-            throw new NotFoundError('No project found for this user in the specified event');
+            throw new NotFoundError('El usuario no tiene un proyecto en el evento indicado');
         }
 
         const [pendingParticipants, documents] = await Promise.all([
