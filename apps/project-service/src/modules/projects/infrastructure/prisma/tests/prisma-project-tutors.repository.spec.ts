@@ -1,11 +1,12 @@
 import { PrismaProjectRepository } from '../prisma-project.repository';
 
 describe('PrismaProjectRepository (tutors)', () => {
+  let db: any;
   let prisma: any;
   let repo: PrismaProjectRepository;
 
   beforeEach(() => {
-    prisma = {
+    db = {
       projectTutor: {
         upsert: jest.fn().mockResolvedValue({}),
         findMany: jest.fn().mockResolvedValue([]),
@@ -18,15 +19,15 @@ describe('PrismaProjectRepository (tutors)', () => {
         deleteMany: jest.fn((a) => ({ op: 'deletePendings', a })),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
-      $transaction: jest.fn().mockResolvedValue([]),
     };
+    prisma = { db, transaction: jest.fn((work) => work(db)) };
     repo = new PrismaProjectRepository(prisma);
   });
 
   it('addTutor is an upsert on (project, user), so repeating it keeps one row', async () => {
     await repo.addTutor(3, 7);
 
-    expect(prisma.projectTutor.upsert).toHaveBeenCalledWith({
+    expect(db.projectTutor.upsert).toHaveBeenCalledWith({
       where: { projectId_userId: { projectId: 3, userId: 7 } },
       update: {},
       create: { projectId: 3, userId: 7 },
@@ -34,7 +35,7 @@ describe('PrismaProjectRepository (tutors)', () => {
   });
 
   it('listTutorUserIds returns only the user ids', async () => {
-    prisma.projectTutor.findMany.mockResolvedValue([{ userId: 7 }, { userId: 9 }]);
+    db.projectTutor.findMany.mockResolvedValue([{ userId: 7 }, { userId: 9 }]);
 
     await expect(repo.listTutorUserIds(3)).resolves.toEqual([7, 9]);
   });
@@ -44,44 +45,50 @@ describe('PrismaProjectRepository (tutors)', () => {
       { firstName: 'Ana', lastName: null, email: '  Ana@Example.COM ' },
     ]);
 
-    expect(prisma.projectTutor.deleteMany).toHaveBeenCalledWith({
+    expect(db.projectTutor.deleteMany).toHaveBeenCalledWith({
       where: { projectId: 3, userId: { notIn: [7, 9] } },
     });
-    expect(prisma.projectTutor.createMany).toHaveBeenCalledWith({
+    expect(db.projectTutor.createMany).toHaveBeenCalledWith({
       data: [
         { projectId: 3, userId: 7 },
         { projectId: 3, userId: 9 },
       ],
       skipDuplicates: true,
     });
-    expect(prisma.pendingProjectTutor.deleteMany).toHaveBeenCalledWith({
+    expect(db.pendingProjectTutor.deleteMany).toHaveBeenCalledWith({
       where: { projectId: 3, email: { notIn: ['ana@example.com'] } },
     });
-    expect(prisma.pendingProjectTutor.upsert).toHaveBeenCalledWith({
+    expect(db.pendingProjectTutor.upsert).toHaveBeenCalledWith({
       where: { projectId_email: { projectId: 3, email: 'ana@example.com' } },
       update: { firstName: 'Ana', lastName: null },
       create: { projectId: 3, email: 'ana@example.com', firstName: 'Ana', lastName: null },
     });
-    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-    expect(prisma.$transaction.mock.calls[0][0]).toHaveLength(4);
+    expect(prisma.transaction).toHaveBeenCalledTimes(1);
+    const order = [
+      db.projectTutor.deleteMany,
+      db.projectTutor.createMany,
+      db.pendingProjectTutor.deleteMany,
+      db.pendingProjectTutor.upsert,
+    ].map((fn) => fn.mock.invocationCallOrder[0]);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
   });
 
   it('replaceTutors with empty lists removes every tutor and pending tutor', async () => {
     await repo.replaceTutors(3, [], []);
 
-    expect(prisma.projectTutor.deleteMany).toHaveBeenCalledWith({
+    expect(db.projectTutor.deleteMany).toHaveBeenCalledWith({
       where: { projectId: 3, userId: { notIn: [] } },
     });
-    expect(prisma.pendingProjectTutor.deleteMany).toHaveBeenCalledWith({
+    expect(db.pendingProjectTutor.deleteMany).toHaveBeenCalledWith({
       where: { projectId: 3, email: { notIn: [] } },
     });
-    expect(prisma.pendingProjectTutor.upsert).not.toHaveBeenCalled();
+    expect(db.pendingProjectTutor.upsert).not.toHaveBeenCalled();
   });
 
   it('addPendingTutor upserts by (project, normalized email)', async () => {
     await repo.addPendingTutor(3, { firstName: 'Ana', email: 'ANA@example.com' });
 
-    expect(prisma.pendingProjectTutor.upsert).toHaveBeenCalledWith({
+    expect(db.pendingProjectTutor.upsert).toHaveBeenCalledWith({
       where: { projectId_email: { projectId: 3, email: 'ana@example.com' } },
       update: { firstName: 'Ana', lastName: null },
       create: { projectId: 3, email: 'ana@example.com', firstName: 'Ana', lastName: null },
@@ -92,10 +99,10 @@ describe('PrismaProjectRepository (tutors)', () => {
     const at = new Date('2026-11-12T10:00:00Z');
 
     await expect(repo.markPendingTutorsInvited(3, [], at)).resolves.toBe(0);
-    expect(prisma.pendingProjectTutor.updateMany).not.toHaveBeenCalled();
+    expect(db.pendingProjectTutor.updateMany).not.toHaveBeenCalled();
 
     await expect(repo.markPendingTutorsInvited(3, ['A@x.com'], at)).resolves.toBe(1);
-    expect(prisma.pendingProjectTutor.updateMany).toHaveBeenCalledWith({
+    expect(db.pendingProjectTutor.updateMany).toHaveBeenCalledWith({
       where: { projectId: 3, email: { in: ['a@x.com'] } },
       data: { status: 'INVITED', invitedAt: at },
     });
@@ -105,33 +112,33 @@ describe('PrismaProjectRepository (tutors)', () => {
     const at = new Date('2026-11-12T10:00:00Z');
 
     await expect(repo.markPendingTutorJoined(3, 'A@x.com', at)).resolves.toBe(true);
-    expect(prisma.pendingProjectTutor.updateMany).toHaveBeenCalledWith({
+    expect(db.pendingProjectTutor.updateMany).toHaveBeenCalledWith({
       where: { projectId: 3, email: 'a@x.com' },
       data: { status: 'JOINED', joinedAt: at },
     });
 
-    prisma.pendingProjectTutor.updateMany.mockResolvedValue({ count: 0 });
+    db.pendingProjectTutor.updateMany.mockResolvedValue({ count: 0 });
     await expect(repo.markPendingTutorJoined(3, 'b@x.com', at)).resolves.toBe(false);
   });
 
   it('batch reads filter by the project ids and skip the query for an empty list', async () => {
-    prisma.projectTutor.findMany.mockResolvedValue([{ projectId: 1, userId: 7 }]);
+    db.projectTutor.findMany.mockResolvedValue([{ projectId: 1, userId: 7 }]);
 
     await expect(repo.listTutorLinksByProjects([1, 2])).resolves.toEqual([{ projectId: 1, userId: 7 }]);
-    expect(prisma.projectTutor.findMany).toHaveBeenCalledWith(
+    expect(db.projectTutor.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { projectId: { in: [1, 2] } } }),
     );
 
     await repo.listPendingTutorsByProjects([1, 2]);
-    expect(prisma.pendingProjectTutor.findMany).toHaveBeenCalledWith(
+    expect(db.pendingProjectTutor.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { projectId: { in: [1, 2] } } }),
     );
 
-    prisma.projectTutor.findMany.mockClear();
-    prisma.pendingProjectTutor.findMany.mockClear();
+    db.projectTutor.findMany.mockClear();
+    db.pendingProjectTutor.findMany.mockClear();
     await expect(repo.listTutorLinksByProjects([])).resolves.toEqual([]);
     await expect(repo.listPendingTutorsByProjects([])).resolves.toEqual([]);
-    expect(prisma.projectTutor.findMany).not.toHaveBeenCalled();
-    expect(prisma.pendingProjectTutor.findMany).not.toHaveBeenCalled();
+    expect(db.projectTutor.findMany).not.toHaveBeenCalled();
+    expect(db.pendingProjectTutor.findMany).not.toHaveBeenCalled();
   });
 });

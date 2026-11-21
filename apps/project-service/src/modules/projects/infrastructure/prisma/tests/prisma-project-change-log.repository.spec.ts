@@ -1,7 +1,4 @@
-import {
-  PrismaProjectChangeLogRepository,
-  toProjectChangeLogData,
-} from '../prisma-project-change-log.repository';
+import { PrismaProjectChangeLogRepository } from '../prisma-project-change-log.repository';
 
 describe('PrismaProjectChangeLogRepository', () => {
   const row = {
@@ -17,33 +14,38 @@ describe('PrismaProjectChangeLogRepository', () => {
 
   it('lists the entries of the project, most recent first', async () => {
     const prisma = {
-      projectChangeLog: { findMany: jest.fn().mockResolvedValue([row]) },
+      db: {
+        projectChangeLog: { findMany: jest.fn().mockResolvedValue([row]) },
+      },
     };
 
     const result = await new PrismaProjectChangeLogRepository(
       prisma as any,
     ).listByProject(4);
 
-    expect(prisma.projectChangeLog.findMany).toHaveBeenCalledWith({
+    expect(prisma.db.projectChangeLog.findMany).toHaveBeenCalledWith({
       where: { projectId: 4 },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
     expect(result).toEqual([row]);
   });
-});
+  it('create inserts the entry through the current client and returns it', async () => {
+    const created = {
+      ...row,
+      action: 'TUTORS',
+      before: { tutorUserIds: [3] },
+      after: { tutorUserIds: [3, 5] },
+      reason: 'Faltaba un tutor',
+    };
+    const prisma = {
+      db: {
+        projectChangeLog: { create: jest.fn().mockResolvedValue(created) },
+      },
+    };
 
-describe('toProjectChangeLogData', () => {
-  it('maps a new entry to the data of a project_change_log row', () => {
-    expect(
-      toProjectChangeLogData({
-        projectId: 4,
-        actorUserId: 1,
-        action: 'TUTORS',
-        before: { tutorUserIds: [3] },
-        after: { tutorUserIds: [3, 5] },
-        reason: 'Faltaba un tutor',
-      }),
-    ).toEqual({
+    const result = await new PrismaProjectChangeLogRepository(
+      prisma as any,
+    ).create({
       projectId: 4,
       actorUserId: 1,
       action: 'TUTORS',
@@ -51,5 +53,17 @@ describe('toProjectChangeLogData', () => {
       after: { tutorUserIds: [3, 5] },
       reason: 'Faltaba un tutor',
     });
+
+    expect(prisma.db.projectChangeLog.create).toHaveBeenCalledWith({
+      data: {
+        projectId: 4,
+        actorUserId: 1,
+        action: 'TUTORS',
+        before: { tutorUserIds: [3] },
+        after: { tutorUserIds: [3, 5] },
+        reason: 'Faltaba un tutor',
+      },
+    });
+    expect(result).toEqual(created);
   });
 });

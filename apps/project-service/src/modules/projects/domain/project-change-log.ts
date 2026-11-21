@@ -47,8 +47,8 @@ export function changedFields(
 
 /**
  * Change log entry of an administrative edit, with only the fields that changed, or null
- * when no field changed. The use case passes it to the repository method that makes the
- * edit, which inserts it in the same transaction, so an edit is never saved without its entry.
+ * when no field changed. The use case saves it with `ProjectChangeLogRepository.create` inside
+ * `UnitOfWork.run`, together with the edit, so an edit is never saved without its entry.
  */
 export function buildProjectChangeLogEntry(
   input: ProjectChangeInput,

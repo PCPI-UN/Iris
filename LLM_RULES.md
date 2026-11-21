@@ -169,6 +169,11 @@ an adapter that implement the port's methods. Then you can inject the servive po
 way to do it. If the service will be used in a single module of the service, the port and adapter can be under the `infrastructure` folder
 of the service. Remember that `infrastructure` must have the `ports` and `adapters` folders for organization purposes. 
 
+15. When a use case makes several writes that must be saved together or not at all (for example an edit and its change log entry),
+it wraps them in `UnitOfWork.run` (port in `libs/common/src/ports`). Repositories do not open their own `$transaction` for writes
+that belong to different repositories. Read `docs/transactions.md` before using it: it explains the rules inside `run` and
+how to add the adapter to a service that does not have it yet.
+
 ## Services in the application
 
 We have 7 services: 

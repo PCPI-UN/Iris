@@ -141,6 +141,10 @@ pnpm exec ts-node scripts/academic-structure/load-academic-structure.ts <file.js
 - Without `--dry-run` it writes everything in one transaction. Departments are matched by name and course sections by (term, NRC); existing ones take the values of the file. Nothing is deleted, and running the same file again changes nothing.
 - It only reads `auth-service` and `event-service`; roles are granted from the user administration (`PUT /users/:id/roles`).
 
+## Writes that go together
+
+An edit and its change log entry are saved together with `UnitOfWork.run`: the use case calls `ProjectChangeLogRepository.create` inside it, next to the edit. How it works and its rules: [transactions.md](../transactions.md).
+
 ## Related
 
 - [schema.md](./schema.md): database schema and ER diagram.
