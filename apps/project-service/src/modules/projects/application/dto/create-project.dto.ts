@@ -7,4 +7,6 @@ export interface CreateProjectDTO {
   description?: string;
   eventNumber?: string; // Identificación de la mesa/stand
   state?: ProjectState;
+  /** NRC of the course section, looked up in the term of the event; ignored when the event does not require one */
+  nrc?: string;
 }

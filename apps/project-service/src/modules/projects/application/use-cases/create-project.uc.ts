@@ -2,6 +2,11 @@ import { Injectable, Inject, BadRequestException } from '@nestjs/common';
 import { ProjectRepository } from '../../domain/repositories/project.repository';
 import { CreateProjectDTO } from '../dto/create-project.dto';
 import { NotFoundError, ValidationError } from '../../domain/errors';
+import {
+  NOT_APPLICABLE_ACADEMIC_COURSE_ID,
+  NO_TERM_ID,
+  isFillAcademicCourse,
+} from '../../domain/entities/project.entity';
 import { EventServicePort } from '../ports/event-service.port';
 import { EVENT_SERVICE_PORT } from '../ports/event-service.port';
 
@@ -48,6 +53,16 @@ export class CreateProjectUC {
       throw new ValidationError('Ya existe un proyecto con el mismo nombre en este evento y categoría');
     }
   
+    // Every project belongs to a course section. An event that is not course work gives
+    // course section 0 ("not applicable"), whatever the student sent; otherwise the NRC is
+    // looked up in the term of the event, since the same NRC repeats across terms. This is
+    // where "0 only for an event that does not require a course" is enforced: the event lives
+    // in another database, so no constraint can
+    const academicCourseId =
+      event.requiresCourse === false
+        ? NOT_APPLICABLE_ACADEMIC_COURSE_ID
+        : await this.resolveAcademicCourse(event.termId, input.nrc);
+
     // 3. Validate that the event registration deadline has not passed
     const currentDate = new Date();
     const registrationDeadline = new Date(event.inscriptionDeadline);
@@ -74,6 +89,22 @@ export class CreateProjectUC {
       description: input.description,
       eventNumber: input.eventNumber,
       state,
+      academicCourseId,
     });
+  }
+
+  private async resolveAcademicCourse(termId: number | undefined, nrc: string | undefined): Promise<number> {
+    const code = nrc?.trim();
+    if (!code) {
+      throw new ValidationError('El NRC del curso es obligatorio');
+    }
+    if (!termId || termId === NO_TERM_ID) {
+      throw new ValidationError('El evento no tiene periodo académico, así que no se puede ubicar el NRC');
+    }
+    const academicCourseId = await this.repo.findAcademicCourseId(termId, code);
+    if (academicCourseId === null || isFillAcademicCourse(academicCourseId)) {
+      throw new ValidationError(`El NRC ${code} no existe en el periodo del evento`);
+    }
+    return academicCourseId;
   }
 }

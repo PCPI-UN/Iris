@@ -4,7 +4,7 @@ import { EventStatus } from '@app/common/generated/event';
 export abstract class EventRepository {
   abstract create(input: any): Promise<DomainEvent>;
   abstract findById(id: number): Promise<DomainEvent | null>;
-  /** Events with the given ids, soft deleted ones included (active = false). */
+  /** Events with the given ids, newest first (by start date), soft deleted ones included (active = false). */
   abstract findByIds(ids: number[]): Promise<DomainEvent[]>;
   abstract findByAccessCode(accessCode: string): Promise<DomainEvent | null>;
   abstract findAll(): Promise<DomainEvent[]>;

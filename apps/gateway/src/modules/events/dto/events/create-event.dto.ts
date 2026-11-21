@@ -5,6 +5,7 @@ import {
   IsArray,
   IsBoolean,
   IsDateString,
+  IsInt,
   IsEnum,
   IsNotEmpty,
   IsNumber,
@@ -256,6 +257,24 @@ export class CreateEventDTO {
   @IsNumber()
   @Min(1)
   minimumTeamSize?: number;
+
+  @ApiProperty({
+    description:
+      'Academic term of the event (GET /terms). It resolves the NRC a student types when submitting a project',
+    example: 3,
+  })
+  @IsInt()
+  @Min(1)
+  termId: number;
+
+  @ApiProperty({
+    description:
+      'true: each project must belong to a course section (NRC) of the term, such as a final projects fair; ' +
+      'false: the event is not course work, such as a hackathon, and the submission asks for no NRC',
+    example: true,
+  })
+  @IsBoolean()
+  requiresCourse: boolean;
 
   @ApiProperty({
     description: 'Information about the event allies or partners',

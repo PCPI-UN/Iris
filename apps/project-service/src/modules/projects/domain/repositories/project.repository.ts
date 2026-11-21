@@ -1,4 +1,32 @@
+import { ProjectReadScope } from '../read-scope';
 import {TypedDocument, JurorKey, Project, UserParticipation, ProjectDocument, ProjectState, ProjectParticipant, StudentStatus, PendingProjectParticipant, PendingProjectTutor, PendingProjectTutorInput, Status, ProjectWithJurorIds } from '../entities/project.entity';
+
+/** Course section (NRC within a term) a project belongs to, with its department. */
+export interface AcademicCourseView {
+  id: number;
+  nrc: string;
+  /** event-service term */
+  termId: number;
+  name: string;
+  professorUserId: number;
+  departmentId: number;
+  departmentName: string;
+}
+
+/** A project as returned by the academic read endpoints. */
+export interface ProjectInScope extends Project {
+  createdAt: Date;
+  updatedAt: Date;
+  academicCourseId: number;
+  /** Null for the fill course sections: -1 (created before course sections existed) and 0 (event without course) */
+  academicCourse: AcademicCourseView | null;
+  /** Confirmed participants, with the name and email of their account when it still exists. */
+  participants: (ProjectParticipant & { firstName?: string; lastName?: string | null; email?: string })[];
+  pendingParticipants: PendingProjectParticipant[];
+  documents: ProjectDocument[];
+  /** Jurors assigned to evaluate the project. */
+  assignedJurorCount: number;
+}
 
 export interface ProjectRepository {
   create(input: {
@@ -9,7 +37,11 @@ export interface ProjectRepository {
     description?: string;
     eventNumber?: string;
     state: ProjectState;           
+    academicCourseId: number;
   }): Promise<Project>;
+
+  /** Id of the course section with that NRC in the term, or null when there is none. */
+  findAcademicCourseId(termId: number, nrc: string): Promise<number | null>;
 
   findById(id: number): Promise<Project | null>;
   findManyByIds(ids: number[]): Promise<Project[]>;
@@ -100,4 +132,14 @@ export interface ProjectRepository {
   listParticipationsByUser(userId: number, email: string): Promise<UserParticipation[]>;
   /** Projects where the user is a confirmed participant, filtered by state. */
   listProjectsByParticipant(userId: number, states: ProjectState[]): Promise<Project[]>;
+
+  /** Projects inside the read scope, newest first; the filters are combined with AND. */
+  listInScope(
+    scope: ProjectReadScope,
+    opts: { eventId?: number; state?: ProjectState; academicCourseId?: number; q?: string; currentPage: number; itemsPerPage: number },
+  ): Promise<{ items: ProjectInScope[]; total: number }>;
+  /** The project if it exists and is inside the read scope, otherwise null. */
+  findInScope(scope: ProjectReadScope, projectId: number): Promise<ProjectInScope | null>;
+  /** Distinct ids of the events with at least one project inside the read scope. */
+  listEventIdsInScope(scope: ProjectReadScope): Promise<number[]>;
 }

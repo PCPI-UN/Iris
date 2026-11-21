@@ -117,4 +117,15 @@ export class UpdateEventDTO {
   @IsArray()
   @IsString({ each: true })
   organizers?: string[];
+
+  /** Not sent: unchanged. UpdateEventUC checks that it exists */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  termId?: number;
+
+  /** Not sent: unchanged. Projects already submitted keep their course section */
+  @IsOptional()
+  @IsBoolean()
+  requiresCourse?: boolean;
 }

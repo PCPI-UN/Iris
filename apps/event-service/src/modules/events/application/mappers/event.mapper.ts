@@ -35,6 +35,8 @@ export class EventMapper {
         : '',
       evaluationsOpened: e.evaluationsOpened ?? false,
       resultsPublished: e.resultsPublished ?? false,
+      termId: e.termId,
+      requiresCourse: e.requiresCourse,
       startDate: e.startDate ? e.startDate.toISOString() : '',
       endDate: e.endDate ? e.endDate.toISOString() : '',
       active: e.active ?? true,

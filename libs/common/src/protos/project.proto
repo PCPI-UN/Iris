@@ -54,6 +54,13 @@ service ProjectsService {
   // Data to build the downloadable template: departments and approved projects of the event
   rpc GetJurorImportTemplate (GetJurorImportTemplateRequest) returns (GetJurorImportTemplateResponse);
 
+  // Academic read endpoints: only the projects the user may read, from their scope permissions
+  // (read_all, read_tutored, read_course, read_department :academic_projects)
+  rpc ListProjectsInScope (ListProjectsInScopeRequest) returns (ListProjectsResponse);
+  // NOT_FOUND when the project does not exist or is outside the user's scope
+  rpc GetProjectInScope (GetProjectInScopeRequest) returns (ProjectComplete);
+  rpc ListEventIdsInScope (ListEventIdsInScopeRequest) returns (ListEventIdsInScopeResponse);
+
 }
 
 enum ProjectState {
@@ -114,6 +121,22 @@ message ProjectComplete {
   repeated PendingProjectParticipant pendingParticipants = 13;
   optional string projectCode = 14;
   repeated ProjectTutor tutors = 15;
+  // Only filled by the academic read endpoints; not set for the fill course sections: -1
+  // (created before course sections existed) and 0 (event that does not require one)
+  optional AcademicCourse academicCourse = 16;
+  // Jurors assigned to evaluate the project; only filled by the academic read endpoints
+  optional int32 assignedJurorCount = 17;
+}
+
+// Course section (NRC within an academic term) of a project, with its department
+message AcademicCourse {
+  int32 id = 1;
+  string nrc = 2;
+  int32 termId = 3;  // event-service term
+  string name = 4;
+  int32 professorUserId = 5;
+  int32 departmentId = 6;
+  string departmentName = 7;
 }
 
 // A tutor of a project: linked to a user account, or pending (typed in by the student, no account yet)
@@ -193,6 +216,9 @@ message CreateProjectRequest {
   optional string eventNumber = 4;
   int32 courseId = 5;
   ProjectState state = 6; // opcional en la práctica; si no se envía, default en UC
+  // NRC of the course section, looked up in the term of the event. Required when the event
+  // requires a course section; ignored otherwise (the project gets course section 0)
+  optional string nrc = 7;
 }
 message ProjectResponse { Project project = 1; }
 
@@ -363,6 +389,9 @@ message CreateProjectWithParticipantsRequest {
   // Existing Tutor/Professor users and tutors typed in by email
   repeated int32 tutorUserIds = 11;
   repeated PendingTutorInput pendingTutors = 12;
+  // NRC of the course section, looked up in the term of the event. Required when the event
+  // requires a course section; ignored otherwise (the project gets course section 0)
+  optional string nrc = 13;
 }
 
 message CreateProjectWithParticipantsResponse {
@@ -611,3 +640,22 @@ message GetStudentParticipationStatsResponse {
   // Derived from all the user's participations, as in ListUserParticipations
   AcademicInfo academic = 9;
 }
+
+/************** Academic read endpoints **************/
+message ListProjectsInScopeRequest {
+  int32 userId = 1;
+  optional int32 eventId = 2;
+  optional ProjectState state = 3;
+  optional int32 academicCourseId = 4;
+  optional string q = 5;
+  optional int32 currentPage = 6;   // default 1
+  optional int32 itemsPerPage = 7;  // default 10, at most 100
+}
+
+message GetProjectInScopeRequest {
+  int32 userId = 1;
+  int32 projectId = 2;
+}
+
+message ListEventIdsInScopeRequest { int32 userId = 1; }
+message ListEventIdsInScopeResponse { repeated int32 eventIds = 1; }

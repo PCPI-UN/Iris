@@ -28,5 +28,9 @@ export interface Event {
   eventType: EventType;
   collaborators: string[];
   organizers: string[];
+  /** Academic term; NO_TERM_ID for the events created before terms existed */
+  termId: number;
+  /** A project of the event must belong to a course section (NRC); false for events that are not course work */
+  requiresCourse: boolean;
 }
 

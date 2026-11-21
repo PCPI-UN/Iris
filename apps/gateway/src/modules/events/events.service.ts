@@ -73,6 +73,8 @@ import {
   GetEventStatusesResponse,
   EventStatusMapping,
   EventProto,
+  TermProto,
+  CreateTermRequest,
   EventWithRole,
   CreateCategoryRequest,
   CreateCategoryResponse,
@@ -266,6 +268,26 @@ export class EventService implements OnModuleInit {
       .filter((value) => value.length > 0);
 
     return [...confirmed, ...pending];
+  }
+
+  /** Academic terms an event can be created or edited with, newest first */
+  async listTerms(): Promise<TermProto[]> {
+    const response = await firstValueFrom(this.eventService.listTerms({}));
+    return response.terms ?? [];
+  }
+
+  /** 409 when the (year, period) term already exists */
+  async createTerm(request: CreateTermRequest): Promise<TermProto> {
+    return firstValueFrom(this.eventService.createTerm(request));
+  }
+
+  /** Events by id as event-service returns them, soft deleted ones included */
+  async listEventsByIds(ids: number[]): Promise<EventProto[]> {
+    if (!ids.length) return [];
+    const response = await firstValueFrom(
+      this.eventService.listEventsByIds({ ids }),
+    );
+    return response.events ?? [];
   }
 
   /** The event as event-service returns it, without the catalog enrichment of `get` */

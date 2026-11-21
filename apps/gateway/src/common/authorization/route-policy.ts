@@ -31,6 +31,12 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'DELETE /admin/cache/user/:userId': { permission: ['admin:system'] },
   // health.controller.ts
   'GET /health': { access: 'public' },
+  // modules/academic/academic.controller.ts (read-only; project-service limits the scope)
+  'GET /academic/events': { permission: ['read:academic_projects'] },
+  'GET /academic/grades': { permission: ['read:academic_projects'] },
+  'GET /academic/projects': { permission: ['read:academic_projects'] },
+  'GET /academic/projects/:id': { permission: ['read:academic_projects'] },
+  'GET /academic/registrations': { permission: ['read:academic_projects'] },
   // modules/auth/auth.controller.ts
   'POST /auth/activate': { access: 'public' },
   'GET /auth/callback': { access: 'public' },
@@ -207,6 +213,9 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'PATCH /projects/reassign-juror': { access: 'pending' },
   // modules/reports/reports.controller.ts
   'GET /events/:eventId/reports/evaluation': { permission: ['read:grades'] },
+  // modules/terms/terms.controller.ts
+  'GET /terms': { permission: ['read:events'] },
+  'POST /terms': { permission: ['manage:events'] },
   // modules/tiebreaks/tiebreaks.controller.ts
   'GET /tiebreaks': { permission: ['read:grades'] },
   'POST /tiebreaks': { permission: ['manage:events'] },

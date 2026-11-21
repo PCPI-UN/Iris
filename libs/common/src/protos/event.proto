@@ -16,8 +16,15 @@ service EventService {
   rpc GetEventStatuses (GetEventStatusesRequest) returns (GetEventStatusesResponse) {}
   rpc GetDashboardStats (GetEventDashboardStatsRequest) returns (GetEventDashboardStatsResponse) {}
   rpc GetEventsForAR (GetEventsForARRequest) returns (GetEventsForARResponse);
-  // Events by id, soft deleted ones included (active = false); used by the student dashboard
+  // Events by id, newest first (by start date), soft deleted ones included (active = false);
+  // used by the student dashboard and the academic read endpoints
   rpc ListEventsByIds (ListEventsByIdsRequest) returns (ListEventsByIdsResponse) {}
+
+  // ---- ACADEMIC TERMS ----
+  // Terms an event can be created or edited with, newest first (the "no term" row -1 is left out)
+  rpc ListTerms (ListTermsRequest) returns (ListTermsResponse) {}
+  // ALREADY_EXISTS when the (year, period) term exists
+  rpc CreateTerm (CreateTermRequest) returns (TermProto) {}
 
   // ---- EVENT MEMBERS ----
   rpc CreateEventMember (CreateEventMemberRequest) returns (CreateEventMemberResponse) {}
@@ -153,6 +160,10 @@ message EventProto {
   optional double longitude = 26;
   // true when the admin published the results: participants can see their scores and awards
   bool resultsPublished = 27;
+  // Academic term of the event; -1 for the events created before terms existed
+  int32 termId = 28;
+  // true: each project needs a course section (NRC) of the term; false: not course work
+  bool requiresCourse = 29;
 }
 
 message CreateEventRequest {
@@ -175,6 +186,11 @@ message CreateEventRequest {
   optional string inscriptionRequirements = 17;
   optional int32 minimumTeamSize = 18;
   optional string aboutOurAllies = 19;
+  // Required: an existing term other than -1
+  int32 termId = 20;
+  // Required (optional only so that a missing value is told apart from false): true when each
+  // project needs a course section (NRC) of the term, false for events that are not course work
+  optional bool requiresCourse = 21;
 }
 
 message CreateEventResponse {
@@ -204,6 +220,10 @@ message UpdateEventRequest {
   optional string aboutOurAllies = 20;
   // Not sent: unchanged
   optional bool resultsPublished = 21;
+  // Not sent: unchanged. When sent, an existing term other than -1
+  optional int32 termId = 22;
+  // Not sent: unchanged. Projects already submitted keep their course section
+  optional bool requiresCourse = 23;
 }
 
 message UpdateEventResponse {
@@ -918,4 +938,22 @@ message ListCategoriesByIdsRequest {
 
 message ListCategoriesByIdsResponse {
   repeated CategoryProto categories = 1;
+}
+
+// =====================
+//   ACADEMIC TERMS
+// =====================
+// Year and period code: 2026 + "10" is the term 202610
+message TermProto {
+  int32 id = 1;
+  int32 year = 2;
+  string period = 3;
+}
+
+message ListTermsRequest {}
+message ListTermsResponse { repeated TermProto terms = 1; }
+
+message CreateTermRequest {
+  int32 year = 1;
+  string period = 2;
 }
