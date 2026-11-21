@@ -7,12 +7,25 @@ import {
 import { ClientGrpc } from '@nestjs/microservices';
 import { firstValueFrom } from 'rxjs';
 import {
+  ExecuteJurorImportResponse,
+  JurorImportExecutionTotals,
+  JurorImportRow,
   JurorImportRowResult,
   JurorImportTotals,
   PROJECTS_SERVICE_NAME,
   PreviewJurorImportResponse,
   ProjectsServiceClient,
 } from '@app/common/generated/project';
+import {
+  EVENT_SERVICE_NAME,
+  EventServiceClient,
+} from '@app/common/generated/event';
+import { status } from '@grpc/grpc-js';
+import {
+  InvitationsService,
+  JurorInvitationsResult,
+  JurorInvitee,
+} from '../../invitations/invitations.service';
 import { parseJurorImportSheet } from './parse-juror-import-sheet';
 import { buildJurorImportTemplate } from './build-juror-import-template';
 
@@ -37,7 +50,28 @@ export interface JurorImportPreview {
   canConfirm: boolean;
 }
 
+/** Summary of an executed juror import */
+export interface JurorImportExecutionResult {
+  /** ASSIGN: assigned now, SKIP: already assigned, ERROR: not assigned */
+  rows: JurorImportPreviewRow[];
+  totals: JurorImportExecutionTotals & {
+    /** Invitation emails sent now, new accounts included */
+    invitationsSent: number;
+    /** Jurors not in the event who already had a pending invitation: no new email */
+    invitationsReused: number;
+    /** Invited jurors who had no account: it was created with the invitation */
+    newUsers: number;
+  };
+}
+
 const UNSET_USER_STATUS = 'JUROR_IMPORT_USER_STATUS_UNSPECIFIED';
+
+interface JurorToInvite extends JurorInvitee {
+  isNewUser: boolean;
+}
+
+const isFailedPrecondition = (error: unknown): boolean =>
+  (error as { code?: number })?.code === status.FAILED_PRECONDITION;
 
 /**
  * The project client loads enums as strings, fills defaults and adds a virtual
@@ -63,9 +97,12 @@ const toPreviewRow = (row: JurorImportRowResult): JurorImportPreviewRow => {
 @Injectable()
 export class JurorImportsService implements OnModuleInit {
   private projectsService: ProjectsServiceClient;
+  private eventsService: EventServiceClient;
 
   constructor(
     @Inject(PROJECTS_SERVICE_NAME) private readonly projectsClient: ClientGrpc,
+    @Inject(EVENT_SERVICE_NAME) private readonly eventsClient: ClientGrpc,
+    private readonly invitations: InvitationsService,
   ) {}
 
   onModuleInit() {
@@ -73,6 +110,8 @@ export class JurorImportsService implements OnModuleInit {
       this.projectsClient.getService<ProjectsServiceClient>(
         PROJECTS_SERVICE_NAME,
       );
+    this.eventsService =
+      this.eventsClient.getService<EventServiceClient>(EVENT_SERVICE_NAME);
   }
 
   /** Reads the uploaded template and asks project-service what confirming would do */
@@ -80,6 +119,91 @@ export class JurorImportsService implements OnModuleInit {
     eventId: number,
     file: Express.Multer.File | undefined,
   ): Promise<JurorImportPreview> {
+    const rows = await this.readRows(file);
+    return this.requestPreview(eventId, rows);
+  }
+
+  /**
+   * Executes the import of the same file reviewed in the preview: validates it again, invites to
+   * the event the jurors who are not in it yet (creating the account of new ones) and assigns every
+   * juror to their project. A file that cannot be confirmed assigns nothing and is answered with
+   * its preview. A juror whose invitation fails is reported as an error and not assigned; the rest
+   * are assigned anyway. If project-service refuses the assignment after the invitations went out
+   * (the event or a project changed meanwhile), the error lists the jurors already invited.
+   */
+  async execute(
+    eventId: number,
+    file: Express.Multer.File | undefined,
+    invitedByUserId: number,
+  ): Promise<JurorImportExecutionResult> {
+    const rows = await this.readRows(file);
+    const preview = await this.requestPreview(eventId, rows);
+    if (!preview.canConfirm) {
+      throw new BadRequestException({
+        message:
+          'No se puede ejecutar la asignación: la carga tiene errores o avisos. Revise la vista previa.',
+        preview,
+      });
+    }
+
+    const jurors = this.jurorsToInvite(preview, rows);
+    const invitations: JurorInvitationsResult = jurors.length
+      ? await this.invitations.inviteJurorsToEvent(
+          eventId,
+          await this.eventType(eventId),
+          jurors,
+          invitedByUserId,
+        )
+      : { sent: [], reused: [], failed: [] };
+
+    let res: ExecuteJurorImportResponse;
+    try {
+      res = await firstValueFrom(
+        this.projectsService.executeJurorImport({
+          eventId,
+          rows,
+          failedInvitations: invitations.failed,
+        }),
+      );
+    } catch (error) {
+      if (!isFailedPrecondition(error) || !invitations.sent.length) throw error;
+      throw new BadRequestException({
+        message:
+          `${(error as { details?: string }).details ?? 'No se puede ejecutar la asignación.'} ` +
+          `Ya se envió la invitación al evento a ${invitations.sent.length} jurado(s). ` +
+          'Puede volver a ejecutar el archivo: no se repiten las invitaciones ni las asignaciones.',
+        invitedJurors: invitations.sent,
+      });
+    }
+
+    // Once invited a new juror has an account: still tell the front it was created now
+    const sent = new Set(invitations.sent);
+    const newUsers = new Set(
+      jurors
+        .filter((j) => j.isNewUser && sent.has(j.email))
+        .map((j) => j.email),
+    );
+    return {
+      rows: (res.rows ?? [])
+        .map(toPreviewRow)
+        .map((row) =>
+          newUsers.has(row.email) && row.userStatus
+            ? { ...row, userStatus: 'NEW_USER' as const }
+            : row,
+        ),
+      totals: {
+        ...(res.totals as JurorImportExecutionTotals),
+        invitationsSent: invitations.sent.length,
+        invitationsReused: invitations.reused.length,
+        newUsers: newUsers.size,
+      },
+    };
+  }
+
+  /** Checks the upload and reads the rows of the juror sheet */
+  private async readRows(
+    file: Express.Multer.File | undefined,
+  ): Promise<JurorImportRow[]> {
     if (!file) {
       throw new BadRequestException(
         'Adjunte la plantilla .xlsx en el campo «file».',
@@ -88,7 +212,13 @@ export class JurorImportsService implements OnModuleInit {
     if (!file.originalname?.toLowerCase().endsWith('.xlsx')) {
       throw new BadRequestException('El archivo debe ser .xlsx.');
     }
-    const rows = await parseJurorImportSheet(file.buffer);
+    return parseJurorImportSheet(file.buffer);
+  }
+
+  private async requestPreview(
+    eventId: number,
+    rows: JurorImportRow[],
+  ): Promise<JurorImportPreview> {
     const res: PreviewJurorImportResponse = await firstValueFrom(
       this.projectsService.previewJurorImport({ eventId, rows }),
     );
@@ -98,6 +228,45 @@ export class JurorImportsService implements OnModuleInit {
       eventWarnings: res.eventWarnings ?? [],
       canConfirm: res.canConfirm,
     };
+  }
+
+  /** Jurors to assign who are not in the event yet, once each, with the name of their first row */
+  private jurorsToInvite(
+    preview: JurorImportPreview,
+    rows: JurorImportRow[],
+  ): JurorToInvite[] {
+    const sourceRows = new Map(
+      rows.map((row) => [`${row.rowNumber}|${row.jurorSlot}`, row]),
+    );
+    const jurors = new Map<string, JurorToInvite>();
+    for (const row of preview.rows) {
+      if (row.outcome !== 'ASSIGN' || jurors.has(row.email)) continue;
+      if (
+        row.userStatus !== 'NEW_USER' &&
+        row.userStatus !== 'INVITE_TO_EVENT'
+      ) {
+        continue;
+      }
+      const source = sourceRows.get(`${row.rowNumber}|${row.jurorSlot}`);
+      const lastName = source?.lastName?.trim();
+      jurors.set(row.email, {
+        email: row.email,
+        firstName: source?.firstName?.trim() || row.email.split('@')[0],
+        ...(lastName ? { lastName } : {}),
+        isNewUser: row.userStatus === 'NEW_USER',
+      });
+    }
+    return [...jurors.values()];
+  }
+
+  /** The invitation expects the event type as the API names it */
+  private async eventType(eventId: number): Promise<string> {
+    const res = await firstValueFrom(
+      this.eventsService.getEvent({ id: eventId }),
+    );
+    return String(res.event?.eventType) === 'COMPETENCIA'
+      ? 'Competition'
+      : 'Exposition';
   }
 
   /** Builds the template of the event with its approved projects */
