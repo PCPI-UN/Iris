@@ -60,6 +60,11 @@ import { PrismaProjectChangeLogRepository } from './infrastructure/prisma/prisma
 import { ListProjectChangeLogUC } from './application/use-cases/list-project-change-log.uc';
 import { UnitOfWork } from '@app/common/ports/unit-of-work.port';
 import { PrismaUnitOfWork } from './infrastructure/prisma/prisma-unit-of-work';
+import { AdminChangeProjectStateUC } from './application/use-cases/admin-change-project-state.uc';
+import { ProjectApprovalEffects } from './application/services/project-approval-effects.service';
+import { EvaluationServiceModule } from './evaluation-service.module';
+import { EVALUATION_SERVICE_PORT } from './application/ports/evaluation-service.port';
+import { EvaluationServiceAdapter } from './infrastructure/grpc-client/evaluation-service.adapter';
 
 @Module({
   controllers: [ProjectsController],
@@ -68,6 +73,7 @@ import { PrismaUnitOfWork } from './infrastructure/prisma/prisma-unit-of-work';
     EventServiceModule,
     NotificationServiceModule,
     AuthServiceModule,
+    EvaluationServiceModule,
   ],
   providers: [
     PrismaService,
@@ -79,6 +85,12 @@ import { PrismaUnitOfWork } from './infrastructure/prisma/prisma-unit-of-work';
     // Same module as the repositories, so it shares their PrismaService instance (and its transaction).
     { provide: UnitOfWork, useClass: PrismaUnitOfWork },
     ListProjectChangeLogUC,
+    AdminChangeProjectStateUC,
+    ProjectApprovalEffects,
+    {
+      provide: EVALUATION_SERVICE_PORT,
+      useExisting: EvaluationServiceAdapter,
+    },
 
     CreateProjectUC,
     {

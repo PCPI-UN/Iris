@@ -141,9 +141,22 @@ export class GrpcExceptionFilter implements ExceptionFilter {
       message = toSpanishMessage(message);
     }
 
+    // An HttpException may add a machine-readable code and details (e.g. the cause of a 409)
+    const extra: { code?: string; details?: unknown } = {};
+    const { status, response: body } = (exception ?? {}) as {
+      status?: unknown;
+      response?: unknown;
+    };
+    if (status && body && typeof body === 'object') {
+      const { code, details } = body as { code?: unknown; details?: unknown };
+      if (typeof code === 'string') extra.code = code;
+      if (details !== undefined) extra.details = details;
+    }
+
     const errorResponse = {
       statusCode: httpStatus,
       message,
+      ...extra,
       timestamp: new Date().toISOString(),
     };
 

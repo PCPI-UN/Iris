@@ -69,6 +69,10 @@ service ProjectsService {
   // Administrative changes of a project, most recent first; NOT_FOUND when the project does not exist
   rpc ListProjectChangeLog (ListProjectChangeLogRequest) returns (ListProjectChangeLogResponse);
 
+  // Administrative change from any state to any other, with a reason. When the project has evaluations
+  // or the event has published results and force is false, nothing changes and the answer carries `blocked`
+  rpc AdminChangeProjectState (AdminChangeProjectStateRequest) returns (AdminChangeProjectStateResponse);
+
 }
 
 enum ProjectState {
@@ -730,3 +734,33 @@ message ProjectChangeLogEntry {
 }
 
 message ListProjectChangeLogResponse { repeated ProjectChangeLogEntry entries = 1; }
+
+/************** Administrative state change **************/
+message AdminChangeProjectStateRequest {
+  int32 id = 1;
+  // auth-service user making the change
+  int32 actingUserId = 2;
+  ProjectState state = 3;
+  string reason = 4;
+  // true: the participants get the email of the new state (none for UNDER_REVIEW)
+  bool notify = 5;
+  // true: change it even if the project has evaluations or the event has published results
+  bool force = 6;
+}
+
+// Why the change needs force; at least one of hasEvaluations or resultsPublished is true
+message ProjectStateChangeBlock {
+  bool hasEvaluations = 1;
+  int32 evaluationCount = 2;
+  bool resultsPublished = 3;
+  // true when the project is APPROVED and would leave the ranking and the juror import
+  bool leavesApproved = 4;
+  // Spanish message for the user
+  string message = 5;
+}
+
+// Exactly one of project (changed) or blocked (nothing changed) is set
+message AdminChangeProjectStateResponse {
+  optional Project project = 1;
+  optional ProjectStateChangeBlock blocked = 2;
+}

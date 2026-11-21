@@ -1,7 +1,8 @@
 import { EmailTemplate } from '@app/common/generated/notification';
 import { ApproveProjectUC } from '../src/modules/projects/application/use-cases/approve-project.uc';
 import { ProjectRepository } from '../src/modules/projects/domain/repositories/project.repository';
-import { NotificationServicePort } from '../src/modules/projects/application/ports/notification-service.port';
+import { ProjectApprovalEffects } from '../src/modules/projects/application/services/project-approval-effects.service';
+import { SetProjectTutorsUC } from '../src/modules/projects/application/use-cases/set-project-tutors.uc';
 import {
   NotFoundError,
   ValidationError,
@@ -32,9 +33,14 @@ describe('ApproveProjectUC', () => {
       ]),
     };
     notifications = { sendEmail: jest.fn().mockResolvedValue(undefined) };
+    // The real shared effects, so the emails are checked as the approval sends them
     uc = new ApproveProjectUC(
       repo as unknown as ProjectRepository,
-      notifications as unknown as NotificationServicePort,
+      new ProjectApprovalEffects(
+        repo as unknown as ProjectRepository,
+        notifications,
+        {} as SetProjectTutorsUC,
+      ),
     );
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
     jest.spyOn(console, 'log').mockImplementation(() => undefined);

@@ -57,6 +57,7 @@ import { ProjectTutorsInputDto } from './dto/project-tutors-input.dto';
 import { TutorCandidatesQueryDto } from './dto/tutor-candidates-query.dto';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { ProjectChangeLogResponseDto } from './dto/project-change-log-response.dto';
+import { AdminChangeProjectStateDto } from './dto/admin-change-project-state.dto';
 
 @ApiTags('projects')
 @ApiSecurity('JWT-auth')
@@ -662,6 +663,59 @@ export class ProjectsController {
     @Param('id', ParseIntPipe) id: number,
   ): Promise<ProjectChangeLogResponseDto> {
     return this.projectsService.listProjectChangeLog(id);
+  }
+
+  @RequirePermission('manage:projects')
+  @Patch(':id/admin/state')
+  @ApiOperation({
+    summary: 'Change the state of a project (administrative correction)',
+    description:
+      'Moves the project from any state to any other with a mandatory reason, and records the change ' +
+      'in the change log. Becoming APPROVED has the effects of the normal approval (Tutor role and ' +
+      'invitations for the tutors). With notify the pending participants get the email of the new state ' +
+      '(none for UNDER_REVIEW). If the project has juror evaluations or the event has published results, ' +
+      'nothing changes and the answer is 409 with code PROJECT_STATE_CHANGE_BLOCKED and the cause in ' +
+      'details (hasEvaluations, evaluationCount, resultsPublished, leavesApproved); resend with force to apply it. ' +
+      'Leaving APPROVED takes the project out of the ranking and the juror import; evaluations are kept.',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Project ID', example: 1 })
+  @ApiResponse({
+    status: 200,
+    description: 'State changed; returns { project }',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Missing reason, unknown state or the project is already in that state',
+  })
+  @ApiResponse({ status: 403, description: 'The user lacks manage:projects' })
+  @ApiResponse({ status: 404, description: 'Project not found' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Not changed: the project has evaluations or the event has published results (send force: true)',
+    schema: {
+      example: {
+        statusCode: 409,
+        message:
+          'No se cambió el estado porque el proyecto ya tiene 2 evaluaciones de jurados. Si el proyecto deja de estar aprobado, sale del ranking y de la plantilla e importación de jurados; sus evaluaciones se conservan. Confirma el cambio para aplicarlo de todas formas.',
+        code: 'PROJECT_STATE_CHANGE_BLOCKED',
+        details: {
+          hasEvaluations: true,
+          evaluationCount: 2,
+          resultsPublished: false,
+          leavesApproved: true,
+        },
+        timestamp: '2026-11-21T15:00:00.000Z',
+      },
+    },
+  })
+  adminChangeProjectState(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AdminChangeProjectStateDto,
+    @GetUser() user: AppUser,
+  ) {
+    return this.projectsService.adminChangeProjectState(id, dto, user.id);
   }
 
   @Get(':id/jurors')

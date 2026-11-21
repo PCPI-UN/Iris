@@ -6,6 +6,7 @@ import {
   Logger,
   NotFoundException,
   ForbiddenException,
+  ConflictException,
 } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
 import { firstValueFrom, lastValueFrom } from 'rxjs';
@@ -44,6 +45,7 @@ import { ReassignProjectJurorDto } from './dto/reassign-project-juror.dto';
 import { ApproveProjectDto } from './dto/approve-project.dto';
 import { AddPendingParticipantDto } from './dto/add-pending-participant.dto';
 import { RejectProjectDto } from './dto/reject-project.dto';
+import { AdminChangeProjectStateDto } from './dto/admin-change-project-state.dto';
 import {
   TypedDocument,
   ProjectDocumentInputDto,
@@ -99,6 +101,9 @@ export type {
   JurorProfile,
   ProjectWithEnrichedJurors,
 } from './types/project-enrichment.types';
+
+/** `code` of the 409 of an administrative state change that needs force */
+export const PROJECT_STATE_CHANGE_BLOCKED = 'PROJECT_STATE_CHANGE_BLOCKED';
 
 @Injectable()
 export class ProjectsService implements OnModuleInit {
@@ -506,6 +511,37 @@ export class ProjectsService implements OnModuleInit {
     );
 
     return response;
+  }
+
+  /**
+   * Administrative state change. When project-service answers `blocked` (juror evaluations
+   * or published results, without force) nothing changed: answers 409 with the cause in
+   * `details` so the client can ask for confirmation and resend with force.
+   */
+  async adminChangeProjectState(
+    id: number,
+    dto: AdminChangeProjectStateDto,
+    actingUserId: number,
+  ) {
+    const response = await firstValueFrom(
+      this.projectsService.adminChangeProjectState({
+        id,
+        actingUserId,
+        state: ProjectState[dto.state],
+        reason: dto.reason,
+        notify: dto.notify === true,
+        force: dto.force === true,
+      }),
+    );
+    if (response.blocked) {
+      const { message, ...details } = response.blocked;
+      throw new ConflictException({
+        message,
+        code: PROJECT_STATE_CHANGE_BLOCKED,
+        details,
+      });
+    }
+    return { project: response.project };
   }
 
   async changeToUnderReviewProject(projectId: number, actingUserId: number) {

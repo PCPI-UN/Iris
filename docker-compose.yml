@@ -258,6 +258,7 @@ services:
       - DATABASE_URL=postgresql://project_user:${PROJECT_DB_PASSWORD}@postgres:5432/project_service
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-auth-service:50051}
       - EVENT_SERVICE_URL=${EVENT_SERVICE_URL:-event-service:50053}
+      - EVALUATION_SERVICE_URL=${EVALUATION_SERVICE_URL:-evaluation-service:50052}
       - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL:-notification-service:50056}
       - INVITATION_SERVICE_URL=${INVITATION_SERVICE_URL:-invitation-service:50054}
       - GRPC_HOST=${GRPC_HOST:-0.0.0.0}
