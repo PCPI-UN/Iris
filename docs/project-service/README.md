@@ -141,6 +141,22 @@ pnpm exec ts-node scripts/academic-structure/load-academic-structure.ts <file.js
 - Without `--dry-run` it writes everything in one transaction. Departments are matched by name and course sections by (term, NRC); existing ones take the values of the file. Nothing is deleted, and running the same file again changes nothing.
 - It only reads `auth-service` and `event-service`; roles are granted from the user administration (`PUT /users/:id/roles`).
 
+## Writes that go together
+
+When a use case makes several writes that must be saved together or not at all, it wraps them in `UnitOfWork.run` (port `UNIT_OF_WORK`). Repositories query through `PrismaService.db`, which is the open transaction when the call runs inside one and the default client otherwise, so they take the transaction without receiving it. A nested call (for example a repository method that opens its own transaction with `PrismaService.transaction`) reuses the open one.
+
+Example: changing the state of a project and recording it in the change log. If the change log insert fails, the state change is undone.
+
+```ts
+await this.uow.run(async () => {
+  await this.projectRepo.setProjectState(id, 'REJECTED');
+  const entry = buildProjectChangeLogEntry({ projectId: id, actorUserId, action, before, after, reason });
+  if (entry) await this.changeLogRepo.create(entry);
+});
+```
+
+Inside `run`, await everything that is started (a promise left running fails once the transaction closes), make calls to other services before or after it (the transaction closes after Prisma's default 5 s), and do not catch a database error to continue: after it the transaction is aborted.
+
 ## Related
 
 - [schema.md](./schema.md): database schema and ER diagram.
