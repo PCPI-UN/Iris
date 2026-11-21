@@ -46,6 +46,7 @@ The role and permission catalogue lives in the migrations of this service, not i
 
 - `read:events` lets a role read events, rubrics and configuration; `read:grades` adds grades, rankings and tie-breaks. Writing requires `manage:events`.
 - `read:academic_projects` opens the read-only academic endpoints (projects, registrations and grades). Which projects each caller sees is decided by `project-service` from four scope permissions, the union of the ones the user holds: `read_all:academic_projects` (every project: `Admin`, `FacultyAdmin`, `Dean`), `read_tutored:academic_projects` (tutored projects: `Tutor`), `read_course:academic_projects` (projects of their course sections: `Professor`) and `read_department:academic_projects` (projects of their department: `DepartmentDirector`). Giving or removing a scope to a role is a row in `_role_permissions`, with no code change. `Admin` holds `read_all` explicitly, because the Admin bypass of the gateway guard does not reach `project-service`. Without `read:grades`, a caller sees no grade before the event results are published.
+- `manage:projects` (Admin and FacultyAdmin, not EventManager) lets a role correct projects as an administrator and read their change log.
 - Event roles are granted through event membership. `CreatePlatformUser` and `SetUserPlatformRoles` reject them as platform roles.
 - `IsPlatformStaff` (every event in "my events") is true for `Admin` and for any role with `read:events`.
 

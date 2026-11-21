@@ -213,6 +213,7 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
     why: 'project-service CheckProjectAccess READ: participants, assigned jurors or read:events',
   },
   'PATCH /projects/:id/approve': { permission: ['manage:events'] },
+  'GET /projects/:id/change-log': { permission: ['manage:projects'] },
   'POST /projects/:id/change-to-under-review': {
     access: 'owner',
     why: 'project-service requires a confirmed participant and the REQUEST_CHANGES state',

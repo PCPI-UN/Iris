@@ -87,6 +87,10 @@ import {
 } from './types/project-enrichment.types';
 import { RemoveJurorFromProjectDto } from './dto/remove-juror-from-project.dto';
 import { JurorRemovalResult } from './types/juror-removal.types';
+import {
+  ProjectChangeAction,
+  ProjectChangeLogResponseDto,
+} from './dto/project-change-log-response.dto';
 
 /** Platform roles a project tutor can be picked from: Professor (9) and Tutor (10). */
 const TUTOR_CANDIDATE_ROLE_IDS = [9, 10];
@@ -780,6 +784,54 @@ export class ProjectsService implements OnModuleInit {
   ): Promise<void> {
     // Delegate to the use-case which contains the business rules
     return this.updateProjectCodeUseCase.execute(id, projectCode, userId);
+  }
+
+  /**
+   * Administrative changes of a project, most recent first, with the name of each author
+   * read from auth-service. project-service answers NOT_FOUND when the project does not exist.
+   */
+  async listProjectChangeLog(
+    projectId: number,
+  ): Promise<ProjectChangeLogResponseDto> {
+    const { entries = [] } = await firstValueFrom(
+      this.projectsService.listProjectChangeLog({ projectId }),
+    );
+    const profiles = await this.fetchUserProfilesUseCase.execute(
+      new Set(entries.map((entry) => entry.actorUserId)),
+    );
+    const parseValues = (
+      entryId: number,
+      json: string,
+    ): Record<string, unknown> => {
+      try {
+        const value: unknown = JSON.parse(json || '{}');
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          return value as Record<string, unknown>;
+        }
+      } catch {
+        // logged below, like a value that is not an object
+      }
+      this.logger.warn(
+        `Change log entry ${entryId} of project ${projectId} has invalid before/after JSON`,
+      );
+      return {};
+    };
+    return {
+      entries: entries.map((entry) => {
+        const profile = profiles.get(entry.actorUserId);
+        const name =
+          `${profile?.firstName ?? ''} ${profile?.lastName ?? ''}`.trim();
+        return {
+          id: entry.id,
+          action: entry.action as ProjectChangeAction,
+          actor: { id: entry.actorUserId, name: name || null },
+          createdAt: entry.createdAt,
+          before: parseValues(entry.id, entry.beforeJson),
+          after: parseValues(entry.id, entry.afterJson),
+          reason: entry.reason ?? null,
+        };
+      }),
+    };
   }
 
   async listJurorsByProjectId(projectId: number) {

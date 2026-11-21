@@ -55,6 +55,9 @@ import { ExecuteJurorImportUC } from './application/use-cases/execute-juror-impo
 import { GetJurorImportTemplateUC } from './application/use-cases/get-juror-import-template.uc';
 import { AUTH_SERVICE_PORT } from './application/ports/auth-service.port';
 import { AuthServiceAdapter } from './infrastructure/grpc-client/auth-service.adapter';
+import { PROJECT_CHANGE_LOG_REPOSITORY } from './domain/repositories/project-change-log.repository';
+import { PrismaProjectChangeLogRepository } from './infrastructure/prisma/prisma-project-change-log.repository';
+import { ListProjectChangeLogUC } from './application/use-cases/list-project-change-log.uc';
 
 @Module({
   controllers: [ProjectsController],
@@ -67,6 +70,11 @@ import { AuthServiceAdapter } from './infrastructure/grpc-client/auth-service.ad
   providers: [
     PrismaService,
     { provide: 'ProjectRepository', useClass: PrismaProjectRepository },
+    {
+      provide: PROJECT_CHANGE_LOG_REPOSITORY,
+      useClass: PrismaProjectChangeLogRepository,
+    },
+    ListProjectChangeLogUC,
 
     CreateProjectUC,
     {

@@ -31,6 +31,16 @@ enum PendingParticipantStatus {
   JOINED // aceptó e ingresó a ProjectParticipant
 }
 
+// What an administrative correction changed (project_change_log.action)
+enum ProjectChangeAction {
+  STATE
+  INFO
+  CATEGORY
+  PARTICIPANTS
+  TUTORS
+  DOCUMENTS
+}
+
 /**
  * ** PROJECTS, DOCUMENTS & PARTICIPANTS ***
  */
@@ -56,6 +66,7 @@ model Project {
   pendingParticipants PendingProjectParticipant[]
   tutors              ProjectTutor[]
   pendingTutors       PendingProjectTutor[]
+  changeLog           ProjectChangeLog[]
 
   @@unique([eventId, name])
   @@index([academicCourseId])
@@ -150,6 +161,23 @@ model PendingProjectTutor {
 
   @@unique([projectId, email])
   @@map("pending_project_tutors")
+}
+
+// Administrative correction of a project: who changed what, before/after (only the changed
+// fields) and why. The actor is a platform user (auth-service database), so actorUserId has no foreign key
+model ProjectChangeLog {
+  id          Int                 @id @default(autoincrement())
+  projectId   Int                 @map("project_id")
+  actorUserId Int                 @map("actor_user_id")
+  action      ProjectChangeAction
+  before      Json
+  after       Json
+  reason      String?             @db.Text
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamp()
+  project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@map("project_change_log")
 }
 
 /**

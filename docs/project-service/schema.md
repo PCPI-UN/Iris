@@ -83,6 +83,17 @@ erDiagram
         timestamp updated_at
     }
 
+    project_change_log {
+        int id PK
+        int project_id FK
+        int actor_user_id
+        ProjectChangeAction action
+        json before
+        json after
+        text reason "nullable"
+        timestamp created_at
+    }
+
     departments {
         int id PK
         string name UK
@@ -108,6 +119,7 @@ erDiagram
     projects ||--o{ pending_project_participants : "pending participants"
     projects ||--o{ project_tutors : "tutors"
     projects ||--o{ pending_project_tutors : "pending tutors"
+    projects ||--o{ project_change_log : "administrative changes"
     academic_courses ||--o{ projects : "projects of the course section"
     departments ||--o{ academic_courses : "course sections"
 ```
@@ -121,6 +133,7 @@ erDiagram
 | `ProjectState` | `UNDER_REVIEW`, `APPROVED`, `REJECTED`, `REQUEST_CHANGES` | Review state of a project. New projects start in `UNDER_REVIEW`. |
 | `TypedDocument` | `LOGO`, `POSTER`, `SUPPORTING_DOCUMENT` | Kind of project document. |
 | `Status` | `ACTIVE`, `INACTIVE` | Whether a document is in use. Default `ACTIVE`. |
+| `ProjectChangeAction` | `STATE`, `INFO`, `CATEGORY`, `PARTICIPANTS`, `TUTORS`, `DOCUMENTS` | What an administrative correction of a project changed: its state, its data (name, description, code...), its event category, its participants, its tutors or its documents. |
 | `PendingParticipantStatus` | `PENDING`, `INVITED`, `JOINED` | `PENDING`: captured at submission. `JOINED`: accepted the invitation and became a confirmed participant. `INVITED` is defined but not currently assigned. |
 
 ## Tables
@@ -142,7 +155,7 @@ erDiagram
 | `created_at` | `TIMESTAMP` | no | `now()` |
 | `updated_at` | `TIMESTAMP` | no | maintained by Prisma (`@updatedAt`) |
 
-Relations: N:1 `academic_courses`; 1:N `project_documents`, `project_participants`, `project_assignments`, `pending_project_participants`, `project_tutors`, `pending_project_tutors`.
+Relations: N:1 `academic_courses`; 1:N `project_documents`, `project_participants`, `project_assignments`, `pending_project_participants`, `project_tutors`, `pending_project_tutors`, `project_change_log`.
 
 ### `project_documents` (`ProjectDocument`)
 
@@ -226,6 +239,23 @@ Tutors typed in at submission who have no account yet; marked `JOINED` when thei
 | `created_at` | `TIMESTAMP` | no | `now()` |
 | `updated_at` | `TIMESTAMP` | no | `@updatedAt` |
 
+### `project_change_log` (`ProjectChangeLog`)
+
+Administrative corrections of a project (state, data, category, participants, tutors, documents): who made them, when, the values before and after, and why. Each row is inserted in the same transaction as the edit it describes; read through `GET /projects/:id/change-log`, most recent first.
+
+| Column | Type | Null | Default / constraint |
+| --- | --- | --- | --- |
+| `id` | `SERIAL` | no | PK |
+| `project_id` | `INTEGER` | no | FK → `projects.id`; indexed together with `created_at` |
+| `actor_user_id` | `INTEGER` | no | refers to a user in `auth-service` |
+| `action` | `ProjectChangeAction` | no | |
+| `before` | `JSONB` | no | JSON object with only the fields that changed, with their old values |
+| `after` | `JSONB` | no | the same fields, with their new values |
+| `reason` | `TEXT` | yes | reason given by the administrator |
+| `created_at` | `TIMESTAMP` | no | `now()` |
+
+Relations: N:1 `projects`.
+
 ### `departments` (`Department`)
 
 Academic departments. A department has at most one director and a user directs at most one department; the director reads the projects of the course sections of the department. Loaded by scripts for now. Row -1 ("Sin departamento", no director) holds the fill course sections -1 and 0.
@@ -274,17 +304,18 @@ Relations: N:1 `departments`; 1:N `projects`.
 | `pending_project_participants.project_id` | `projects.id` | `RESTRICT` |
 | `project_tutors.project_id` | `projects.id` | `CASCADE` |
 | `pending_project_tutors.project_id` | `projects.id` | `CASCADE` |
+| `project_change_log.project_id` | `projects.id` | `CASCADE` |
 | `projects.academic_course_id` | `academic_courses.id` | `RESTRICT` |
 | `academic_courses.department_id` | `departments.id` | `RESTRICT` |
 
-All foreign keys use `ON UPDATE CASCADE`. References to other services (`event_id`, `course_id`, `user_id`, `member_*`, `term_id`, `professor_user_id`, `director_user_id`) are logical only; there are no cross-database foreign keys.
+All foreign keys use `ON UPDATE CASCADE`. References to other services (`event_id`, `course_id`, `user_id`, `member_*`, `term_id`, `professor_user_id`, `director_user_id`, `actor_user_id`) are logical only; there are no cross-database foreign keys.
 
 ## Notes
 
 - `pending_project_participants.pendingId` is the only column without a `snake_case` mapping, so its physical name is `"pendingId"` (quoted, camelCase).
-- Deleting a project requires deleting its documents, participants, assignments and pending participants first, because those foreign keys are `RESTRICT`. Tutors and pending tutors are deleted with the project (`CASCADE`).
+- Deleting a project requires deleting its documents, participants, assignments and pending participants first, because those foreign keys are `RESTRICT`. Tutors, pending tutors and the change log are deleted with the project (`CASCADE`).
 - Timestamps are `TIMESTAMP` without time zone.
 - `semester` and `career` were added later with the defaults `'1'` and `'N/A'`, which were also used to fill existing rows.
 - A course section with projects, or a department with course sections, cannot be deleted (`RESTRICT`).
 - `academic_course_id` was added with the fill rows (department -1, course sections -1 and 0): the existing projects took course section -1 and then the column became `NOT NULL`. The explicit ids leave the sequences untouched, so the real rows start at 1.
-- Besides the primary keys and the unique constraints, there are indexes on `projects.academic_course_id`, `academic_courses.professor_user_id` and `academic_courses.department_id`.
+- Besides the primary keys and the unique constraints, there are indexes on `projects.academic_course_id`, `project_change_log` (`project_id`, `created_at`), `academic_courses.professor_user_id` and `academic_courses.department_id`.

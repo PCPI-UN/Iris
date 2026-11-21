@@ -56,6 +56,7 @@ import { ApproveProjectDto } from './dto/approve-project.dto';
 import { ProjectTutorsInputDto } from './dto/project-tutors-input.dto';
 import { TutorCandidatesQueryDto } from './dto/tutor-candidates-query.dto';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
+import { ProjectChangeLogResponseDto } from './dto/project-change-log-response.dto';
 
 @ApiTags('projects')
 @ApiSecurity('JWT-auth')
@@ -643,6 +644,24 @@ export class ProjectsController {
       user.id,
     );
     return { message: 'Código del proyecto actualizado correctamente' };
+  }
+
+  @RequirePermission('manage:projects')
+  @Get(':id/change-log')
+  @ApiOperation({
+    summary: 'List the administrative changes of a project',
+    description:
+      'Corrections made by administrators (state, data, category, participants, tutors, documents), ' +
+      'most recent first: action, author, date, changed fields before and after, and reason.',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Project ID', example: 1 })
+  @ApiResponse({ status: 200, type: ProjectChangeLogResponseDto })
+  @ApiResponse({ status: 403, description: 'The user lacks manage:projects' })
+  @ApiResponse({ status: 404, description: 'Project not found' })
+  async listProjectChangeLog(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<ProjectChangeLogResponseDto> {
+    return this.projectsService.listProjectChangeLog(id);
   }
 
   @Get(':id/jurors')
