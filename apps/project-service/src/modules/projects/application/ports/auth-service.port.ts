@@ -16,6 +16,12 @@ export interface RoleHolder {
   roleIds: number[];
 }
 
+/** Platform roles and flattened permissions of a user, as the gateway guard sees them */
+export interface UserPlatformAccess {
+  roleNames: string[];
+  permissions: string[];
+}
+
 export interface AuthServicePort {
   /** Returns null when no user has that email. */
   findUserByEmail(email: string): Promise<AuthUser | null>;
@@ -25,4 +31,6 @@ export interface AuthServicePort {
   findUsersByRoles(input: { roleIds: number[]; userIds?: number[] }): Promise<RoleHolder[]>;
   /** Adds the platform roles to the user, keeping the ones already held. */
   assignPlatformRoles(userId: number, roleIds: number[]): Promise<void>;
+  /** Platform roles and permissions of the user; empty when the user has none. */
+  getUserPlatformAccess(userId: number): Promise<UserPlatformAccess>;
 }

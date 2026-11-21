@@ -4,6 +4,7 @@ import {
   AuthServicePort,
   AuthUser,
   RoleHolder,
+  UserPlatformAccess,
 } from '../../application/ports/auth-service.port';
 import { User } from '@app/common/generated/auth';
 import { AuthGrpcClient } from './auth.grpc-client';
@@ -47,6 +48,15 @@ export class AuthServiceAdapter implements AuthServicePort {
 
   async assignPlatformRoles(userId: number, roleIds: number[]): Promise<void> {
     await this.grpc.assignPlatformRoles(userId, roleIds);
+  }
+
+  async getUserPlatformAccess(userId: number): Promise<UserPlatformAccess> {
+    const res = await this.grpc.getUserPermissions(userId);
+    // proto3 leaves an empty repeated field out of the message
+    return {
+      roleNames: (res.roles ?? []).map((role) => role.name),
+      permissions: res.permissions ?? [],
+    };
   }
 
   private async orNull(call: () => Promise<User>): Promise<AuthUser | null> {

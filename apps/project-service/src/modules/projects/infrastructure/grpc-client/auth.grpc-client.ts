@@ -7,6 +7,7 @@ import {
   User,
   FindUsersByRolesRequest,
   UserSummary,
+  GetUserPermissionsResponse,
 } from '@app/common/generated/auth';
 
 @Injectable()
@@ -35,5 +36,9 @@ export class AuthGrpcClient implements OnModuleInit {
 
   async assignPlatformRoles(userId: number, roleIds: number[]): Promise<void> {
     await firstValueFrom(this.svc.assignPlatformRoles({ userId, roleIds }));
+  }
+
+  async getUserPermissions(userId: number): Promise<GetUserPermissionsResponse> {
+    return firstValueFrom(this.svc.getUserPermissions({ userId }));
   }
 }
