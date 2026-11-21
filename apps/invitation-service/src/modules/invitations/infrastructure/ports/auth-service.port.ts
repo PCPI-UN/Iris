@@ -94,12 +94,8 @@ export abstract class AuthServicePort {
     actorUserId?: number;
   }): Promise<AssignPlatformRolesResponse>;
 
-  /**
-   * Platform role names and flattened permissions of a user.
-   */
-  abstract getUserPlatformAccess(
-    userId: number,
-  ): Promise<{ roleNames: string[]; permissions: string[] }>;
+  /** Flattened platform permissions ("action:resource") of the user's active roles. */
+  abstract getUserPermissions(userId: number): Promise<string[]>;
 
   /**
    * Fails (PERMISSION_DENIED / INVALID_ARGUMENT) unless the actor may grant these platform
@@ -108,6 +104,8 @@ export abstract class AuthServicePort {
   abstract checkPlatformRoleGrant(params: {
     actorUserId: number;
     roleIds: number[];
+    /** The user who receives them, when known: nobody grants roles to themselves */
+    targetUserId?: number;
   }): Promise<void>;
 
   /**

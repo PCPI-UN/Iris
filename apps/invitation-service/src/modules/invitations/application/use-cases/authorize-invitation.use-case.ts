@@ -36,17 +36,23 @@ export class AuthorizeInvitationUseCase {
 
   async execute(input: AuthorizeInvitationInput): Promise<void> {
     const roleIds = input.roleIds ?? [];
-    const access = await this.authService.getUserPlatformAccess(input.inviterUserId);
+    const permissions = await this.forward(() =>
+      this.authService.getUserPermissions(input.inviterUserId),
+    );
 
     switch (input.targetType) {
       case InvitationTargetType.PLATFORM: {
-        if (!holds(access, CREATE_PLATFORM_INVITATIONS_PERMISSION)) {
+        if (!holds(permissions, CREATE_PLATFORM_INVITATIONS_PERMISSION)) {
           throw this.denied('Solo quien tiene el permiso create:invitations puede invitar a la plataforma');
         }
-        const inviter = await this.authService.getUser(input.inviterUserId);
+        const inviter = await this.forward(() =>
+          this.authService.getUser(input.inviterUserId),
+        );
         if (normalizeEmail(inviter.email) === normalizeEmail(input.email)) {
           throw this.denied('Un usuario no puede invitarse a sí mismo a la plataforma');
         }
+        // Without roles the invitee only gets the base role: nothing to grant
+        if (roleIds.length === 0) return;
         await this.forward(() =>
           this.authService.checkPlatformRoleGrant({
             actorUserId: input.inviterUserId,
@@ -57,7 +63,7 @@ export class AuthorizeInvitationUseCase {
       }
 
       case InvitationTargetType.EVENT:
-        if (!holds(access, MANAGE_EVENTS_PERMISSION)) {
+        if (!holds(permissions, MANAGE_EVENTS_PERMISSION)) {
           throw this.denied('Solo quien administra eventos puede invitar a un evento');
         }
         return;
@@ -95,9 +101,9 @@ export class AuthorizeInvitationUseCase {
    * A gRPC error from another service arrives as a plain error with `code` and `details`;
    * thrown as is it becomes UNKNOWN (500 in the gateway). Keep its code (403, 404, 400).
    */
-  private async forward(call: () => Promise<void>): Promise<void> {
+  private async forward<T>(call: () => Promise<T>): Promise<T> {
     try {
-      await call();
+      return await call();
     } catch (error) {
       if (error instanceof RpcException) throw error;
       const { code, details, message } = (error ?? {}) as { code?: number; details?: string; message?: string };

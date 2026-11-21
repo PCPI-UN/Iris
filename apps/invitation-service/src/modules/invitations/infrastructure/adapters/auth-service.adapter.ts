@@ -87,22 +87,18 @@ export class AuthServiceAdapter implements AuthServicePort, OnModuleInit {
     return await firstValueFrom(this.authService.assignPlatformRoles(params));
   }
 
-  async getUserPlatformAccess(
-    userId: number,
-  ): Promise<{ roleNames: string[]; permissions: string[] }> {
+  async getUserPermissions(userId: number): Promise<string[]> {
     const response = await firstValueFrom(
       this.authService.getUserPermissions({ userId }),
     );
     // proto3 leaves an empty repeated field out of the message
-    return {
-      roleNames: (response.roles ?? []).map((role) => role.name),
-      permissions: response.permissions ?? [],
-    };
+    return response.permissions ?? [];
   }
 
   async checkPlatformRoleGrant(params: {
     actorUserId: number;
     roleIds: number[];
+    targetUserId?: number;
   }): Promise<void> {
     await firstValueFrom(this.authService.checkPlatformRoleGrant(params));
   }

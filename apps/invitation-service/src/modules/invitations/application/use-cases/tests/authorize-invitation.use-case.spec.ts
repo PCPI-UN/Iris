@@ -11,9 +11,9 @@ const STUDENT = 3; // participant of project 10
 const OTHER = 7; // signed in, unrelated
 const PROJECT = 10;
 
-const ACCESS: Record<number, { roleNames: string[]; permissions: string[] }> = {
-  [ADMIN]: { roleNames: ['Admin'], permissions: [] },
-  [MANAGER]: { roleNames: ['EventManager'], permissions: ['manage:events', 'create:invitations'] },
+const PERMISSIONS: Record<number, string[]> = {
+  [ADMIN]: ['create:invitations', 'manage:events', 'manage:admins'],
+  [MANAGER]: ['manage:events', 'create:invitations'],
 };
 const EMAILS: Record<number, string> = { [ADMIN]: 'admin@x.test', [MANAGER]: 'em@x.test', [STUDENT]: 's@x.test', [OTHER]: 'o@x.test' };
 const ROLE_NAMES: Record<number, string> = { 1: 'Admin', 4: 'Juror', 5: 'Participant', 7: 'Dean', 10: 'Tutor' };
@@ -22,7 +22,9 @@ const denied = (message: string) => new RpcException({ code: status.PERMISSION_D
 
 function build() {
   const auth = {
-    getUserPlatformAccess: jest.fn(async (id: number) => ACCESS[id] ?? { roleNames: ['User'], permissions: [] }),
+    getUserPermissions: jest.fn((id: number) =>
+      Promise.resolve(PERMISSIONS[id] ?? []),
+    ),
     getUser: jest.fn(async (id: number) => ({ id, email: EMAILS[id] })),
     getRolesByIds: jest.fn(async (ids: number[]) => ({
       roles: ids.filter((id) => ROLE_NAMES[id]).map((id) => ({ id, name: ROLE_NAMES[id] })),
@@ -73,6 +75,27 @@ describe('AuthorizeInvitationUseCase', () => {
       await expect(invite(useCase, MANAGER, InvitationTargetType.PLATFORM, [7])).resolves.toBeUndefined();
       await expect(invite(useCase, ADMIN, InvitationTargetType.PLATFORM, [1])).resolves.toBeUndefined();
       expect(auth.checkPlatformRoleGrant).toHaveBeenCalledWith({ actorUserId: MANAGER, roleIds: [7] });
+    });
+
+    it('lets an inviter with create:invitations invite without roles (base role only)', async () => {
+      const { useCase, auth } = build();
+      await expect(
+        invite(useCase, MANAGER, InvitationTargetType.PLATFORM, []),
+      ).resolves.toBeUndefined();
+      expect(auth.checkPlatformRoleGrant).not.toHaveBeenCalled();
+    });
+
+    it('keeps the code of an auth-service error instead of answering UNKNOWN', async () => {
+      const { useCase, auth } = build();
+      auth.getUserPermissions.mockRejectedValueOnce({
+        code: status.NOT_FOUND,
+        details: 'no user',
+      });
+      await expect(
+        invite(useCase, MANAGER, InvitationTargetType.PLATFORM, [7]),
+      ).rejects.toMatchObject({
+        error: expect.objectContaining({ code: status.NOT_FOUND }),
+      });
     });
   });
 
