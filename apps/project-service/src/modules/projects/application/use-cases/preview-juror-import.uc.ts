@@ -24,6 +24,8 @@ import {
 /** Same limit the gateway enforces; it keeps the gRPC messages far below 4 MB */
 export const MAX_JUROR_IMPORT_ROWS = 2000;
 const LOOKUP_CONCURRENCY = 10;
+/** Appended to the message of a row whose juror is a tutor of the project */
+export const JUROR_IMPORT_TUTOR_NOTE = ' Aviso: es tutor de este proyecto.';
 
 export type JurorImportOutcome = 'ASSIGN' | 'SKIP' | 'ERROR';
 export type JurorImportUserStatus =
@@ -387,7 +389,7 @@ export class PreviewJurorImportUC {
     const tutors = ctx.tutorsByProject.get(project.id);
     const tutorNote =
       tutors?.emails.has(email) || (user && tutors?.userIds.has(user.id))
-        ? ' Aviso: es tutor de este proyecto.'
+        ? JUROR_IMPORT_TUTOR_NOTE
         : '';
     if (!user) {
       return {

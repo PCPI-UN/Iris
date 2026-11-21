@@ -32,6 +32,12 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'DELETE /admin/cache/user/:userId': { permission: ['admin:system'] },
   // health.controller.ts
   'GET /health': { access: 'public' },
+  // modules/academic/academic.controller.ts (read-only; project-service limits the scope)
+  'GET /academic/events': { permission: ['read:academic_projects'] },
+  'GET /academic/grades': { permission: ['read:academic_projects'] },
+  'GET /academic/projects': { permission: ['read:academic_projects'] },
+  'GET /academic/projects/:id': { permission: ['read:academic_projects'] },
+  'GET /academic/registrations': { permission: ['read:academic_projects'] },
   // modules/auth/auth.controller.ts
   'POST /auth/activate': { access: 'public' },
   'GET /auth/callback': { access: 'public' },
@@ -161,6 +167,12 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'PATCH /events/recaps/:id': { permission: ['manage:events'] },
   'GET /events/statuses': { access: 'public' },
   'PATCH /events/update-ranking-config/:id': { permission: ['manage:events'] },
+  // modules/grading-scales/grading-scales.controller.ts
+  'GET /grading-scales': { permission: ['read:events'] },
+  'POST /grading-scales': { permission: ['manage:events'] },
+  'DELETE /grading-scales/:id': { permission: ['manage:events'] },
+  'GET /grading-scales/:id': { permission: ['read:events'] },
+  'PUT /grading-scales/:id': { permission: ['manage:events'] },
   // modules/invitations/invitations.controller.ts
   'POST /invitations': {
     access: 'owner',
@@ -186,6 +198,9 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   },
   // modules/projects/juror-imports/juror-imports.controller.ts
   'POST /events/:eventId/juror-imports/preview': {
+    permission: ['manage:events'],
+  },
+  'POST /events/:eventId/juror-imports/execute': {
     permission: ['manage:events'],
   },
   'GET /events/:eventId/juror-imports/template': {
@@ -240,7 +255,17 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   },
   'PATCH /projects/reassign-juror': { permission: ['manage:events'] },
   // modules/reports/reports.controller.ts
-  'GET /events/:eventId/reports/evaluation': { permission: ['read:grades'] },
+  'GET /events/:eventId/my-project/report': {
+    access: 'session',
+    why: "report of the caller's own project, only once the admin publishes the results",
+  },
+  'GET /events/:eventId/reports/evaluation': {
+    access: 'session',
+    why: 'the service checks read:grades (whole category) or read:academic_projects (only the projects in scope, once published); anyone else gets 403',
+  },
+  // modules/terms/terms.controller.ts
+  'GET /terms': { permission: ['read:events'] },
+  'POST /terms': { permission: ['manage:events'] },
   // modules/tiebreaks/tiebreaks.controller.ts
   'GET /tiebreaks': { permission: ['read:grades'] },
   'POST /tiebreaks': { permission: ['manage:events'] },

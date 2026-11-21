@@ -1,15 +1,20 @@
 import { TypedDocument ,ProjectState, ProjectDocument, Project, JurorKey, Status, ProjectTutorView } from '../../domain/entities/project.entity';
+import { AcademicCourseView } from '../../domain/repositories/project.repository';
 import {
   JurorImportOutcome as ProtoJurorImportOutcome,
   JurorImportUserStatus as ProtoJurorImportUserStatus,
   PreviewJurorImportResponse,
+  ExecuteJurorImportResponse,
   GetJurorImportTemplateResponse,
+  JurorImportRowResult as ProtoJurorImportRowResult,
 } from '@app/common/generated/project';
 import {
   JurorImportOutcome,
   JurorImportPreview,
+  JurorImportRowResult,
   JurorImportUserStatus,
 } from '../../application/use-cases/preview-juror-import.uc';
+import { JurorImportExecution } from '../../application/use-cases/execute-juror-import.uc';
 import { JurorImportTemplate } from '../../application/use-cases/get-juror-import-template.uc';
 import { StudentDashboardData } from '../../application/use-cases/get-student-participation-stats.uc';
 
@@ -160,6 +165,23 @@ export const toProtoProjectComplete = (p: any) => ({
   tutors: (p.tutors ?? []).map(toProtoTutor),
 });
 
+export const toProtoAcademicCourse = (c: AcademicCourseView) => ({
+  id: c.id,
+  nrc: c.nrc,
+  termId: c.termId,
+  name: c.name,
+  professorUserId: c.professorUserId,
+  departmentId: c.departmentId,
+  departmentName: c.departmentName,
+});
+
+/** Project of the academic read endpoints: the complete project plus its course section. */
+export const toProtoProjectInScope = (p: any) => ({
+  ...toProtoProjectComplete(p),
+  academicCourse: p.academicCourse ? toProtoAcademicCourse(p.academicCourse) : undefined,
+  assignedJurorCount: p.assignedJurorCount ?? 0,
+});
+
 const jurorImportOutcomeToProto: Record<
   JurorImportOutcome,
   ProtoJurorImportOutcome
@@ -178,25 +200,36 @@ const jurorImportUserStatusToProto: Record<
   INVITE_TO_EVENT: ProtoJurorImportUserStatus.INVITE_TO_EVENT,
 };
 
+const toProtoJurorImportRow = (
+  row: JurorImportRowResult,
+): ProtoJurorImportRowResult => ({
+  rowNumber: row.rowNumber,
+  outcome: jurorImportOutcomeToProto[row.outcome],
+  userStatus: row.userStatus
+    ? jurorImportUserStatusToProto[row.userStatus]
+    : ProtoJurorImportUserStatus.JUROR_IMPORT_USER_STATUS_UNSPECIFIED,
+  message: row.message,
+  email: row.email,
+  projectId: row.projectId,
+  projectName: row.projectName,
+  userId: row.userId,
+  jurorSlot: row.jurorSlot,
+});
+
 export const toPreviewJurorImportResponse = (
   preview: JurorImportPreview,
 ): PreviewJurorImportResponse => ({
-  rows: preview.rows.map((row) => ({
-    rowNumber: row.rowNumber,
-    outcome: jurorImportOutcomeToProto[row.outcome],
-    userStatus: row.userStatus
-      ? jurorImportUserStatusToProto[row.userStatus]
-      : ProtoJurorImportUserStatus.JUROR_IMPORT_USER_STATUS_UNSPECIFIED,
-    message: row.message,
-    email: row.email,
-    projectId: row.projectId,
-    projectName: row.projectName,
-    userId: row.userId,
-    jurorSlot: row.jurorSlot,
-  })),
+  rows: preview.rows.map(toProtoJurorImportRow),
   totals: preview.totals,
   eventWarnings: preview.eventWarnings,
   canConfirm: preview.canConfirm,
+});
+
+export const toExecuteJurorImportResponse = (
+  execution: JurorImportExecution,
+): ExecuteJurorImportResponse => ({
+  rows: execution.rows.map(toProtoJurorImportRow),
+  totals: execution.totals,
 });
 
 export const toGetJurorImportTemplateResponse = (

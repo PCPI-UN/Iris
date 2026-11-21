@@ -37,16 +37,15 @@ export class CheckProjectAccessUC {
     const isParticipant = await this.repo.isUserParticipant(projectId, input.userId);
     if (isParticipant) return { projectId };
 
-    const [assignments, access] = await Promise.all([
+    const [assignments, permissions] = await Promise.all([
       input.action === 'READ' ? this.repo.listAssignments(projectId) : Promise.resolve([]),
-      this.auth.getUserPlatformAccess(input.userId),
+      this.auth.getUserPermissions(input.userId),
     ]);
 
     const allowed = canAccessProject(input.userId, input.action, {
       isParticipant,
       assignedJurorUserIds: jurorUserIds(assignments),
-      roleNames: access.roleNames,
-      permissions: access.permissions,
+      permissions,
     });
     if (!allowed) {
       throw new ForbiddenError(

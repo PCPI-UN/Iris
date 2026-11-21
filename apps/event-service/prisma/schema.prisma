@@ -48,16 +48,41 @@ model Event {
   organizers              String[]        @db.VarChar(255)
   latitude                Float?
   longitude               Float?
+  // Academic term of the event: resolves the NRC a student types to a single course section
+  termId                  Int             @map("term_id")
+  // true: a project of the event must belong to a course section (NRC) of its term, such as
+  // a final projects fair; false: projects have no course section, such as a hackathon.
+  // Set when the event is created; it has no default
+  requiresCourse          Boolean         @map("requires_course")
   createdAt               DateTime        @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt               DateTime        @updatedAt @map("updated_at") @db.Timestamptz()
 
+  term                    Term            @relation(fields: [termId], references: [id], onDelete: Restrict)
   participants            StaffEventMember[]
   categories              Category[]
   eventInscriptionDetails EventInscriptionDetail[]
   eventRecaps             EventRecap[]
   rankingEvent            RankingEvent?
 
+  @@index([termId])
   @@map("event")
+}
+
+// Academic term: year and period code (2026 + "10" is the term 202610).
+// The NRC of a course section repeats across terms, so (term, NRC) identifies one section.
+// Row -1 ("no term") holds the events created before terms existed; the API neither
+// lists it nor lets an event be created or edited with it.
+model Term {
+  id        Int      @id @default(autoincrement())
+  year      Int
+  period    String   @db.VarChar(10)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  events Event[]
+
+  @@unique([year, period])
+  @@map("terms")
 }
 
 // Additional ordered content shown during the inscription process of an event.

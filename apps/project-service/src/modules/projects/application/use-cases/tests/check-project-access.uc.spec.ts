@@ -1,6 +1,6 @@
 import { CheckProjectAccessUC } from '../check-project-access.uc';
 import { ProjectRepository } from '../../../domain/repositories/project.repository';
-import { AuthServicePort, UserPlatformAccess } from '../../ports/auth-service.port';
+import { AuthServicePort } from '../../ports/auth-service.port';
 import { ForbiddenError, NotFoundError } from '../../../domain/errors';
 import { JUROR_ROLE_ID } from '../../../domain/entities/project.entity';
 
@@ -13,10 +13,10 @@ const STAFF_EDIT = 50; // event manager: manage:events
 const ADMIN = 60;
 const DOCUMENT = 7;
 
-const ACCESS: Record<number, UserPlatformAccess> = {
-  [STAFF_READ]: { roleNames: ['Dean'], permissions: ['read:events', 'read:grades'] },
-  [STAFF_EDIT]: { roleNames: ['EventManager'], permissions: ['read:events', 'manage:events'] },
-  [ADMIN]: { roleNames: ['Admin'], permissions: [] },
+const PERMISSIONS: Record<number, string[]> = {
+  [STAFF_READ]: ['read:events', 'read:grades'], // Dean
+  [STAFF_EDIT]: ['read:events', 'manage:events'], // EventManager
+  [ADMIN]: ['read:events', 'manage:events', 'manage:admins'],
 };
 
 function build() {
@@ -33,7 +33,7 @@ function build() {
     ]),
   };
   const auth = {
-    getUserPlatformAccess: jest.fn(async (userId: number) => ACCESS[userId] ?? { roleNames: ['User'], permissions: [] }),
+    getUserPermissions: jest.fn(async (userId: number) => PERMISSIONS[userId] ?? []),
   };
   const useCase = new CheckProjectAccessUC(
     repo as unknown as ProjectRepository,
@@ -80,6 +80,6 @@ describe('CheckProjectAccessUC', () => {
   it('does not ask auth-service when the caller is a participant', async () => {
     const { useCase: fresh, auth } = build();
     await fresh.execute({ userId: STUDENT, action: 'EDIT', projectId: PROJECT });
-    expect(auth.getUserPlatformAccess).not.toHaveBeenCalled();
+    expect(auth.getUserPermissions).not.toHaveBeenCalled();
   });
 });

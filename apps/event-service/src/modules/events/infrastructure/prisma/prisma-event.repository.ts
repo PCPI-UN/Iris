@@ -88,6 +88,8 @@ function toDomainEvent(p: any): DomainEvent {
     eventType: toProtoEventType(p.eventType),
     collaborators: p.collaborators ?? [],
     organizers: p.organizers ?? [],
+    termId: p.termId,
+    requiresCourse: p.requiresCourse,
   };
 }
 
@@ -207,6 +209,8 @@ export class PrismaEventRepository extends EventRepository {
       organizers: input.organizers ?? [],
       active: input.active ?? true,
       createdByUserId: input.createdByUserId ?? 0,
+      termId: input.termId,
+      requiresCourse: input.requiresCourse,
     };
 
     const created = await this.prisma.event.create({ data });
@@ -228,6 +232,7 @@ export class PrismaEventRepository extends EventRepository {
 
     const rows = await this.prisma.event.findMany({
       where: { id: { in: ids } },
+      orderBy: [{ startDate: 'desc' }, { id: 'desc' }],
     });
 
     return rows.map(toDomainEvent);
@@ -282,6 +287,8 @@ export class PrismaEventRepository extends EventRepository {
       collaborators: input.collaborators,
       organizers: input.organizers,
       active: input.active,
+      termId: input.termId,
+      requiresCourse: input.requiresCourse,
     };
 
     const updated = await this.prisma.event.update({

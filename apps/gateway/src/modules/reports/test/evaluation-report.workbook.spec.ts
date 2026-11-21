@@ -23,6 +23,8 @@ describe('Evaluation report workbook', () => {
     categoryName: 'Departamento de Ingeniería Civil y Ambiental',
     maxScore: 100,
     generatedAt: new Date('2026-11-13T15:00:00Z'),
+    showJurorCount: true,
+    showPositions: true,
     projects: [
       {
         rowNumber: 1,
@@ -87,10 +89,10 @@ describe('Evaluation report workbook', () => {
     ],
   };
 
-  const load = async () => {
+  const load = async (source: EvaluationReport = report) => {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(
-      (await buildEvaluationReportBuffer(report)) as any,
+      (await buildEvaluationReportBuffer(source)) as any,
     );
     return workbook;
   };
@@ -248,6 +250,115 @@ describe('Evaluation report workbook', () => {
       state: 'frozen',
       xSplit: 3,
       ySplit: 4,
+    });
+  });
+
+  /** CU-86e3vmz0c: the student's report never shows how many jurors evaluated */
+  /** Filtered report of an event without ranking configuration */
+  describe('report without positions', () => {
+    const noPositions: EvaluationReport = {
+      ...report,
+      showJurorCount: false,
+      showPositions: false,
+      projects: [{ ...report.projects[0], jurorCount: null, position: null }],
+    };
+
+    it('leaves the position column out of the summary and the note', async () => {
+      const sheet = (await load(noPositions)).getWorksheet(SUMMARY_SHEET)!;
+
+      expect(values(sheet, 4, 6)).toEqual([
+        'Código',
+        'ID Proyecto',
+        'Nombre del Proyecto',
+        'Integrantes del Equipo',
+        'Puntaje Final',
+        'Comentarios Consolidados',
+      ]);
+      expect(values(sheet, 5, 6)).toEqual([
+        1,
+        120,
+        'Vía de integración',
+        'Ana Pérez, Luis Gómez',
+        85.8,
+        'Muy claros | Faltó el costo',
+      ]);
+      expect(sheet.getCell('G5').value).toBeNull();
+      const note = sheet.getCell('A7').text;
+      expect(note).toContain('Puntaje Final');
+      expect(note).not.toContain('Posición');
+      expect(note).not.toContain('coganadores');
+    });
+  });
+
+  describe('student report', () => {
+    const studentReport: EvaluationReport = {
+      ...report,
+      showJurorCount: false,
+      projects: [{ ...report.projects[0], jurorCount: null }],
+    };
+
+    const allText = (sheet: ExcelJS.Worksheet) => {
+      const texts: string[] = [];
+      sheet.eachRow((row) => row.eachCell((cell) => texts.push(cell.text)));
+      return texts;
+    };
+
+    it('leaves the jurors column out of the summary', async () => {
+      const sheet = (await load(studentReport)).getWorksheet(SUMMARY_SHEET)!;
+
+      expect(values(sheet, 4, 7)).toEqual([
+        'Código',
+        'ID Proyecto',
+        'Nombre del Proyecto',
+        'Integrantes del Equipo',
+        'Puntaje Final',
+        'Posición',
+        'Comentarios Consolidados',
+      ]);
+      expect(values(sheet, 5, 7)).toEqual([
+        1,
+        120,
+        'Vía de integración',
+        'Ana Pérez, Luis Gómez',
+        85.8,
+        1,
+        'Muy claros | Faltó el costo',
+      ]);
+      expect(sheet.getCell('H5').value).toBeNull();
+      expect(allText(sheet)).not.toContain('N° de Jurados');
+    });
+
+    it('leaves the jurors column out of the detail and keeps the merges', async () => {
+      const sheet = (await load(studentReport)).getWorksheet(DETAIL_SHEET)!;
+
+      expect(values(sheet, 4, 10)).toEqual([
+        'Código',
+        'Nombre del Proyecto',
+        'Integrantes del Equipo',
+        'Componente',
+        'Peso del Componente',
+        'Criterio',
+        'Peso del Criterio',
+        'Nota del Criterio',
+        'Puntaje Final del Proyecto',
+        'Comentarios Consolidados',
+      ]);
+      expect(values(sheet, 5, 10)).toEqual([
+        1,
+        'Vía de integración',
+        'Ana Pérez, Luis Gómez',
+        'Exposición',
+        0.5,
+        'Claridad',
+        0.2,
+        80,
+        85.8,
+        'Muy claros | Faltó el costo',
+      ]);
+      expect(allText(sheet)).not.toContain('N° de Jurados');
+      expect((sheet.model as { merges: string[] }).merges).toEqual(
+        expect.arrayContaining(['A5:A7', 'I5:I7', 'J5:J7', 'D5:D6']),
+      );
     });
   });
 

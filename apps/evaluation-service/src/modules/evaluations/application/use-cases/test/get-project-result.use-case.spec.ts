@@ -1,12 +1,16 @@
 import { RpcException } from '@nestjs/microservices';
-import { EvaluationType as EventEvaluationType } from '@app/common/generated/event';
 import { GetProjectResultUseCase } from '../get-project-result.use-case';
 import { EvaluationRepositoryPort } from '../../../domain/repositories/evaluation.repository.port';
 import { ProjectServicePort } from '../../../infrastructure/ports/project.service.port';
+import {
+  buildResolver,
+  customScale,
+  InMemoryGradingScaleRepository,
+} from '../../../../grading-scales/testing/grading-scales.fixture';
 
 describe('GetProjectResultUseCase', () => {
   const build = (
-    evaluationType?: EventEvaluationType,
+    scaleId = 1,
     project: object | null = { id: 5, eventId: 3 },
   ) => {
     const repo = {
@@ -27,24 +31,23 @@ describe('GetProjectResultUseCase', () => {
       ]),
     };
     const projects = { getProject: jest.fn().mockResolvedValue(project) };
-    const events = {
-      getEvent: jest.fn().mockResolvedValue({ id: 3, evaluationType }),
-    };
+    const scales = new InMemoryGradingScaleRepository();
+    scales.scales.set(50, customScale(50, [10, 20, 30, 40]));
+    scales.eventScales.set(3, scaleId);
     const uc = new GetProjectResultUseCase(
       repo as unknown as EvaluationRepositoryPort,
       projects as unknown as ProjectServicePort,
-      events,
+      buildResolver(scales),
     );
-    return { uc, repo, projects, events };
+    return { uc, repo, projects };
   };
 
-  it('reads the evaluations of the project and the event of the project', async () => {
-    const { uc, repo, events } = build(EventEvaluationType.FINAL_PROJECTS);
+  it('reads the evaluations of the project', async () => {
+    const { uc, repo } = build();
 
     const result = await uc.execute({ projectId: 5 });
 
     expect(repo.findProjectEvaluationsForResult).toHaveBeenCalledWith(5);
-    expect(events.getEvent).toHaveBeenCalledWith(3);
     expect(result).toMatchObject({
       evaluated: true,
       finalScore: 80,
@@ -52,13 +55,13 @@ describe('GetProjectResultUseCase', () => {
     });
   });
 
-  it.each([
-    [EventEvaluationType.FINAL_PROJECTS, 90],
-    [EventEvaluationType.ZERO_TO_FIVE, 5],
-    [EventEvaluationType.ZERO_TO_HUNDRED, 100],
-    [undefined, 90],
-  ])('uses the highest grade of the type %p as maxScore', async (type, max) => {
-    const { uc } = build(type);
+  it.each<[string, number, number]>([
+    ['Proyectos finales', 1, 90],
+    ['Cero a cinco', 2, 5],
+    ['Cero a cien', 3, 100],
+    ['a custom scale', 50, 40],
+  ])('uses the highest level of %s as maxScore', async (_name, scaleId, max) => {
+    const { uc } = build(scaleId);
 
     const result = await uc.execute({ projectId: 5 });
 
@@ -66,7 +69,7 @@ describe('GetProjectResultUseCase', () => {
   });
 
   it('fails with NOT_FOUND when the project does not exist', async () => {
-    const { uc, repo } = build(EventEvaluationType.FINAL_PROJECTS, null);
+    const { uc, repo } = build(1, null);
 
     await expect(uc.execute({ projectId: 5 })).rejects.toBeInstanceOf(
       RpcException,

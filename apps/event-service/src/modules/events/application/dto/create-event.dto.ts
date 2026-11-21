@@ -105,6 +105,15 @@ export class CreateEventDTO {
   @Min(1)
   createdByUserId?: number;
 
+  /** Academic term of the event; CreateEventUC checks that it exists */
+  @IsInt()
+  @Min(1)
+  termId: number;
+
+  /** true: each project needs a course section (NRC) of the term; false: not course work */
+  @IsBoolean()
+  requiresCourse: boolean;
+
   @IsOptional()
   @IsNumber()
   @Min(-90)

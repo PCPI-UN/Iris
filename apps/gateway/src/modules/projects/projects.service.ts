@@ -35,6 +35,7 @@ import {
   ListUserParticipationsResponse,
   AddPendingParticipantRequest,
   JurorKey,
+  ListProjectsInScopeRequest,
 } from '@app/common/generated/project';
 import { CreateProjectWithParticipantsDto } from './dto/create-project-with-participants.dto';
 import { CreateProjectWithParticipantsMultipartDto } from './dto/create-project-with-participants-multipart.dto';
@@ -250,6 +251,7 @@ export class ProjectsService implements OnModuleInit {
           eventId,
           eventType,
           courseId,
+          nrc: body.nrc,
           name: body.name,
           description: body.description,
           projectCode: body.projectCode,
@@ -336,6 +338,7 @@ export class ProjectsService implements OnModuleInit {
         eventId: dto.eventId,
         eventType: dto.eventType,
         courseId: dto.courseId,
+        nrc: dto.nrc,
         name: dto.name,
         description: dto.description,
         projectCode: dto.projectCode,
@@ -552,6 +555,54 @@ export class ProjectsService implements OnModuleInit {
     };
 
     return lastValueFrom(this.projectsService.listProjectsByEvent(request));
+  }
+
+  /**
+   * Academic reads: project-service resolves the projects the user may read from their
+   * scope permissions (tutored, of their course sections or department, or all of them).
+   */
+  async listProjectsInScope(
+    request: ListProjectsInScopeRequest,
+  ): Promise<ListProjectsResponse> {
+    return lastValueFrom(this.projectsService.listProjectsInScope(request));
+  }
+
+  /** Every project of the user's scope that matches the filters, page after page */
+  async listAllProjectsInScope(
+    request: Omit<ListProjectsInScopeRequest, 'currentPage' | 'itemsPerPage'>,
+  ): Promise<ProjectComplete[]> {
+    const itemsPerPage = 100;
+    const projects: ProjectComplete[] = [];
+    let currentPage = 1;
+    let totalPages = 1;
+    do {
+      const page = await this.listProjectsInScope({
+        ...request,
+        currentPage,
+        itemsPerPage,
+      });
+      projects.push(...(page.items ?? []));
+      totalPages = page.totalPages ?? 1;
+      currentPage++;
+    } while (currentPage <= totalPages);
+    return projects;
+  }
+
+  /** NOT_FOUND (404) when the project does not exist or is outside the user's scope */
+  async getProjectInScope(
+    userId: number,
+    projectId: number,
+  ): Promise<ProjectComplete> {
+    return lastValueFrom(
+      this.projectsService.getProjectInScope({ userId, projectId }),
+    );
+  }
+
+  async listEventIdsInScope(userId: number): Promise<number[]> {
+    const response = await lastValueFrom(
+      this.projectsService.listEventIdsInScope({ userId }),
+    );
+    return response.eventIds ?? [];
   }
 
   async listProjectsByEventWithJurors(

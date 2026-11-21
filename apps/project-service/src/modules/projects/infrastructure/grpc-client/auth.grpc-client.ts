@@ -7,7 +7,6 @@ import {
   User,
   FindUsersByRolesRequest,
   UserSummary,
-  GetUserPermissionsResponse,
 } from '@app/common/generated/auth';
 
 @Injectable()
@@ -34,11 +33,13 @@ export class AuthGrpcClient implements OnModuleInit {
     return res.users ?? [];
   }
 
-  async assignPlatformRoles(userId: number, roleIds: number[]): Promise<void> {
-    await firstValueFrom(this.svc.assignPlatformRoles({ userId, roleIds }));
+  async getUserPermissions(userId: number): Promise<string[]> {
+    const res = await firstValueFrom(this.svc.getUserPermissions({ userId }));
+    // proto3 leaves an empty repeated field out of the message
+    return res.permissions ?? [];
   }
 
-  async getUserPermissions(userId: number): Promise<GetUserPermissionsResponse> {
-    return firstValueFrom(this.svc.getUserPermissions({ userId }));
+  async assignPlatformRoles(userId: number, roleIds: number[]): Promise<void> {
+    await firstValueFrom(this.svc.assignPlatformRoles({ userId, roleIds }));
   }
 }

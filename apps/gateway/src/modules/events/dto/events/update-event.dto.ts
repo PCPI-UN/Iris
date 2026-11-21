@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { EvaluationType, EventType } from '@app/common/generated/event';
+import { EventType } from '@app/common/generated/event';
 import {
   IsArray,
   IsInt,
@@ -17,7 +17,6 @@ import {
   ValidateNested,
 } from 'class-validator';
 import {
-  transformEvaluationType,
   transformEventType,
 } from './event-type-transformer';
 
@@ -271,15 +270,16 @@ export class UpdateEventPayloadDTO {
   locationDetails?: string;
 
   @ApiProperty({
-    description: 'Updated evaluation scale configured for the event',
-    enum: EvaluationType,
+    description:
+      'Grading scale of the event, from the catalog (GET /grading-scales). To use a new scale, create it first ' +
+      'with POST /grading-scales. Without it, a new event gets "Proyectos finales" and an existing event keeps its scale.',
     required: false,
-    example: 'FINAL_PROJECTS',
+    example: 1,
   })
   @IsOptional()
-  @Transform(transformEvaluationType)
-  @IsEnum(EvaluationType)
-  evaluationType?: EvaluationType;
+  @IsInt()
+  @Min(1)
+  gradingScaleId?: number;
 
   @ApiProperty({
     description: 'Updated inscription requirements',
@@ -298,6 +298,27 @@ export class UpdateEventPayloadDTO {
   @IsInt()
   @Min(1)
   minimumTeamSize?: number;
+
+  @ApiProperty({
+    description: 'Academic term of the event (GET /terms); not sent: unchanged',
+    required: false,
+    example: 3,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  termId?: number;
+
+  @ApiProperty({
+    description:
+      'Whether each project must belong to a course section (NRC); not sent: unchanged. ' +
+      'Projects already submitted keep their course section',
+    required: false,
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  requiresCourse?: boolean;
 
   @ApiProperty({
     description: 'Updated information about allies or partners',

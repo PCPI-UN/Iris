@@ -47,6 +47,19 @@ export class CreateProjectWithParticipantsMultipartDto {
   courseId: string;
 
   @ApiProperty({
+    description:
+      'NRC of the course section of the project, looked up in the academic term of the event. ' +
+      'Required when the event requires a course section (requiresCourse); ignored otherwise',
+    example: '1001',
+    maxLength: 20,
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  nrc?: string;
+
+  @ApiProperty({
     description: 'Name of the project',
     example: 'Smart Home Automation System',
   })

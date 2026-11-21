@@ -30,10 +30,12 @@ import {
   protobufPackage as evaluationProtobufPackage,
 } from '@app/common/generated/evaluation';
 import { AuthModule } from '../auth/auth.module';
+import { InvitationsModule } from '../invitations/invitations.module';
 
 @Module({
   imports: [
     AuthModule,
+    InvitationsModule,
     ClientsModule.registerAsync([
       {
         name: PROJECTS_SERVICE_NAME,

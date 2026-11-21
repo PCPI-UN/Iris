@@ -3,10 +3,15 @@ import { RpcException } from '@nestjs/microservices';
 import { EventRepository } from '../../domain/repositories/event.repository';
 import { UpdateEventDTO } from '../dto/update-event.dto';
 import { parseBogotaToUTC } from '@events/domain/utils/timezone.util';
+import { TermRepository } from '@events/domain/repositories/term.repository';
+import { assertSelectableTerm } from '@events/application/use-cases/assert-selectable-term';
 
 @Injectable()
 export class UpdateEventUC {
-  constructor(private readonly repo: EventRepository) {}
+  constructor(
+    private readonly repo: EventRepository,
+    private readonly terms: TermRepository,
+  ) {}
 
   async execute(input: UpdateEventDTO) {
     const existing = await this.repo.findById(input.id);
@@ -42,6 +47,12 @@ export class UpdateEventUC {
         code: 3,
         message: 'Validación fallida: startDate debe ser anterior a endDate',
       });
+    }
+
+    // An event still on the "no term" row can be edited without choosing one (for example
+    // to publish its results); a term that is sent must be a real one
+    if (input.termId !== undefined) {
+      await assertSelectableTerm(this.terms, input.termId);
     }
 
     if (input.accessCode && input.accessCode !== existing.accessCode) {
@@ -82,6 +93,8 @@ export class UpdateEventUC {
       eventType: input.eventType,
       collaborators: input.collaborators,
       organizers: input.organizers,
+      termId: input.termId,
+      requiresCourse: input.requiresCourse,
     });
   }
 }
