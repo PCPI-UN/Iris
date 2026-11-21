@@ -9,9 +9,8 @@ import { CriterionRepositoryPort } from '../../../criterions/domain/repositories
 import { Evaluation } from '../../domain/entities/evaluation.entity';
 import { EvaluationDetail } from '../../domain/entities/evaluation-detail.entity';
 import { EvaluateProjectDto } from '../dto/evaluate-project.dto';
-import { ScoreMapperFactory } from '../mappers/score-mapper.factory';
-import { resolveEvaluationType } from '../evaluation-type.resolver';
-import { ScoreValidatorFactory } from '../validators/score-validator.factory';
+import { EventGradingScaleResolver } from '../../../grading-scales/application/event-grading-scale.resolver';
+import { ScaleScorer } from '../../../grading-scales/domain/scale-scorer';
 import { Role } from '@app/common/generated/auth';
 import { isFullWeight, roundGrade } from '../../../../common/utils/grade.utils';
 import { buildRubric } from '../../../criterions/domain/services/rubric';
@@ -26,6 +25,7 @@ export class EvaluateProjectUseCase {
         private readonly eventService: EventServicePort,
         private readonly authService: AuthServicePort,
         private readonly criterionRepository: CriterionRepositoryPort,
+        private readonly gradingScaleResolver: EventGradingScaleResolver,
     ) { }
 
     async execute(request: EvaluateProjectDto): Promise<{ evaluation: Evaluation; scores: EvaluationDetail[] }> {
@@ -100,7 +100,7 @@ export class EvaluateProjectUseCase {
         const { savedEvaluation, evaluationDetails } = await this.criterionRepository.withRubricLock(
             [memberEventId],
             'shared',
-            () => this.gradeAndSave(request, project.courseId, memberEventId, memberRoleId, event.evaluationType),
+            () => this.gradeAndSave(request, project.courseId, memberEventId, memberRoleId),
         );
 
         // 7. Return evaluation with scores in the expected format
@@ -122,7 +122,6 @@ export class EvaluateProjectUseCase {
         courseId: number,
         memberEventId: number,
         memberRoleId: number,
-        eventEvaluationType: unknown,
     ): Promise<{ savedEvaluation: Evaluation; evaluationDetails: EvaluationDetail[] }> {
         const { projectId, userId: memberUserId, scores, comments } = request;
 
@@ -191,10 +190,10 @@ export class EvaluateProjectUseCase {
         const rubricById = new Map(rubric.map((criterion) => [criterion.id, criterion]));
         const scoredCriterionIds = new Set<number>();
 
-        // Resolve score validation and mapping from the event evaluation type
-        const evaluationType = resolveEvaluationType(eventEvaluationType);
-        const scoreValidator = ScoreValidatorFactory.create(evaluationType);
-        const scoreMapper = ScoreMapperFactory.create(evaluationType);
+        // The juror picks a level per criterion; the event's grading scale gives its points. It is read under
+        // the rubric lock, so the scale cannot change while this evaluation is graded.
+        const gradingScale = await this.gradingScaleResolver.resolve(memberEventId);
+        const scorer = new ScaleScorer(gradingScale);
 
         for (const scoreItem of scores) {
             if (scoredCriterionIds.has(scoreItem.criterionId)) {
@@ -213,23 +212,16 @@ export class EvaluateProjectUseCase {
                 });
             }
 
-            if (!Number.isInteger(scoreItem.score)) {
+            const mappedValue = Number.isInteger(scoreItem.score) ? scorer.pointsFor(scoreItem.score) : undefined;
+
+            if (mappedValue === undefined) {
                 throw new RpcException({
                     code: status.INVALID_ARGUMENT,
-                    message: `El puntaje del criterio ${scoreItem.criterionId} debe ser un nivel entero`,
+                    message:
+                        `El puntaje del criterio ${scoreItem.criterionId} debe ser un nivel de la escala de calificación ` +
+                        `"${gradingScale.name}": ${scorer.levels.join(', ')}`,
                 });
             }
-
-            const validation = scoreValidator.validate(scoreItem.score, evaluationType);
-
-            if (!validation.valid) {
-                throw new RpcException({
-                    code: status.INVALID_ARGUMENT,
-                    message: validation.error,
-                });
-            }
-
-            const mappedValue = scoreMapper.map(scoreItem.score, evaluationType);
 
             const effectiveWeight = effectiveWeights.get(criterion.id)!;
             totalGrade += mappedValue * effectiveWeight;

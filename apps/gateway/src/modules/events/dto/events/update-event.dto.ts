@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { EvaluationType, EventType } from '@app/common/generated/event';
+import { EventType } from '@app/common/generated/event';
 import {
   IsArray,
   IsInt,
@@ -17,7 +17,6 @@ import {
   ValidateNested,
 } from 'class-validator';
 import {
-  transformEvaluationType,
   transformEventType,
 } from './event-type-transformer';
 
@@ -271,15 +270,16 @@ export class UpdateEventPayloadDTO {
   locationDetails?: string;
 
   @ApiProperty({
-    description: 'Updated evaluation scale configured for the event',
-    enum: EvaluationType,
+    description:
+      'Grading scale of the event, from the catalog (GET /grading-scales). To use a new scale, create it first ' +
+      'with POST /grading-scales. Without it, a new event gets "Proyectos finales" and an existing event keeps its scale.',
     required: false,
-    example: 'FINAL_PROJECTS',
+    example: 1,
   })
   @IsOptional()
-  @Transform(transformEvaluationType)
-  @IsEnum(EvaluationType)
-  evaluationType?: EvaluationType;
+  @IsInt()
+  @Min(1)
+  gradingScaleId?: number;
 
   @ApiProperty({
     description: 'Updated inscription requirements',

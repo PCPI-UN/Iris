@@ -3,17 +3,12 @@ import { RpcException } from '@nestjs/microservices';
 import { status } from '@grpc/grpc-js';
 import { EvaluationRepositoryPort } from '../../domain/repositories/evaluation.repository.port';
 import { ProjectServicePort } from '../../infrastructure/ports/project.service.port';
-import { EventServicePort } from '../../infrastructure/ports/event.service.port';
 import {
   ProjectResult,
   buildProjectResult,
 } from '../../domain/services/project-result';
-import { ScoreMapperFactory } from '../mappers/score-mapper.factory';
-import { resolveEvaluationType } from '../evaluation-type.resolver';
 import { GetProjectResultDto } from '../dto/get-project-result.dto';
-
-/** Highest raw score a juror can give; every evaluation type maps 1 to 4 */
-const HIGHEST_RAW_SCORE = 4;
+import { EventGradingScaleResolver } from '../../../grading-scales/application/event-grading-scale.resolver';
 
 export interface ProjectResultWithScale extends ProjectResult {
   maxScore: number;
@@ -21,8 +16,8 @@ export interface ProjectResultWithScale extends ProjectResult {
 
 /**
  * Consolidated result of a project for its participants (see buildProjectResult).
- * `maxScore` is the stored value of the highest raw score in the event's evaluation type,
- * which is also the highest grade, since the effective weights add up to 1.
+ * `maxScore` is the points of the highest level of the event's grading scale, which is also
+ * the highest grade, since the effective weights add up to 1.
  *
  * It does not check whether the results are published nor who asks: the gateway does.
  */
@@ -31,7 +26,7 @@ export class GetProjectResultUseCase {
   constructor(
     private readonly evaluationRepository: EvaluationRepositoryPort,
     private readonly projectService: ProjectServicePort,
-    private readonly eventService: EventServicePort,
+    private readonly gradingScaleResolver: EventGradingScaleResolver,
   ) {}
 
   async execute(dto: GetProjectResultDto): Promise<ProjectResultWithScale> {
@@ -43,16 +38,12 @@ export class GetProjectResultUseCase {
       });
     }
 
-    const [event, evaluations] = await Promise.all([
-      this.eventService.getEvent(project.eventId),
+    const [scale, evaluations] = await Promise.all([
+      this.gradingScaleResolver.resolve(project.eventId),
       this.evaluationRepository.findProjectEvaluationsForResult(dto.projectId),
     ]);
 
-    const evaluationType = resolveEvaluationType(event?.evaluationType);
-    const maxScore = ScoreMapperFactory.create(evaluationType).map(
-      HIGHEST_RAW_SCORE,
-      evaluationType,
-    );
+    const maxScore = Math.max(...scale.levels.map((level) => level.points));
 
     return { ...buildProjectResult(evaluations), maxScore };
   }

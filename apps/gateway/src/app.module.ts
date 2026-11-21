@@ -17,6 +17,7 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
 import { UsersModule } from './modules/users/users.module';
 import { ProfileModule } from './modules/profile/profile.module';
 import { CacheModule } from './common/cache/cache.module';
+import { GradingScalesModule } from './modules/grading-scales/grading-scales.module';
 import { CacheManagementController } from './common/cache/cache-management.controller';
 import { HealthController } from './health.controller';
 
@@ -33,6 +34,7 @@ import { HealthController } from './health.controller';
     InvitationsModule,
     CriterionsModule,
     TieBreaksModule,
+    GradingScalesModule,
     DashboardModule,
     ReportsModule,
     AcademicModule,
