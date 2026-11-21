@@ -5,7 +5,6 @@ import {
   IsArray,
   IsBoolean,
   IsDateString,
-  IsInt,
   IsEnum,
   IsInt,
   IsNotEmpty,
