@@ -50,12 +50,14 @@ export class EvaluationsController {
         );
     }
 
+    @RequirePermission('read:grades')
     @Get('projects/:projectId/stats')
     @ApiOperation({
         summary: 'Get project evaluation statistics',
         description:
             'Returns statistics for a project including average grade, evaluation count, and category-based stats. ' +
-            'Each category shows the average score and weight for that category across all evaluations.',
+            'Each category shows the average score and weight for that category across all evaluations. ' +
+            'Requires read:grades: it shows grades before the event publishes its results.',
     })
     @ApiParam({
         name: 'projectId',

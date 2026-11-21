@@ -14,6 +14,7 @@ import {
   PROJECTS_SERVICE_NAME,
   ProjectsServiceClient,
   ProjectState,
+  ProjectAccessAction,
   ListProjectsByEventRequest,
   ListProjectsResponse,
   GetProjectRequest,
@@ -358,6 +359,29 @@ export class ProjectsService implements OnModuleInit {
     );
 
     return response;
+  }
+
+  /**
+   * Fails with 403 unless the user may read or edit the project (or the project of the
+   * document). project-service decides: confirmed participants, assigned jurors (read only)
+   * and platform staff (read:events to read, manage:events to edit).
+   */
+  async assertProjectAccess(
+    userId: number,
+    action: 'READ' | 'EDIT',
+    target: { projectId: number } | { documentId: number },
+  ): Promise<void> {
+    await firstValueFrom(
+      this.projectsService.checkProjectAccess({
+        userId,
+        action:
+          action === 'READ'
+            ? ProjectAccessAction.PROJECT_ACCESS_READ
+            : ProjectAccessAction.PROJECT_ACCESS_EDIT,
+        projectId: 'projectId' in target ? target.projectId : 0,
+        documentId: 'documentId' in target ? target.documentId : 0,
+      }),
+    );
   }
 
   async addPendingParticipant(dto: AddPendingParticipantDto) {

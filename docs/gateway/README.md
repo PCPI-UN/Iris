@@ -11,7 +11,7 @@ Single HTTP entry point of the platform. It authenticates the browser session, c
 | Gateway does | Gateway does not |
 | --- | --- |
 | Read the session cookie, verify the access token and load the user with their platform roles and permissions | Issue or store tokens, users, roles or permissions: that belongs to `auth-service` |
-| Enforce platform permissions declared on each endpoint | Check event-level roles (juror, participant) or ownership: services do that where they need it |
+| Enforce platform permissions declared on each endpoint | Decide event-level roles (juror, participant) or ownership: services do that; the gateway asks them first on `owner` endpoints (`CheckProjectAccess`, `AuthorizeInvitation`) |
 | Run the Microsoft sign-in redirect and code exchange, then hand the Microsoft token to `auth-service` | Store project documents itself: files go to Azure Blob Storage |
 | Validate request shape with DTOs and map gRPC errors to HTTP status codes | Persist anything: every state change happens in a service |
 | Combine data from several services for some screens (rankings, top projects, juror lists, dashboard) | Send emails: services call `notification-service` |
@@ -47,9 +47,40 @@ Cross-cutting code lives in `src/common`: guards, decorators (`@Public`, `@Requi
 | Access | Meaning |
 | --- | --- |
 | `public` | No session |
-| `session` | Any authenticated user; `why` explains why that is enough (own data, or the service behind checks ownership) |
-| `pending` | Only a session today, without a decision yet; each one must end as `permission` or `session` |
+| `session` | Any authenticated user; `why` explains why that is enough (own data, or data that is not sensitive) |
+| `owner` | Only a session in the guard; the service named in `why` checks that the caller owns the resource (participant of the project, assigned juror) or is staff |
 | `permission` | The permissions listed |
+
+There is no `pending` value: the type does not allow it, so every endpoint has a decision.
+
+### Endpoints that only required a session (ClickUp 1dfnv12c650)
+
+Before this change 49 endpoints asked only for a session without a decision. Each one was called on an isolated stack with an unrelated student, a participant, an assigned juror, a dean, an event manager and the admin. "Before" is what the service behind checked about the caller; "Decision" is what each one requires now.
+
+| Endpoints | Before | Decision |
+| --- | --- | --- |
+| `PATCH /projects/:id/approve`, `/reject`, `/request-changes` | Nothing: any student approved, rejected or requested changes (`actingUserId` is sent but not read) | `manage:events` |
+| `POST /projects/assign-jurors`, `PATCH /projects/reassign-juror`, `DELETE /projects/:projectId/jurors/:jurorId` | Nothing: any student assigned, moved or removed jurors | `manage:events` |
+| `GET /projects/:id/jurors` | Nothing | `read:event-members`, like `GET /events/:eventId/jurors` |
+| `POST`, `PATCH`, `DELETE /events/award-winners*` | Nothing: any student created winners and changed `grade`; `assignedByUserId` came from the body | `manage:events`; the assigner is the caller (the body field is gone) |
+| `GET /events/award-winners*` | Nothing: winners and `grade` of every event, published or not | `read:grades` |
+| `POST`, `PATCH`, `DELETE /events/categories*` and `/events/category-awards*`, `PATCH /events/courses/:id` | Nothing | `manage:events` |
+| `GET /events/categories*`, `GET /events/category-awards*` | Nothing | `read:events` (no frontend caller; the public data is in `/events/public*`) |
+| `GET /evaluations/projects/:projectId/stats` | Nothing: average grade, scores per category and the jurors' ids of any project, before publishing | `read:grades` (only admin views use it) |
+| `GET /criterions/course/:courseId` | Nothing | `session`: rubric without grades; jurors (platform role `User`) load it to evaluate |
+| `GET /projects/:id`, `GET /projects/:id/for-review` | Nothing: full project with pending participants' emails and codes | `owner`: participants, assigned jurors or `read:events` (`CheckProjectAccess` READ) |
+| `PATCH /projects/:id/info`, `PATCH /projects/documents/:id`, `POST /projects/add-update-participants` | Nothing: any student renamed projects, changed documents (the file was uploaded first) or added participants | `owner`: participants or `manage:events` (`CheckProjectAccess` EDIT, before the upload) |
+| `PATCH /projects/:id/code` | The gateway use case: confirmed participant and `REQUEST_CHANGES` | `owner`, unchanged |
+| `POST /projects/:id/change-to-under-review` | `project-service`: confirmed participant and `REQUEST_CHANGES` | `owner`, unchanged |
+| `POST /invitations` | Nothing: a student created a `PLATFORM` invitation with `Admin`, accepted it with the token in the response and became `Admin` | `owner`: `invitation-service` `AuthorizeInvitation` (see its README); `auth-service` checks the grant again on acceptance |
+| `POST`, `PATCH`, `DELETE /events/inscription-details*` and `/events/recaps*` | Nothing: any student published recaps | `manage:events` |
+| `GET /events/inscription-details*`, `GET /events/recaps*` | Nothing: unpublished recaps included | `read:events` |
+| `GET /events/courses`, `/events/courses/all`, `/events/courses/dropdown/:eventId` | Nothing | `read:events` (admin pages only) |
+| `GET /events/courses/event/:eventId`, `GET /events/courses/:id` | Nothing | `session`: categories of an event; the student project wizard needs them and they are public in `/events/public/:id` |
+
+`POST /auth/logout`, `PUT /auth/password` and `POST /evaluations/projects/evaluate` were decided in CU-86e3vmxav.
+
+Known issue, not changed here: the list endpoints `GET /events/award-winners`, `/events/categories`, `/events/category-awards`, `/events/courses`, `/events/inscription-details` and `/events/recaps` are declared after `GET /events/:id`, which matches them first and answers 400 (`numeric string is expected`). No frontend calls them.
 
 See [auth-service](../auth-service/) for how tokens are issued and refreshed.
 

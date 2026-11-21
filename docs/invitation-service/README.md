@@ -42,6 +42,21 @@ The service has a single module, `invitations`, following the layering described
 | `PROJECT` | a project in `project-service` | `project-service` adds the user as a confirmed participant, then `event-service` adds the event membership |
 | `PROJECT_TUTOR` | a project in `project-service` | `auth-service` assigns the Tutor platform role (keeping the user's other roles), then `project-service` links the user as tutor of the project; no event membership is created |
 
+## Who may create an invitation (`AuthorizeInvitation`)
+
+Accepting an invitation grants its roles, so creating one is as sensitive as granting them. `POST /invitations` calls `AuthorizeInvitation` (`domain/policies/invitation-access.ts`) before `CreateInvitation`:
+
+| Target | The inviter needs | Roles the invitation may carry |
+| --- | --- | --- |
+| `PLATFORM` | `create:invitations`, and not inviting their own email | Platform roles that `auth-service` lets the inviter grant (`CheckPlatformRoleGrant`): `Admin` and `FacultyAdmin` only with `manage:admins` |
+| `EVENT` | `manage:events` | Event roles (`event-service` rejects the rest on acceptance) |
+| `PROJECT` | To be a participant of the project, or `manage:events` (`project-service` `CheckProjectAccess`) | `Participant` only |
+| `PROJECT_TUTOR` | Same as `PROJECT` | `Tutor` only |
+
+Errors from `auth-service` and `project-service` keep their gRPC code (403, 404). Invitations that services create themselves (participants when a project is submitted, tutors when it is approved, jurors through `POST /invitations/events/:eventId/jurors`) do not go through this check.
+
+When a `PLATFORM` invitation is accepted, `AssignPlatformRoles` receives the inviter as `actorUserId`, so `auth-service` applies the administrator rules again: an invitation created before these rules cannot give `Admin` to someone the inviter could not make Admin.
+
 ## Dependencies
 
 - **Uses**: PostgreSQL, `auth-service` (users, account setup tokens, platform roles), `event-service` (events and membership), `project-service` (projects and participants) and `notification-service` (emails).

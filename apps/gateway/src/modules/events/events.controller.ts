@@ -558,6 +558,7 @@ export class EventsController {
   }
 
   @Patch('courses/:id')
+  @RequirePermission('manage:events')
   @ApiOperation({ summary: 'Update a course alias backed by categories' })
   async updateCourse(
     @Param('id', ParseIntPipe) id: number,
@@ -585,6 +586,7 @@ export class EventsController {
   }
 
   @Get('courses/dropdown/:eventId')
+  @RequirePermission('read:events')
   @ApiOperation({
     summary: 'List course aliases for dropdown backed by categories',
   })
@@ -599,12 +601,14 @@ export class EventsController {
   }
 
   @Get('courses/all')
+  @RequirePermission('read:events')
   @ApiOperation({ summary: 'List all course aliases backed by categories' })
   async listAllCourses(@Query() dto: ListCoursesDTO) {
     return this.eventsService.listCourses(dto);
   }
 
   @Get('courses')
+  @RequirePermission('read:events')
   @ApiOperation({ summary: 'List course aliases backed by categories' })
   async listCourses(@Query() dto: ListCoursesDTO) {
     return this.eventsService.listCourses(dto);
@@ -617,18 +621,21 @@ export class EventsController {
   }
 
   @Post('categories')
+  @RequirePermission('manage:events')
   @ApiOperation({ summary: 'Create a category for an event' })
   async createCategory(@Body() dto: CreateCategoryDTO) {
     return this.eventsService.createCategory(dto);
   }
 
   @Get('categories')
+  @RequirePermission('read:events')
   @ApiOperation({ summary: 'List categories' })
   async listCategories(@Query() dto: ListCategoriesDTO) {
     return this.eventsService.listCategories(dto);
   }
 
   @Get('categories/event/:eventId')
+  @RequirePermission('read:events')
   @ApiOperation({ summary: 'List categories by event' })
   async listCategoriesByEvent(
     @Param('eventId', ParseIntPipe) eventId: number,
@@ -638,12 +645,14 @@ export class EventsController {
   }
 
   @Get('categories/:id')
+  @RequirePermission('read:events')
   @ApiOperation({ summary: 'Get category by id' })
   async getCategory(@Param('id', ParseIntPipe) id: number) {
     return this.eventsService.getCategory(id);
   }
 
   @Patch('categories/:id')
+  @RequirePermission('manage:events')
   @ApiOperation({ summary: 'Update category' })
   async updateCategory(
     @Param('id', ParseIntPipe) id: number,
@@ -653,30 +662,35 @@ export class EventsController {
   }
 
   @Delete('categories/:id')
+  @RequirePermission('manage:events')
   @ApiOperation({ summary: 'Delete category' })
   async deleteCategory(@Param('id', ParseIntPipe) id: number) {
     return this.eventsService.deleteCategory(id);
   }
 
   @Post('category-awards')
+  @RequirePermission('manage:events')
   @ApiOperation({ summary: 'Create category award' })
   async createCategoryAward(@Body() dto: CreateCategoryAwardDTO) {
     return this.eventsService.createCategoryAward(dto);
   }
 
   @Get('category-awards')
+  @RequirePermission('read:events')
   @ApiOperation({ summary: 'List category awards' })
   async listCategoryAwards(@Query() dto: ListCategoryAwardsDTO) {
     return this.eventsService.listCategoryAwards(dto);
   }
 
   @Get('category-awards/:id')
+  @RequirePermission('read:events')
   @ApiOperation({ summary: 'Get category award by id' })
   async getCategoryAward(@Param('id', ParseIntPipe) id: number) {
     return this.eventsService.getCategoryAward(id);
   }
 
   @Patch('category-awards/:id')
+  @RequirePermission('manage:events')
   @ApiOperation({ summary: 'Update category award' })
   async updateCategoryAward(
     @Param('id', ParseIntPipe) id: number,
@@ -686,45 +700,69 @@ export class EventsController {
   }
 
   @Delete('category-awards/:id')
+  @RequirePermission('manage:events')
   @ApiOperation({ summary: 'Delete category award' })
   async deleteCategoryAward(@Param('id', ParseIntPipe) id: number) {
     return this.eventsService.deleteCategoryAward(id);
   }
 
   @Post('award-winners')
-  @ApiOperation({ summary: 'Create award winner' })
-  async createAwardWinner(@Body() dto: CreateAwardWinnerDTO) {
-    return this.eventsService.createAwardWinner(dto);
+  @RequirePermission('manage:events')
+  @ApiOperation({
+    summary: 'Create award winner',
+    description: 'The user who assigns the award is the caller.',
+  })
+  async createAwardWinner(
+    @Body() dto: CreateAwardWinnerDTO,
+    @GetUser('id') userId: number,
+  ) {
+    return this.eventsService.createAwardWinner({
+      ...dto,
+      assignedByUserId: userId,
+    });
   }
 
   @Get('award-winners')
+  @RequirePermission('read:grades')
   @ApiOperation({ summary: 'List award winners' })
   async listAwardWinners(@Query() dto: ListAwardWinnersDTO) {
     return this.eventsService.listAwardWinners(dto);
   }
 
   @Get('award-winners/:id')
+  @RequirePermission('read:grades')
   @ApiOperation({ summary: 'Get award winner by id' })
   async getAwardWinner(@Param('id', ParseIntPipe) id: number) {
     return this.eventsService.getAwardWinner(id);
   }
 
   @Patch('award-winners/:id')
-  @ApiOperation({ summary: 'Update award winner' })
+  @RequirePermission('manage:events')
+  @ApiOperation({
+    summary: 'Update award winner',
+    description: 'The caller is recorded as the user who assigned the award.',
+  })
   async updateAwardWinner(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateAwardWinnerDTO,
+    @GetUser('id') userId: number,
   ) {
-    return this.eventsService.updateAwardWinner({ ...dto, id });
+    return this.eventsService.updateAwardWinner({
+      ...dto,
+      id,
+      assignedByUserId: userId,
+    });
   }
 
   @Delete('award-winners/:id')
+  @RequirePermission('manage:events')
   @ApiOperation({ summary: 'Delete award winner' })
   async deleteAwardWinner(@Param('id', ParseIntPipe) id: number) {
     return this.eventsService.deleteAwardWinner(id);
   }
 
   @Post('inscription-details')
+  @RequirePermission('manage:events')
   @ApiOperation({ summary: 'Create inscription detail' })
   async createEventInscriptionDetail(
     @Body() dto: CreateEventInscriptionDetailDTO,
@@ -733,6 +771,7 @@ export class EventsController {
   }
 
   @Get('inscription-details')
+  @RequirePermission('read:events')
   @ApiOperation({ summary: 'List inscription details' })
   async listEventInscriptionDetails(
     @Query() dto: ListEventInscriptionDetailsDTO,
@@ -741,12 +780,14 @@ export class EventsController {
   }
 
   @Get('inscription-details/:id')
+  @RequirePermission('read:events')
   @ApiOperation({ summary: 'Get inscription detail by id' })
   async getEventInscriptionDetail(@Param('id', ParseIntPipe) id: number) {
     return this.eventsService.getEventInscriptionDetail(id);
   }
 
   @Patch('inscription-details/:id')
+  @RequirePermission('manage:events')
   @ApiOperation({ summary: 'Update inscription detail' })
   async updateEventInscriptionDetail(
     @Param('id', ParseIntPipe) id: number,
@@ -756,30 +797,35 @@ export class EventsController {
   }
 
   @Delete('inscription-details/:id')
+  @RequirePermission('manage:events')
   @ApiOperation({ summary: 'Delete inscription detail' })
   async deleteEventInscriptionDetail(@Param('id', ParseIntPipe) id: number) {
     return this.eventsService.deleteEventInscriptionDetail(id);
   }
 
   @Post('recaps')
+  @RequirePermission('manage:events')
   @ApiOperation({ summary: 'Create event recap' })
   async createEventRecap(@Body() dto: CreateEventRecapDTO) {
     return this.eventsService.createEventRecap(dto);
   }
 
   @Get('recaps')
+  @RequirePermission('read:events')
   @ApiOperation({ summary: 'List event recaps' })
   async listEventRecaps(@Query() dto: ListEventRecapsDTO) {
     return this.eventsService.listEventRecaps(dto);
   }
 
   @Get('recaps/:id')
+  @RequirePermission('read:events')
   @ApiOperation({ summary: 'Get event recap by id' })
   async getEventRecap(@Param('id', ParseIntPipe) id: number) {
     return this.eventsService.getEventRecap(id);
   }
 
   @Patch('recaps/:id')
+  @RequirePermission('manage:events')
   @ApiOperation({ summary: 'Update event recap' })
   async updateEventRecap(
     @Param('id', ParseIntPipe) id: number,
@@ -789,6 +835,7 @@ export class EventsController {
   }
 
   @Delete('recaps/:id')
+  @RequirePermission('manage:events')
   @ApiOperation({ summary: 'Delete event recap' })
   async deleteEventRecap(@Param('id', ParseIntPipe) id: number) {
     return this.eventsService.deleteEventRecap(id);

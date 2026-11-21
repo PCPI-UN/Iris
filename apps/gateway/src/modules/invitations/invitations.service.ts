@@ -48,6 +48,17 @@ export class InvitationsService implements OnModuleInit {
   }
 
   async createInvitation(dto: CreateInvitationDto, invitedByUserId: number): Promise<InvitationWithRolesResponseDto> {
+    // invitation-service decides whether the caller may create this invitation (403 otherwise)
+    await firstValueFrom(
+      this.invitationService.authorizeInvitation({
+        inviterUserId: invitedByUserId,
+        email: dto.email,
+        targetType: dto.targetType as unknown as string,
+        targetId: dto.targetId,
+        roleIds: dto.roleIds ?? [],
+      }),
+    );
+
     const invitation = await firstValueFrom(
       this.invitationService.createInvitation({
         ...dto,

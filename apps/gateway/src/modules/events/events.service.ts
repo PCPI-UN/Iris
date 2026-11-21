@@ -1149,7 +1149,7 @@ export class EventService implements OnModuleInit {
   }
 
   async createAwardWinner(
-    dto: CreateAwardWinnerDTO,
+    dto: CreateAwardWinnerDTO & { assignedByUserId: number },
   ): Promise<CreateAwardWinnerResponse> {
     return firstValueFrom(
       this.eventService.createAwardWinner(dto as CreateAwardWinnerRequest),
@@ -1157,7 +1157,7 @@ export class EventService implements OnModuleInit {
   }
 
   async updateAwardWinner(
-    dto: UpdateAwardWinnerDTO,
+    dto: UpdateAwardWinnerDTO & { assignedByUserId: number },
   ): Promise<UpdateAwardWinnerResponse> {
     return firstValueFrom(
       this.eventService.updateAwardWinner(dto as UpdateAwardWinnerRequest),
