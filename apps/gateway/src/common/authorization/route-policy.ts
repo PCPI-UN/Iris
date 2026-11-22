@@ -103,6 +103,10 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'DELETE /events/:id': { permission: ['manage:events'] },
   'GET /events/:id': { permission: ['read:events'] },
   'PATCH /events/:id': { permission: ['manage:events'] },
+  'GET /events/:eventId/course-sections': {
+    access: 'session',
+    why: 'NRC of the term of an event, for the student project wizard to pick one; names the professor but never the email',
+  },
   'GET /events/:id/my-project': {
     access: 'session',
     why: "the caller's own project in the event",

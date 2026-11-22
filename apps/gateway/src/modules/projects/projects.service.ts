@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
 import { firstValueFrom, lastValueFrom } from 'rxjs';
+import type { CourseSectionsResponse } from '../events/dto/events/course-sections.response';
 import { MAX_LIST_PROJECTS_BY_IDS } from '@app/common/constants/projects';
 import {
   PROJECTS_SERVICE_NAME,
@@ -1269,6 +1270,28 @@ export class ProjectsService implements OnModuleInit {
           },
         }
       : res;
+  }
+
+  /** Course sections (NRC) of the term of the event, without the professors' emails or the gRPC client's `_field` keys */
+  async listCourseSections(eventId: number): Promise<CourseSectionsResponse> {
+    const res = await lastValueFrom(
+      this.projectsService.listCourseSections({ eventId }),
+    );
+    return {
+      sections: (res.sections ?? []).map((section) => ({
+        id: section.id,
+        nrc: section.nrc,
+        name: section.name,
+        professor: section.professor
+          ? {
+              userId: section.professor.userId,
+              firstName: section.professor.firstName,
+              lastName: section.professor.lastName ?? null,
+            }
+          : null,
+      })),
+      professorsAvailable: res.professorsAvailable,
+    };
   }
 
   async listUserParticipations(

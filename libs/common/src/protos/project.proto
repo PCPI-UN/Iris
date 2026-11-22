@@ -42,6 +42,8 @@ service ProjectsService {
   rpc ListProjectJurors (ListProjectJurorsRequest) returns (ListProjectJurorsResponse);  
   rpc ListAssignedProjects(ListAssignedProjectsRequest) returns (ListAssignedProjectsResponse);
   rpc GetMyProjectByEvent (GetMyProjectByEventRequest) returns (GetMyProjectByEventResponse);
+  // Course sections (NRC) of the academic term of an event, for the student to pick theirs when submitting a project
+  rpc ListCourseSections (ListCourseSectionsRequest) returns (ListCourseSectionsResponse);
   rpc ListUserParticipations (ListUserParticipationsRequest) returns (ListUserParticipationsResponse);
   // Data of the student dashboard: participation statistics, history, current project and academic data
   rpc GetStudentParticipationStats (GetStudentParticipationStatsRequest) returns (GetStudentParticipationStatsResponse);
@@ -465,6 +467,31 @@ message GetMyProjectByEventRequest {
 
 message GetMyProjectByEventResponse {
   ProjectComplete project = 1;
+}
+
+message ListCourseSectionsRequest {
+  int32 eventId = 1;
+}
+
+// Professor of a course section; no email, since any signed-in user can list the sections
+message CourseSectionProfessor {
+  int32 userId = 1;
+  string firstName = 2;
+  optional string lastName = 3;
+}
+
+message CourseSection {
+  int32 id = 1;
+  string nrc = 2;
+  string name = 3;
+  // Absent when the professor account no longer exists or auth-service could not be reached
+  optional CourseSectionProfessor professor = 4;
+}
+
+message ListCourseSectionsResponse {
+  repeated CourseSection sections = 1;
+  // false when auth-service failed: the sections come back without professor names
+  bool professorsAvailable = 2;
 }
 
 message ListUserParticipationsRequest {
