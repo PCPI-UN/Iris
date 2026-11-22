@@ -63,7 +63,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -107,7 +107,7 @@ jobs:
         run: npx jest --selectProjects "$SERVICE" --passWithNoTests --maxWorkers=2
 
       - name: ESLint changed files (Warning)
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
         continue-on-error: true
         env:
           SERVICE: ${{ matrix.service }}
