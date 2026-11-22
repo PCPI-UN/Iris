@@ -13,6 +13,8 @@ notification-service:
 gateway:
   - 'apps/gateway/**'
 shared:
+  - '.github/workflows/**'
+  - '.github/service-filters.yml'
   - 'libs/**'
   - 'package.json'
   - 'pnpm-lock.yaml'
