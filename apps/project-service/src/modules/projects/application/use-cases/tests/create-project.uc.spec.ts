@@ -15,7 +15,12 @@ describe('CreateProjectUC: course section (NRC) of the project', () => {
     };
     events = {
       getEventById: jest.fn().mockResolvedValue({
-        id: 4, active: true, isPubliclyJoinable: true, inscriptionDeadline: tomorrow, termId: 3, requiresCourse: true,
+        id: 4,
+        active: true,
+        isPubliclyJoinable: true,
+        inscriptionDeadline: tomorrow,
+        termId: 3,
+        requiresCourse: true,
       }),
       getCourseById: jest.fn().mockResolvedValue({ id: 2, eventId: 4 }),
     };
@@ -27,7 +32,9 @@ describe('CreateProjectUC: course section (NRC) of the project', () => {
     await build().execute(input);
 
     expect(repo.findAcademicCourseId).toHaveBeenCalledWith(3, '1001');
-    expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({ name: 'EcoVision', academicCourseId: 12 }));
+    expect(repo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'EcoVision', academicCourseId: 12 }),
+    );
   });
 
   it.each([
@@ -35,26 +42,40 @@ describe('CreateProjectUC: course section (NRC) of the project', () => {
     ['an event without term (-1)', {}, { termId: -1 }],
     ['an event without termId', {}, { termId: undefined }],
   ])('rejects %s', async (_case, inputChange, eventChange) => {
-    events.getEventById.mockResolvedValue({ ...(await events.getEventById()), ...eventChange });
+    events.getEventById.mockResolvedValue({
+      ...(await events.getEventById()),
+      ...eventChange,
+    });
 
-    await expect(build().execute({ ...input, ...inputChange })).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      build().execute({ ...input, ...inputChange }),
+    ).rejects.toBeInstanceOf(ValidationError);
     expect(repo.create).not.toHaveBeenCalled();
   });
 
   it.each([
     ['an NRC that is not in the term', null],
     ['course section -1', -1],
-    ['course section 0 ("not applicable") in an event that requires a course', 0],
+    [
+      'course section 0 ("not applicable") in an event that requires a course',
+      0,
+    ],
   ])('rejects %s', async (_case, courseId) => {
     repo.findAcademicCourseId.mockResolvedValue(courseId);
 
-    await expect(build().execute(input)).rejects.toThrow('El NRC 1001 no existe en el periodo del evento');
+    await expect(build().execute(input)).rejects.toThrow(
+      'El NRC 1001 no existe en el periodo del evento',
+    );
     expect(repo.create).not.toHaveBeenCalled();
   });
 
   describe('event that does not require a course section (requiresCourse = false)', () => {
     beforeEach(async () => {
-      events.getEventById.mockResolvedValue({ ...(await events.getEventById()), requiresCourse: false, termId: -1 });
+      events.getEventById.mockResolvedValue({
+        ...(await events.getEventById()),
+        requiresCourse: false,
+        termId: -1,
+      });
     });
 
     it.each([
@@ -64,13 +85,81 @@ describe('CreateProjectUC: course section (NRC) of the project', () => {
       await build().execute({ ...input, nrc });
 
       expect(repo.findAcademicCourseId).not.toHaveBeenCalled();
-      expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({ academicCourseId: 0 }));
+      expect(repo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ academicCourseId: 0 }),
+      );
     });
   });
 
   it('treats an event that does not say whether it requires a course as requiring one', async () => {
-    events.getEventById.mockResolvedValue({ ...(await events.getEventById()), requiresCourse: undefined });
+    events.getEventById.mockResolvedValue({
+      ...(await events.getEventById()),
+      requiresCourse: undefined,
+    });
 
-    await expect(build().execute({ ...input, nrc: undefined })).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      build().execute({ ...input, nrc: undefined }),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+});
+
+describe('CreateProjectUC: inscription deadline in Bogotá time', () => {
+  // Deadline as event-service stores "21 Nov 2026": 00:00 in Bogotá = 05:00 UTC
+  const deadline = '2026-11-21T05:00:00.000Z';
+  let repo: any;
+  let events: any;
+
+  beforeEach(() => {
+    repo = {
+      findProject: jest.fn().mockResolvedValue(null),
+      findAcademicCourseId: jest.fn().mockResolvedValue(12),
+      create: jest.fn(async (data) => ({ id: 1, ...data })),
+    };
+    events = {
+      getEventById: jest.fn().mockResolvedValue({
+        id: 4,
+        active: true,
+        isPubliclyJoinable: true,
+        inscriptionDeadline: deadline,
+        termId: 3,
+        requiresCourse: true,
+      }),
+      getCourseById: jest.fn().mockResolvedValue({ id: 2, eventId: 4 }),
+    };
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => jest.useRealTimers());
+
+  const register = () =>
+    new CreateProjectUC(repo, events).execute({
+      eventId: 4,
+      courseId: 2,
+      name: 'EcoVision',
+      nrc: '1001',
+    });
+
+  // These run the same on a server in UTC (production containers) and on a PC in Colombia
+  it.each([
+    [
+      '7:00 PM in Bogotá of the deadline day (midnight UTC)',
+      '2026-11-22T00:00:00.000Z',
+    ],
+    ['11:30 PM in Bogotá of the deadline day', '2026-11-22T04:30:00.000Z'],
+  ])('accepts a registration at %s', async (_case, now) => {
+    jest.setSystemTime(new Date(now));
+
+    await expect(register()).resolves.toEqual(
+      expect.objectContaining({ id: 1 }),
+    );
+  });
+
+  it('rejects a registration at 00:00 in Bogotá of the next day', async () => {
+    jest.setSystemTime(new Date('2026-11-22T05:00:00.000Z'));
+
+    await expect(register()).rejects.toThrow(
+      'La fecha límite de inscripción del evento ya pasó',
+    );
+    expect(repo.create).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,5 @@
 import { EventStatus } from './event-status.enum';
-import { parseBogotaToUTC } from '../utils/timezone.util';
+import { isInscriptionDeadlinePassed } from '@app/common/utils/bogota-date.util';
 
 export const getEventStatus = (
   start: Date | string,
@@ -20,25 +20,16 @@ export const getEventStatus = (
     return EventStatus.AVAILABLE;
   }
 
-  // Event hasn't started yet - check registration deadline
-  if (inscriptionDeadline) {
-    const regDeadline =
-      inscriptionDeadline instanceof Date
-        ? inscriptionDeadline
-        : new Date(inscriptionDeadline);
-
-    // Comparar solo fechas, sin considerar la hora
-    const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const deadlineDateOnly = new Date(regDeadline.getFullYear(), regDeadline.getMonth(), regDeadline.getDate());
-    const startDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-
-    // Registrations closed but event hasn't started
-    if (nowDateOnly > deadlineDateOnly && nowDateOnly < startDateOnly) {
-      return EventStatus.REGISTRATION_CLOSED;
-    }
+  // Event hasn't started yet (now < start, checked above): check the registration deadline.
+  // The deadline day is read in Bogotá time (the container runs in UTC) and counts in full.
+  // The start is compared by its exact instant, as PrismaEventRepository filters it.
+  if (
+    inscriptionDeadline &&
+    isInscriptionDeadlinePassed(inscriptionDeadline, now)
+  ) {
+    return EventStatus.REGISTRATION_CLOSED;
   }
 
   // Registrations still open, event hasn't started
   return EventStatus.UPCOMING;
 };
- 
