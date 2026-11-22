@@ -9,6 +9,7 @@ import {
 } from '../../domain/entities/project.entity';
 import { EventServicePort } from '../ports/event-service.port';
 import { EVENT_SERVICE_PORT } from '../ports/event-service.port';
+import { isInscriptionDeadlinePassed } from '@app/common/utils/bogota-date.util';
 
 @Injectable()
 export class CreateProjectUC {
@@ -64,14 +65,8 @@ export class CreateProjectUC {
         : await this.resolveAcademicCourse(event.termId, input.nrc);
 
     // 3. Validate that the event registration deadline has not passed
-    const currentDate = new Date();
-    const registrationDeadline = new Date(event.inscriptionDeadline);
-    
-    // Compare only dates, without considering the time
-    const currentDateOnly = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
-    const deadlineDateOnly = new Date(registrationDeadline.getFullYear(), registrationDeadline.getMonth(), registrationDeadline.getDate());
-    
-    if (deadlineDateOnly < currentDateOnly) {
+    // The deadline day counts in full, in Bogotá time (the container runs in UTC)
+    if (isInscriptionDeadlinePassed(event.inscriptionDeadline)) {
       throw new ValidationError('La fecha límite de inscripción del evento ya pasó');
     }
     

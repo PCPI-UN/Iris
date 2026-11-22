@@ -3,6 +3,7 @@ import { PrismaService } from '../../../../common/prisma/prisma.service';
 import { EventRepository } from '../../domain/repositories/event.repository';
 import { Event as DomainEvent } from '../../domain/entities/event.entity';
 import { EvaluationType, EventStatus, EventType } from '@app/common/generated/event';
+import { isInscriptionDeadlinePassed, startOfBogotaDay } from '@app/common/utils/bogota-date.util';
 
 type PrismaEvent = any;
 
@@ -100,11 +101,15 @@ export class PrismaEventRepository extends EventRepository {
   }
 
   private buildStatusCondition(status: EventStatus, now: Date) {
+    // The deadline day counts in full, in Bogotá time: inscriptions are open while the
+    // deadline falls on today (Bogotá) or later, whatever the zone of the server
+    const todayStart = startOfBogotaDay(now);
+
     if (status === EventStatus.UPCOMING) {
       return {
         AND: [
           { startDate: { gt: now } },
-          { inscriptionDeadline: { gt: now } },
+          { inscriptionDeadline: { gte: todayStart } },
         ],
       };
     }
@@ -112,7 +117,7 @@ export class PrismaEventRepository extends EventRepository {
     if (status === EventStatus.REGISTRATION_CLOSED) {
       return {
         AND: [
-          { inscriptionDeadline: { lte: now } },
+          { inscriptionDeadline: { lt: todayStart } },
           { startDate: { gt: now } },
         ],
       };
@@ -175,7 +180,7 @@ export class PrismaEventRepository extends EventRepository {
 
     if (end && now > end) return EventStatus.CLOSED;
     if (start && now >= start && (!end || now <= end)) return EventStatus.AVAILABLE;
-    if (inscriptionDeadline && start && now >= inscriptionDeadline && now < start) {
+    if (inscriptionDeadline && start && isInscriptionDeadlinePassed(inscriptionDeadline, now) && now < start) {
       return EventStatus.REGISTRATION_CLOSED;
     }
     return EventStatus.UPCOMING;

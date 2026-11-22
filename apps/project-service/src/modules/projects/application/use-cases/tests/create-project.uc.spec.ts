@@ -74,3 +74,47 @@ describe('CreateProjectUC: course section (NRC) of the project', () => {
     await expect(build().execute({ ...input, nrc: undefined })).rejects.toBeInstanceOf(ValidationError);
   });
 });
+
+describe('CreateProjectUC: inscription deadline in Bogotá time', () => {
+  // Deadline as event-service stores "21 Nov 2026": 00:00 in Bogotá = 05:00 UTC
+  const deadline = '2026-11-21T05:00:00.000Z';
+  let repo: any;
+  let events: any;
+
+  beforeEach(() => {
+    repo = {
+      findProject: jest.fn().mockResolvedValue(null),
+      findAcademicCourseId: jest.fn().mockResolvedValue(12),
+      create: jest.fn(async (data) => ({ id: 1, ...data })),
+    };
+    events = {
+      getEventById: jest.fn().mockResolvedValue({
+        id: 4, active: true, isPubliclyJoinable: true, inscriptionDeadline: deadline, termId: 3, requiresCourse: true,
+      }),
+      getCourseById: jest.fn().mockResolvedValue({ id: 2, eventId: 4 }),
+    };
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => jest.useRealTimers());
+
+  const register = () =>
+    new CreateProjectUC(repo, events).execute({ eventId: 4, courseId: 2, name: 'EcoVision', nrc: '1001' });
+
+  // These run the same on a server in UTC (production containers) and on a PC in Colombia
+  it.each([
+    ['7:00 PM in Bogotá of the deadline day (midnight UTC)', '2026-11-22T00:00:00.000Z'],
+    ['11:30 PM in Bogotá of the deadline day', '2026-11-22T04:30:00.000Z'],
+  ])('accepts a registration at %s', async (_case, now) => {
+    jest.setSystemTime(new Date(now));
+
+    await expect(register()).resolves.toEqual(expect.objectContaining({ id: 1 }));
+  });
+
+  it('rejects a registration at 00:00 in Bogotá of the next day', async () => {
+    jest.setSystemTime(new Date('2026-11-22T05:00:00.000Z'));
+
+    await expect(register()).rejects.toThrow('La fecha límite de inscripción del evento ya pasó');
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+});
