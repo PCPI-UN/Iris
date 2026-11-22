@@ -6,11 +6,14 @@ import { NotFoundError } from '../../domain/errors';
 export class ListDocumentsUC {
   constructor(@Inject('ProjectRepository') private readonly repo: ProjectRepository) {}
 
-  async execute(input: { projectId: number }) {
+  /** ACTIVE documents of the project; with includeInactive (administrative list) also the INACTIVE ones. */
+  async execute(input: { projectId: number; includeInactive?: boolean }) {
     // Asegura que el proyecto exista
     const project = await this.repo.findById(input.projectId);
     if (!project) throw new NotFoundError('No se encontró el proyecto');
 
-    return this.repo.listDocuments(input.projectId);
+    return this.repo.listDocuments(input.projectId, {
+      includeInactive: input.includeInactive === true,
+    });
   }
 }
