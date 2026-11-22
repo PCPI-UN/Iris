@@ -2,7 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../../common/prisma/prisma.service';
 import { normalizeEmail } from '@app/common/utils/email.util';
-import { AcademicCourseView, ProjectRepository, ProjectInScope } from '../../domain/repositories/project.repository';
+import {
+  AcademicCourseView,
+  ProjectRepository,
+  ProjectInScope,
+} from '../../domain/repositories/project.repository';
 import { ProjectReadScope } from '../../domain/read-scope';
 import { PendingProjectParticipant, PendingProjectTutor, PendingProjectTutorInput, Project, TypedDocument } from '../../domain/entities/project.entity';
 import { ProjectDocument, ProjectState, JurorKey, ProjectParticipant, UserParticipation, ProjectWithJurorIds, JUROR_ROLE_ID, isFillAcademicCourse } from '../../domain/entities/project.entity';
@@ -118,11 +122,13 @@ export class PrismaProjectRepository implements ProjectRepository {
     return course?.id ?? null;
   }
 
-  async listAcademicCoursesByTerm(termId: number): Promise<AcademicCourseView[]> {
+  async listAcademicCoursesByTerm(
+    termId: number,
+  ): Promise<AcademicCourseView[]> {
     const courses = await this.prisma.db.academicCourse.findMany({
       // The fill rows (-1, 0) belong to term -1, but they are left out by id as well
       where: { termId, id: { gt: 0 } },
-      orderBy: { nrc: "asc" },
+      orderBy: { nrc: 'asc' },
       include: { department: { select: { name: true } } },
     });
     return courses.map((course) => ({

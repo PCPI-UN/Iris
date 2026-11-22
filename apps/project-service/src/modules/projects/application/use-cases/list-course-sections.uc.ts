@@ -4,10 +4,19 @@ import { ProjectRepository } from '../../domain/repositories/project.repository'
 import { NO_TERM_ID } from '../../domain/entities/project.entity';
 import { NotFoundError } from '../../domain/errors';
 import { AUTH_SERVICE_PORT, AuthServicePort } from '../ports/auth-service.port';
-import { EVENT_SERVICE_PORT, EventServicePort } from '../ports/event-service.port';
+import {
+  EVENT_SERVICE_PORT,
+  EventServicePort,
+} from '../ports/event-service.port';
 
 /** How long the list waits for auth-service before giving the sections without professor names */
 export const PROFESSORS_LOOKUP_TIMEOUT_MS = 3000;
+
+/** What this use case reads of an event: getEventById is typed any */
+interface EventTerm {
+  termId?: number;
+  requiresCourse?: boolean;
+}
 
 export interface CourseSectionProfessor {
   userId: number;
@@ -56,7 +65,7 @@ export class ListCourseSectionsUC {
       throw new NotFoundError('El evento no existe en event-service');
     }
 
-    const termId: number | undefined = event.termId;
+    const { termId } = event;
     if (event.requiresCourse === false || !termId || termId === NO_TERM_ID) {
       return { sections: [], professorsAvailable: true };
     }
@@ -66,7 +75,9 @@ export class ListCourseSectionsUC {
       return { sections: [], professorsAvailable: true };
     }
 
-    const { professors, available } = await this.findProfessors(courses.map((course) => course.professorUserId));
+    const { professors, available } = await this.findProfessors(
+      courses.map((course) => course.professorUserId),
+    );
     return {
       sections: courses.map((course) => ({
         id: course.id,
@@ -79,9 +90,11 @@ export class ListCourseSectionsUC {
   }
 
   /** event-service answers a missing event with a gRPC NOT_FOUND error, not with null */
-  private async findEvent(eventId: number) {
+  private async findEvent(eventId: number): Promise<EventTerm | null> {
     try {
-      return await this.eventService.getEventById(eventId);
+      return (await this.eventService.getEventById(
+        eventId,
+      )) as EventTerm | null;
     } catch (error) {
       if ((error as { code?: number })?.code === status.NOT_FOUND) return null;
       throw error;
@@ -92,23 +105,31 @@ export class ListCourseSectionsUC {
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(
-        () => reject(new Error(`sin respuesta tras ${PROFESSORS_LOOKUP_TIMEOUT_MS} ms`)),
+        () =>
+          reject(
+            new Error(`sin respuesta tras ${PROFESSORS_LOOKUP_TIMEOUT_MS} ms`),
+          ),
         PROFESSORS_LOOKUP_TIMEOUT_MS,
       );
     });
     return Promise.race([call, timeout]).finally(() => clearTimeout(timer));
   }
 
-  private async findProfessors(
-    userIds: number[],
-  ): Promise<{ professors: Map<number, CourseSectionProfessor>; available: boolean }> {
+  private async findProfessors(userIds: number[]): Promise<{
+    professors: Map<number, CourseSectionProfessor>;
+    available: boolean;
+  }> {
     try {
       const users = await this.withTimeout(this.auth.findUsersByIds(userIds));
       return {
         professors: new Map(
           users.map((user) => [
             user.id,
-            { userId: user.id, firstName: user.firstName, lastName: user.lastName ?? null },
+            {
+              userId: user.id,
+              firstName: user.firstName,
+              lastName: user.lastName ?? null,
+            },
           ]),
         ),
         available: true,

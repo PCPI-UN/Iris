@@ -634,9 +634,10 @@ export class ProjectsController {
 
   @GrpcMethod('ProjectsService', 'ListCourseSections')
   async listCourseSectionsRpc(req: { eventId: number }) {
-    const { sections, professorsAvailable } = await this.listCourseSectionsUC.execute({
-      eventId: req.eventId,
-    });
+    const { sections, professorsAvailable } =
+      await this.listCourseSectionsUC.execute({
+        eventId: req.eventId,
+      });
     return {
       sections: sections.map((section) => ({
         id: section.id,
