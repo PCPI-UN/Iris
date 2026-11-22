@@ -41,6 +41,7 @@ import { AddPendingParticipantUC } from '../../application/use-cases/add-pending
 import { AddProjectTutorUC } from '../../application/use-cases/add-project-tutor.uc';
 import { SetProjectTutorsUC } from '../../application/use-cases/set-project-tutors.uc';
 import { ListProjectTutorsUC } from '../../application/use-cases/list-project-tutors.uc';
+import { ListCourseSectionsUC } from '../../application/use-cases/list-course-sections.uc';
 import { ListPendingParticipantsUC } from '../../application/use-cases/list-pending-participants.uc';
 import { ListProjectsAssignedToJurorUC } from '../../application/use-cases/list-projects-assigned-to-juror.uc';
 import { NotificateStudentUC } from '../../application/use-cases/notificate-student.uc';
@@ -121,6 +122,7 @@ export class ProjectsController {
     private readonly addProjectTutorUC: AddProjectTutorUC,
     private readonly setProjectTutorsUC: SetProjectTutorsUC,
     private readonly listProjectTutorsUC: ListProjectTutorsUC,
+    private readonly listCourseSectionsUC: ListCourseSectionsUC,
     private readonly listAssignedToJurorUC: ListProjectsAssignedToJurorUC,
     private readonly notificateStudentUC: NotificateStudentUC,
     private readonly listProjectsForReviewUC: ListProjectsForReviewUC,
@@ -627,6 +629,22 @@ export class ProjectsController {
         ...project,
         tutors: await this.tutorsOf(project.id),
       }),
+    };
+  }
+
+  @GrpcMethod('ProjectsService', 'ListCourseSections')
+  async listCourseSectionsRpc(req: { eventId: number }) {
+    const { sections, professorsAvailable } = await this.listCourseSectionsUC.execute({
+      eventId: req.eventId,
+    });
+    return {
+      sections: sections.map((section) => ({
+        id: section.id,
+        nrc: section.nrc,
+        name: section.name,
+        professor: section.professor ?? undefined,
+      })),
+      professorsAvailable,
     };
   }
 

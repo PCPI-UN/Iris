@@ -43,6 +43,9 @@ export interface ProjectRepository {
   /** Id of the course section with that NRC in the term, or null when there is none. */
   findAcademicCourseId(termId: number, nrc: string): Promise<number | null>;
 
+  /** Real course sections of the term, by NRC; never the fill rows (-1 "no NRC" and 0 "not applicable"). */
+  listAcademicCoursesByTerm(termId: number): Promise<AcademicCourseView[]>;
+
   findById(id: number): Promise<Project | null>;
   findManyByIds(ids: number[]): Promise<Project[]>;
   findProject(eventId: number, courseId: number, name: string): Promise<Project | null>;

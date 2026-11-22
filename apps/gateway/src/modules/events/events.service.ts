@@ -1671,6 +1671,11 @@ export class EventService implements OnModuleInit {
     };
   }
 
+  /** Course sections (NRC) a student can pick when submitting a project to the event */
+  async listCourseSections(eventId: number) {
+    return this.projectsService.listCourseSections(eventId);
+  }
+
   async getMyProjectForEvent(userId: number, eventId: number) {
     const [projectResponse, eventResponse] = await Promise.all([
       this.projectsService.getMyProjectByEvent(userId, eventId),

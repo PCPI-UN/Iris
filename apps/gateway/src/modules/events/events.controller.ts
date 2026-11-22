@@ -32,6 +32,7 @@ import { EventStatus } from '@app/common/generated/event';
 import { CreateEventDTO } from './dto/events/create-event.dto';
 import { UpdateEventDTO } from './dto/events/update-event.dto';
 import { ListEventsDTO } from './dto/events/list-events.dto';
+import { CourseSectionsResponse } from './dto/events/course-sections.response';
 import { ListMyEventsDTO } from './dto/events/list-my-events.dto';
 import { ListEventsDropdownDTO } from './dto/events/list-events-dropdown.dto';
 
@@ -1157,6 +1158,23 @@ export class EventsController {
       await generateRankingExcelBuffer(report),
       rankingFileName(report, 'public'),
     );
+  }
+
+  @Get(':eventId/course-sections')
+  @ApiOperation({
+    summary: 'Course sections (NRC) of the academic term of an event',
+    description:
+      'The NRC a student picks when submitting a project: nrc, course name and professor name (never the email). ' +
+      'Empty when the event does not require a course section or has no term; the "no NRC" and "not applicable" fill rows are never listed. ' +
+      'If auth-service fails, the sections are still returned with professor null and professorsAvailable false. Any signed-in user can call it.',
+  })
+  @ApiParam({ name: 'eventId', type: Number, example: 1 })
+  @ApiResponse({ status: 200, type: CourseSectionsResponse })
+  @ApiResponse({ status: 404, description: 'The event does not exist' })
+  async listCourseSections(
+    @Param('eventId', ParseIntPipe) eventId: number,
+  ): Promise<CourseSectionsResponse> {
+    return this.eventsService.listCourseSections(eventId);
   }
 
   @Get(':id/my-project')
