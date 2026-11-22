@@ -81,7 +81,7 @@ import {
 } from '@app/common/generated/evaluation';
 import { ProjectForReviewResponseDto } from './dto/project-for-review-response.dto';
 import { AuthService } from '../auth/auth.service';
-import { withoutOneofMarkers } from '../academic/academic.service';
+import { withoutOneofMarkers } from '@app/common/utils/grpc-oneof.util';
 import { FetchProjectJurorsUseCase } from './use-cases/fetch-project-jurors.use-case';
 import { FetchUserProfilesUseCase } from './use-cases/fetch-user-profiles.use-case';
 import { EnrichProjectsWithJurorsUseCase } from './use-cases/enrich-projects-with-jurors.use-case';
