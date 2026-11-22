@@ -2,8 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../common/prisma/prisma.service';
 import { EventRepository } from '../../domain/repositories/event.repository';
 import { Event as DomainEvent } from '../../domain/entities/event.entity';
-import { EvaluationType, EventStatus, EventType } from '@app/common/generated/event';
-import { isInscriptionDeadlinePassed, startOfBogotaDay } from '@app/common/utils/bogota-date.util';
+import {
+  EvaluationType,
+  EventStatus,
+  EventType,
+} from '@app/common/generated/event';
+import {
+  isInscriptionDeadlinePassed,
+  startOfBogotaDay,
+} from '@app/common/utils/bogota-date.util';
 
 type PrismaEvent = any;
 
@@ -18,7 +25,9 @@ function toProtoEventType(value: string | null | undefined): EventType {
   }
 }
 
-function toPrismaEventType(value: EventType | undefined): 'Exposition' | 'Competition' {
+function toPrismaEventType(
+  value: EventType | undefined,
+): 'Exposition' | 'Competition' {
   switch (value) {
     case EventType.COMPETENCIA:
       return 'Competition';
@@ -29,7 +38,9 @@ function toPrismaEventType(value: EventType | undefined): 'Exposition' | 'Compet
   }
 }
 
-function toProtoEvaluationType(value: string | null | undefined): EvaluationType {
+function toProtoEvaluationType(
+  value: string | null | undefined,
+): EvaluationType {
   switch (value) {
     case 'FINAL_PROJECTS':
       return EvaluationType.FINAL_PROJECTS;
@@ -125,10 +136,7 @@ export class PrismaEventRepository extends EventRepository {
 
     if (status === EventStatus.AVAILABLE) {
       return {
-        AND: [
-          { startDate: { lte: now } },
-          { endDate: { gte: now } },
-        ],
+        AND: [{ startDate: { lte: now } }, { endDate: { gte: now } }],
       };
     }
 
@@ -141,7 +149,11 @@ export class PrismaEventRepository extends EventRepository {
     return undefined;
   }
 
-  private buildWhere(where?: { q?: string; onlyActive?: boolean; statuses?: EventStatus[] }) {
+  private buildWhere(where?: {
+    q?: string;
+    onlyActive?: boolean;
+    statuses?: EventStatus[];
+  }) {
     const filters: any = {};
     if (where?.onlyActive) filters.active = true;
     if (where?.q?.trim()) {
@@ -179,8 +191,14 @@ export class PrismaEventRepository extends EventRepository {
       : undefined;
 
     if (end && now > end) return EventStatus.CLOSED;
-    if (start && now >= start && (!end || now <= end)) return EventStatus.AVAILABLE;
-    if (inscriptionDeadline && start && isInscriptionDeadlinePassed(inscriptionDeadline, now) && now < start) {
+    if (start && now >= start && (!end || now <= end))
+      return EventStatus.AVAILABLE;
+    if (
+      inscriptionDeadline &&
+      start &&
+      isInscriptionDeadlinePassed(inscriptionDeadline, now) &&
+      now < start
+    ) {
       return EventStatus.REGISTRATION_CLOSED;
     }
     return EventStatus.UPCOMING;
@@ -263,7 +281,8 @@ export class PrismaEventRepository extends EventRepository {
   async update(id: number, input: any) {
     const data = {
       name: input.name,
-      description: input.description !== undefined ? input.description : undefined,
+      description:
+        input.description !== undefined ? input.description : undefined,
       accessCode: input.accessCode,
       isPubliclyJoinable: input.isPubliclyJoinable,
       inscriptionDeadline: input.inscriptionDeadline,
@@ -288,7 +307,10 @@ export class PrismaEventRepository extends EventRepository {
         input.minimumTeamSize !== undefined ? input.minimumTeamSize : undefined,
       aboutOurAllies:
         input.aboutOurAllies !== undefined ? input.aboutOurAllies : undefined,
-      eventType: input.eventType !== undefined ? toPrismaEventType(input.eventType) : undefined,
+      eventType:
+        input.eventType !== undefined
+          ? toPrismaEventType(input.eventType)
+          : undefined,
       collaborators: input.collaborators,
       organizers: input.organizers,
       active: input.active,
@@ -361,11 +383,13 @@ export class PrismaEventRepository extends EventRepository {
     // ==========================================================
     // 🔎 LOG 1: Ver todos los EventMembers del usuario
     // ==========================================================
-    const userMemberships = await (this.prisma as any).staffEventMember.findMany({
+    const userMemberships = await (
+      this.prisma as any
+    ).staffEventMember.findMany({
       where: { userId },
     });
 
-    console.log("🔎 [EventMember] Registros encontrados para userId:", userId);
+    console.log('🔎 [EventMember] Registros encontrados para userId:', userId);
     console.log(JSON.stringify(userMemberships, null, 2));
 
     // ==========================================================
@@ -381,7 +405,7 @@ export class PrismaEventRepository extends EventRepository {
       },
     };
 
-    console.log("🧩 [QueryWhere] Filtro de búsqueda construido:");
+    console.log('🧩 [QueryWhere] Filtro de búsqueda construido:');
     console.log(JSON.stringify(where, null, 2));
 
     // ==========================================================
@@ -394,15 +418,23 @@ export class PrismaEventRepository extends EventRepository {
       orderBy: { createdAt: 'desc' },
     });
 
-    console.log("📦 [Eventos encontrados]:");
-    console.log(JSON.stringify(rows.map(r => ({ id: r.id, name: r.name })), null, 2));
+    console.log('📦 [Eventos encontrados]:');
+    console.log(
+      JSON.stringify(
+        rows.map((r) => ({ id: r.id, name: r.name })),
+        null,
+        2,
+      ),
+    );
 
     const total = await this.prisma.event.count({ where });
 
     // ==========================================================
     // 🔎 LOG 4: Mostrar el total
     // ==========================================================
-    console.log(`📊 [Total]: ${total} eventos permitidos para userId ${userId}`);
+    console.log(
+      `📊 [Total]: ${total} eventos permitidos para userId ${userId}`,
+    );
 
     // ==========================================================
     // FIN LOGS - Mapear a Domain
@@ -497,13 +529,11 @@ export class PrismaEventRepository extends EventRepository {
     const rows = await this.prisma.event.findMany({
       where: {
         active: true,
-        latitude:  { not: null },
+        latitude: { not: null },
         longitude: { not: null },
       },
       orderBy: { startDate: 'asc' },
     });
     return rows.map(toDomainEvent);
   }
-
-
 }

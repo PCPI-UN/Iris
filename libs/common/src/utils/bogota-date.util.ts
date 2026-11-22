@@ -16,7 +16,9 @@ export function bogotaDay(instant: Date | string): string {
 
 /** The instant the current day starts in Bogotá (00:00 America/Bogota). */
 export function startOfBogotaDay(now: Date = new Date()): Date {
-  return DateTime.fromJSDate(now, { zone: BOGOTA_ZONE }).startOf('day').toJSDate();
+  return DateTime.fromJSDate(now, { zone: BOGOTA_ZONE })
+    .startOf('day')
+    .toJSDate();
 }
 
 /**
