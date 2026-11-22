@@ -76,6 +76,8 @@ import { ListProjectChangeLogUC } from '../../application/use-cases/list-project
 import { AdminChangeProjectStateUC } from '../../application/use-cases/admin-change-project-state.uc';
 import { ProjectApprovalEffects } from '../../application/services/project-approval-effects.service';
 import { ProjectStateChangeBlockedError } from '../../domain/admin-state-change';
+import { AdminUpdateProjectUC } from '../../application/use-cases/admin-update-project.uc';
+import { AdminProjectEditConflictError } from '../../domain/admin-project-edit';
 
 interface InvitationGrpcService {
   CreateInvitation(data: {
@@ -138,6 +140,7 @@ export class ProjectsController {
     private readonly listProjectChangeLogUC: ListProjectChangeLogUC,
     private readonly adminChangeProjectStateUC: AdminChangeProjectStateUC,
     private readonly approvalEffects: ProjectApprovalEffects,
+    private readonly adminUpdateProjectUC: AdminUpdateProjectUC,
     @Inject(INVITATION_SERVICE_NAME) private readonly client: ClientGrpc,
   ) {}
 
@@ -239,7 +242,6 @@ export class ProjectsController {
       description: req.description,
       eventNumber: req.eventNumber,
       courseId: req.courseId,
-      state: req.state ? protoToState(req.state) : undefined,
     });
     return { project: toProtoProject(updated) };
   }
@@ -765,6 +767,40 @@ export class ProjectsController {
       // Nothing changed: the gateway answers 409 with the cause
       if (error instanceof ProjectStateChangeBlockedError) {
         return { blocked: error.block };
+      }
+      throw error;
+    }
+  }
+
+  @GrpcMethod('ProjectsService', 'AdminUpdateProject')
+  async adminUpdateProjectRpc(req: {
+    id: number;
+    actingUserId: number;
+    name?: string;
+    description?: string;
+    projectCode?: string;
+    eventNumber?: string;
+    courseId?: number;
+    reason?: string;
+    force?: boolean;
+  }) {
+    try {
+      const project = await this.adminUpdateProjectUC.execute({
+        projectId: req.id,
+        actingUserId: req.actingUserId,
+        name: req.name,
+        description: req.description,
+        projectCode: req.projectCode,
+        eventNumber: req.eventNumber,
+        courseId: req.courseId,
+        reason: req.reason,
+        force: req.force === true,
+      });
+      return { project: toProtoProject(project) };
+    } catch (error) {
+      // Nothing changed: the gateway answers 409 with the cause
+      if (error instanceof AdminProjectEditConflictError) {
+        return { conflict: error.conflict };
       }
       throw error;
     }

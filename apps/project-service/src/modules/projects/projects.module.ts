@@ -13,6 +13,7 @@ import { GetMyProjectByEventUC } from './application/use-cases/get-my-project-by
 import { ListUserParticipationsUC } from './application/use-cases/list-user-participations.uc';
 import { GetStudentParticipationStatsUC } from './application/use-cases/get-student-participation-stats.uc';
 import { UpdateProjectUC } from './application/use-cases/update-project.uc';
+import { AdminUpdateProjectUC } from './application/use-cases/admin-update-project.uc';
 import { ApproveProjectUC } from './application/use-cases/approve-project.uc';
 import { RejectProjectUC } from './application/use-cases/reject-project.uc';
 import { RequestChangesProjectUC } from './application/use-cases/request-changes-project.uc';
@@ -107,6 +108,7 @@ import { EvaluationServiceAdapter } from './infrastructure/grpc-client/evaluatio
     ListUserParticipationsUC,
     GetStudentParticipationStatsUC,
     UpdateProjectUC,
+    AdminUpdateProjectUC,
     ApproveProjectUC,
     RejectProjectUC,
     AssignJurorBulkUC,

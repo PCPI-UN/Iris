@@ -1,5 +1,4 @@
-import { ProjectState } from '../../domain/entities/project.entity';
-
+/** Basic data and category of a project; the state is not editable here. */
 export interface UpdateProjectDTO {
   id: number;
   name?: string;
@@ -7,5 +6,7 @@ export interface UpdateProjectDTO {
   description?: string | null;
   eventNumber?: string | null;
   courseId?: number;
-  state?: ProjectState; 
 }
+
+/** Values the fields must still hold for the write to apply (optimistic check). */
+export type UpdateProjectExpected = Partial<Omit<UpdateProjectDTO, 'id'>>;

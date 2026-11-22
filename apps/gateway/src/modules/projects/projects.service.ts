@@ -47,6 +47,10 @@ import { AddPendingParticipantDto } from './dto/add-pending-participant.dto';
 import { RejectProjectDto } from './dto/reject-project.dto';
 import { AdminChangeProjectStateDto } from './dto/admin-change-project-state.dto';
 import {
+  ADMIN_PROJECT_EDITABLE_FIELDS,
+  AdminUpdateProjectDto,
+} from './dto/admin-update-project.dto';
+import {
   TypedDocument,
   ProjectDocumentInputDto,
 } from './dto/project-document-input.dto';
@@ -77,6 +81,7 @@ import {
 } from '@app/common/generated/evaluation';
 import { ProjectForReviewResponseDto } from './dto/project-for-review-response.dto';
 import { AuthService } from '../auth/auth.service';
+import { withoutOneofMarkers } from '../academic/academic.service';
 import { FetchProjectJurorsUseCase } from './use-cases/fetch-project-jurors.use-case';
 import { FetchUserProfilesUseCase } from './use-cases/fetch-user-profiles.use-case';
 import { EnrichProjectsWithJurorsUseCase } from './use-cases/enrich-projects-with-jurors.use-case';
@@ -104,6 +109,11 @@ export type {
 
 /** `code` of the 409 of an administrative state change that needs force */
 export const PROJECT_STATE_CHANGE_BLOCKED = 'PROJECT_STATE_CHANGE_BLOCKED';
+/** `code` of the 409 of an administrative edit: another project of the event has the name */
+export const PROJECT_NAME_TAKEN = 'PROJECT_NAME_TAKEN';
+/** `code` of the 409 of an administrative category change of a project with evaluations */
+export const PROJECT_CATEGORY_CHANGE_BLOCKED =
+  'PROJECT_CATEGORY_CHANGE_BLOCKED';
 
 @Injectable()
 export class ProjectsService implements OnModuleInit {
@@ -547,6 +557,61 @@ export class ProjectsService implements OnModuleInit {
       failedEffects: response.failedEffects ?? [],
       warning: response.warning || null,
     };
+  }
+
+  /**
+   * Administrative edit of the basic data and the category. A body without any editable field
+   * is a 400. When project-service answers `conflict` nothing changed: answers 409 with `code`
+   * (PROJECT_NAME_TAKEN, PROJECT_CATEGORY_CHANGE_BLOCKED or PROJECT_CHANGED_MEANWHILE) and the
+   * cause in `details`.
+   */
+  async adminUpdateProject(
+    id: number,
+    dto: AdminUpdateProjectDto,
+    actingUserId: number,
+  ) {
+    if (
+      ADMIN_PROJECT_EDITABLE_FIELDS.every(
+        // A null name is not an edit; null clears the other text fields
+        (field) =>
+          dto[field] === undefined || (field === 'name' && dto.name === null),
+      )
+    ) {
+      throw new BadRequestException(
+        'Indica al menos un dato del proyecto para modificar: name, description, projectCode, eventNumber o courseId',
+      );
+    }
+    // null clears a text field: project-service reads the empty text as "clear"
+    const text = (value: string | null | undefined) =>
+      value === null ? '' : value;
+    const response = await firstValueFrom(
+      this.projectsService.adminUpdateProject({
+        id,
+        actingUserId,
+        name: dto.name ?? undefined,
+        description: text(dto.description),
+        projectCode: text(dto.projectCode),
+        eventNumber: text(dto.eventNumber),
+        courseId: dto.courseId,
+        reason: dto.reason ?? '',
+        force: dto.force === true,
+      }),
+    );
+    if (response.conflict) {
+      const { code, message, evaluationCount, name } = response.conflict;
+      throw new ConflictException({
+        message,
+        code,
+        details:
+          code === PROJECT_CATEGORY_CHANGE_BLOCKED
+            ? { evaluationCount }
+            : code === PROJECT_NAME_TAKEN
+              ? { name }
+              : {},
+      });
+    }
+    // Drops the oneof markers of the optional fields (_description: 'description')
+    return withoutOneofMarkers(response.project);
   }
 
   async changeToUnderReviewProject(projectId: number, actingUserId: number) {
