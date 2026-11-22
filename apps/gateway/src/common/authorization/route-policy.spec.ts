@@ -5,6 +5,7 @@ import { RequestMethod } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { PERMISSIONS_KEY } from '../decorators/require-permission.decorator';
+import { ANY_PERMISSIONS_KEY } from '../decorators/require-any-permission.decorator';
 import { ROUTE_POLICY, RouteAccess } from './route-policy';
 
 /**
@@ -16,6 +17,7 @@ interface DeclaredRoute {
   key: string;
   isPublic: boolean;
   permissions: string[];
+  anyPermissions: string[];
 }
 
 const SRC = join(__dirname, '..', '..');
@@ -50,6 +52,9 @@ function declaredRoutes(): DeclaredRoute[] {
 
       const classPublic = Reflect.getMetadata(IS_PUBLIC_KEY, controller) === true;
       const classPermissions = (Reflect.getMetadata(PERMISSIONS_KEY, controller) as string[] | undefined) ?? [];
+      const classAnyPermissions =
+        (Reflect.getMetadata(ANY_PERMISSIONS_KEY, controller) as
+          string[] | undefined) ?? [];
       const prototype = controller.prototype as Record<string, unknown>;
 
       for (const name of Object.getOwnPropertyNames(prototype)) {
@@ -59,11 +64,16 @@ function declaredRoutes(): DeclaredRoute[] {
         if (method === undefined) continue;
 
         const handlerPermissions = Reflect.getMetadata(PERMISSIONS_KEY, handler) as string[] | undefined;
+        const handlerAnyPermissions = Reflect.getMetadata(
+          ANY_PERMISSIONS_KEY,
+          handler,
+        ) as string[] | undefined;
         routes.push({
           key: `${RequestMethod[method]} ${joinPath(controllerPath, Reflect.getMetadata(PATH_METADATA, handler) as string | string[] | undefined)}`,
           isPublic: Reflect.getMetadata(IS_PUBLIC_KEY, handler) === true || classPublic,
           // Same precedence as the guard (getAllAndOverride): handler first, then class
           permissions: handlerPermissions ?? classPermissions,
+          anyPermissions: handlerAnyPermissions ?? classAnyPermissions,
         });
       }
     }
@@ -74,12 +84,23 @@ function declaredRoutes(): DeclaredRoute[] {
 
 function describeDeclared(route: DeclaredRoute): RouteAccess {
   if (route.isPublic) return { access: 'public' };
+  if (route.permissions.length > 0 && route.anyPermissions.length > 0) {
+    // Not expressible in the table: make it a mismatch so the decorators get fixed
+    return {
+      permission: [...route.permissions].sort(),
+      anyPermission: [...route.anyPermissions].sort(),
+    };
+  }
   if (route.permissions.length > 0) return { permission: [...route.permissions].sort() };
+  if (route.anyPermissions.length > 0)
+    return { anyPermission: [...route.anyPermissions].sort() };
   return { access: 'session' } as RouteAccess;
 }
 
 function normalize(access: RouteAccess): RouteAccess {
   if ('permission' in access) return { permission: [...access.permission].sort() };
+  if ('anyPermission' in access)
+    return { anyPermission: [...access.anyPermission].sort() };
   // `session` and `owner` are the same for the guard: only a session is required
   // (for `owner`, the service behind checks the resource)
   if (access.access === 'session' || access.access === 'owner') return { access: 'session' } as RouteAccess;

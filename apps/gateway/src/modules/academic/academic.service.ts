@@ -7,6 +7,7 @@ import {
 } from '@app/common/generated/project';
 import { TermProto } from '@app/common/generated/event';
 import { withoutOneofMarkers } from '@app/common/utils/grpc-oneof.util';
+import { pendingStatus } from '@app/common/utils/pending-status.util';
 import { ProjectsService } from '../projects/projects.service';
 import { EventService } from '../events/events.service';
 import { EvaluationsService } from '../evaluations/evaluations.service';
@@ -266,14 +267,6 @@ export function reviewState(state: unknown): ProjectReviewState {
   return (REVIEW_STATES as string[]).includes(name)
     ? (name as ProjectReviewState)
     : 'UNDER_REVIEW';
-}
-
-/** Pending participant status: PENDING, INVITED or JOINED, by name or as 1, 2, 3 */
-function pendingStatus(status: unknown): 'PENDING' | 'INVITED' | 'JOINED' {
-  const value = String(status);
-  if (value === 'JOINED' || value === '3') return 'JOINED';
-  if (value === 'INVITED' || value === '2') return 'INVITED';
-  return 'PENDING';
 }
 
 const informative = (value?: string | null): string | null => {

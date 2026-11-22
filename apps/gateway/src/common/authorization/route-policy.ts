@@ -11,8 +11,9 @@
  *   that is not sensitive).
  * - `owner`: the guard only asks for a session and the service named in `why` checks that
  *   the caller owns the resource (participant of the project, assigned juror) or is staff.
- * - `permission`: the permission(s) required; roles that hold them are in the auth-service
- *   migrations (Admin passes every check).
+ * - `permission`: the permission(s) required, all of them; roles that hold them are in the
+ *   auth-service migrations (Admin passes every check).
+ * - `anyPermission`: at least one of these permissions (`@RequireAnyPermission()`).
  *
  * There is no "pending" value: every endpoint has a decision.
  */
@@ -20,7 +21,8 @@ export type RouteAccess =
   | { access: 'public' }
   | { access: 'session'; why: string }
   | { access: 'owner'; why: string }
-  | { permission: string[] };
+  | { permission: string[] }
+  | { anyPermission: string[] };
 
 export const ROUTE_POLICY: Record<string, RouteAccess> = {
   // common/cache/cache-management.controller.ts
@@ -220,6 +222,13 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'GET /projects/:id/change-log': { permission: ['manage:projects'] },
   'PATCH /projects/:id/admin/state': { permission: ['manage:projects'] },
   'PATCH /projects/:id/admin': { permission: ['manage:projects'] },
+  'POST /projects/:id/admin/participants': { permission: ['manage:projects'] },
+  'DELETE /projects/:id/admin/participants/:userId': {
+    permission: ['manage:projects'],
+  },
+  'DELETE /projects/:id/admin/participants/pending/:pendingId': {
+    permission: ['manage:projects'],
+  },
   'POST /projects/:id/change-to-under-review': {
     access: 'owner',
     why: 'project-service requires a confirmed participant and the REQUEST_CHANGES state',
@@ -253,7 +262,10 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   },
   // name search for the public submission form; returns id and name only
   'GET /projects/tutor-candidates': { access: 'public' },
-  'PUT /projects/:id/tutors': { permission: ['manage:events'] },
+  // Event managers and project administrators (who correct projects from the app) both replace tutors
+  'PUT /projects/:id/tutors': {
+    anyPermission: ['manage:events', 'manage:projects'],
+  },
   'GET /projects/by-event/:eventId': { access: 'public' },
   'GET /projects/by-event/:eventId/with-jurors': { access: 'public' },
   'PATCH /projects/documents/:id': {
