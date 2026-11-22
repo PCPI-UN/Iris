@@ -20,6 +20,10 @@ describe('ReplaceProjectTutorsUC', () => {
     };
     const repo = {
       findById: jest.fn().mockResolvedValue({ id: 3, state }),
+      lockProject: jest.fn(() => {
+        if (open) inTransaction.push('lock');
+        return Promise.resolve();
+      }),
       listTutorUserIds: jest.fn().mockResolvedValue([7, 5]),
       listPendingTutors: jest.fn().mockResolvedValue([
         {
@@ -101,7 +105,8 @@ describe('ReplaceProjectTutorsUC', () => {
       },
       reason: 'Cambio de tutor',
     });
-    expect(inTransaction).toEqual(['tutors', 'changeLog']);
+    // Locked before reading the tutors it replaces
+    expect(inTransaction).toEqual(['lock', 'tutors', 'changeLog']);
     // Not approved: no roles or invitations yet
     expect(tutors.activate).not.toHaveBeenCalled();
     expect(result).toEqual([{ userId: 5, firstName: 'L', pending: false }]);

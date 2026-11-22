@@ -40,8 +40,9 @@ const pendingTutorsLog = (
 /**
  * Replaces the tutors of a project (PUT /projects/:id/tutors) and records a TUTORS entry in the
  * change log with the linked and pending tutors before and after; the tutors and the entry are
- * saved together, and a replacement that changes nothing records nothing. On an APPROVED project
- * the tutors are then activated (role and invitations), outside the transaction.
+ * saved together under the project row lock, and a replacement that changes nothing records
+ * nothing. On an APPROVED project the tutors are then activated (role and invitations), outside
+ * the transaction.
  */
 @Injectable()
 export class ReplaceProjectTutorsUC {
@@ -68,6 +69,9 @@ export class ReplaceProjectTutorsUC {
     });
 
     await this.uow.run(async () => {
+      // Two replacements of the same project run one after the other, so `before` is always
+      // the list each one replaces
+      await this.repo.lockProject(project.id);
       const before = {
         tutorUserIds: await this.repo.listTutorUserIds(project.id),
         pendingTutors: pendingTutorsLog(
