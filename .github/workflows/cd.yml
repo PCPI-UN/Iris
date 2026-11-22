@@ -98,7 +98,7 @@ jobs:
           echo "services=$SERVICES" >> "$GITHUB_OUTPUT"
 
   deploy-services:
-    name: Deploy (${{ matrix.service }})
+    name: Deploy
     runs-on: ubuntu-24.04-arm
     needs: detect-changes
     if: ${{ needs.detect-changes.outputs.services != '[]' && needs.detect-changes.outputs.services != '' }}
