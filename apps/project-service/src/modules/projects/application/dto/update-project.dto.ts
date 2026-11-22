@@ -7,3 +7,6 @@ export interface UpdateProjectDTO {
   eventNumber?: string | null;
   courseId?: number;
 }
+
+/** Values the fields must still hold for the write to apply (optimistic check). */
+export type UpdateProjectExpected = Partial<Omit<UpdateProjectDTO, 'id'>>;

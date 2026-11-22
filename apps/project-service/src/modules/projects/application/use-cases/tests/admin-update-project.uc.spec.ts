@@ -4,6 +4,7 @@ import { UpdateProjectUC } from '../update-project.uc';
 import { NotFoundError, ValidationError } from '../../../domain/errors';
 import {
   AdminProjectEditConflictError,
+  ProjectChangedMeanwhileError,
   ProjectNameTakenError,
 } from '../../../domain/admin-project-edit';
 import { Project } from '../../../domain/entities/project.entity';
@@ -104,14 +105,23 @@ describe('AdminUpdateProjectUC', () => {
       eventNumber: '17',
       courseId: 3,
     });
-    expect(repo.updateProject).toHaveBeenCalledWith({
-      id: 4,
-      name: 'Robot clasificador',
-      description: 'Usa visión por computador',
-      projectCode: 'ING-42',
-      eventNumber: '17',
-      courseId: undefined,
-    });
+    expect(repo.updateProject).toHaveBeenCalledWith(
+      {
+        id: 4,
+        name: 'Robot clasificador',
+        description: 'Usa visión por computador',
+        projectCode: 'ING-42',
+        eventNumber: '17',
+        courseId: undefined,
+      },
+      // Written only if the fields still hold the values read
+      {
+        name: 'Robot',
+        description: 'Clasifica residuos',
+        projectCode: 'ING-1',
+        eventNumber: '7',
+      },
+    );
     expect(changeLog.create).toHaveBeenCalledTimes(1);
     expect(changeLog.create).toHaveBeenCalledWith({
       projectId: 4,
@@ -147,6 +157,7 @@ describe('AdminUpdateProjectUC', () => {
 
     expect(repo.updateProject).toHaveBeenCalledWith(
       expect.objectContaining({ id: 4, eventNumber: '8', name: undefined }),
+      { eventNumber: '7' },
     );
     expect(changeLog.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -174,6 +185,11 @@ describe('AdminUpdateProjectUC', () => {
         projectCode: null,
         eventNumber: null,
       }),
+      {
+        description: 'Clasifica residuos',
+        projectCode: 'ING-1',
+        eventNumber: '7',
+      },
     );
     expect(changeLog.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -258,6 +274,7 @@ describe('AdminUpdateProjectUC', () => {
     expect(result.courseId).toBe(5);
     expect(repo.updateProject).toHaveBeenCalledWith(
       expect.objectContaining({ id: 4, courseId: 5 }),
+      { courseId: 3 },
     );
     expect(changeLog.create).toHaveBeenCalledTimes(1);
     expect(changeLog.create).toHaveBeenCalledWith({
@@ -281,7 +298,9 @@ describe('AdminUpdateProjectUC', () => {
     expect((error as AdminProjectEditConflictError).conflict).toMatchObject({
       code: 'PROJECT_CATEGORY_CHANGE_BLOCKED',
       evaluationCount: 2,
-      message: expect.stringContaining('2 evaluaciones de jurados') as unknown,
+      message: expect.stringContaining(
+        '2 evaluaciones de jurados, calificadas con las rúbricas',
+      ) as unknown,
     });
     expect(repo.updateProject).not.toHaveBeenCalled();
     expect(changeLog.create).not.toHaveBeenCalled();
@@ -362,6 +381,39 @@ describe('AdminUpdateProjectUC', () => {
         'Indica al menos un dato del proyecto para modificar',
       ),
     );
+  });
+
+  it('agrees the blocked message with a single evaluation', async () => {
+    const { uc } = setup({ evaluationCount: 1 });
+
+    const error = (await uc
+      .execute({ ...base, courseId: 5 })
+      .catch((e: unknown) => e)) as AdminProjectEditConflictError;
+
+    expect(error.conflict.message).toContain(
+      '1 evaluación de jurados, calificada con las rúbricas',
+    );
+  });
+
+  it('answers PROJECT_CHANGED_MEANWHILE and leaves no entry when another edit changed the fields first', async () => {
+    const { uc, repo, changeLog } = setup();
+    repo.updateProject.mockRejectedValueOnce(
+      new ProjectChangedMeanwhileError(),
+    );
+
+    const error = await uc
+      .execute({ ...base, name: 'Dron', courseId: 5 })
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ProjectChangedMeanwhileError);
+    expect((error as ProjectChangedMeanwhileError).conflict.code).toBe(
+      'PROJECT_CHANGED_MEANWHILE',
+    );
+    expect(repo.updateProject).toHaveBeenCalledWith(expect.anything(), {
+      name: 'Robot',
+      courseId: 3,
+    });
+    expect(changeLog.create).not.toHaveBeenCalled();
   });
 
   it('answers 404 when the project does not exist', async () => {

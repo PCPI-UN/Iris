@@ -5,9 +5,12 @@ import { ConflictError } from './errors';
  * - PROJECT_NAME_TAKEN: another project of the same event has that name
  * - PROJECT_CATEGORY_CHANGE_BLOCKED: the project has juror evaluations, whose rubrics depend on
  *   the category; it is applied with force
+ * - PROJECT_CHANGED_MEANWHILE: another edit changed the same fields after they were read
  */
 export type AdminProjectEditConflictCode =
-  'PROJECT_NAME_TAKEN' | 'PROJECT_CATEGORY_CHANGE_BLOCKED';
+  | 'PROJECT_NAME_TAKEN'
+  | 'PROJECT_CATEGORY_CHANGE_BLOCKED'
+  | 'PROJECT_CHANGED_MEANWHILE';
 
 export interface AdminProjectEditConflict {
   code: AdminProjectEditConflictCode;
@@ -43,15 +46,26 @@ export function categoryChangeBlocked(
 ): AdminProjectEditConflictError {
   const evaluations =
     evaluationCount === 1
-      ? '1 evaluación de jurados'
-      : `${evaluationCount} evaluaciones de jurados`;
+      ? '1 evaluación de jurados, calificada'
+      : `${evaluationCount} evaluaciones de jurados, calificadas`;
   return new AdminProjectEditConflictError({
     code: 'PROJECT_CATEGORY_CHANGE_BLOCKED',
     evaluationCount,
     message:
-      `No se cambió la categoría porque el proyecto ya tiene ${evaluations}, ` +
-      'calificadas con las rúbricas de la categoría actual. Confirma el cambio para aplicarlo de todas formas.',
+      `No se cambió la categoría porque el proyecto ya tiene ${evaluations} ` +
+      'con las rúbricas de la categoría actual. Confirma el cambio para aplicarlo de todas formas.',
   });
+}
+
+/** Another edit changed the same fields after they were read; nothing was written. */
+export class ProjectChangedMeanwhileError extends AdminProjectEditConflictError {
+  constructor() {
+    super({
+      code: 'PROJECT_CHANGED_MEANWHILE',
+      message:
+        'Otro cambio modificó el proyecto mientras se aplicaba la edición. Vuelve a cargar el proyecto e inténtalo de nuevo.',
+    });
+  }
 }
 
 /** Basic data of a project, as the change log stores it (INFO entries). */

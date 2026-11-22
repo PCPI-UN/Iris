@@ -81,6 +81,7 @@ import {
 } from '@app/common/generated/evaluation';
 import { ProjectForReviewResponseDto } from './dto/project-for-review-response.dto';
 import { AuthService } from '../auth/auth.service';
+import { withoutOneofMarkers } from '../academic/academic.service';
 import { FetchProjectJurorsUseCase } from './use-cases/fetch-project-jurors.use-case';
 import { FetchUserProfilesUseCase } from './use-cases/fetch-user-profiles.use-case';
 import { EnrichProjectsWithJurorsUseCase } from './use-cases/enrich-projects-with-jurors.use-case';
@@ -561,7 +562,8 @@ export class ProjectsService implements OnModuleInit {
   /**
    * Administrative edit of the basic data and the category. A body without any editable field
    * is a 400. When project-service answers `conflict` nothing changed: answers 409 with `code`
-   * (PROJECT_NAME_TAKEN or PROJECT_CATEGORY_CHANGE_BLOCKED) and the cause in `details`.
+   * (PROJECT_NAME_TAKEN, PROJECT_CATEGORY_CHANGE_BLOCKED or PROJECT_CHANGED_MEANWHILE) and the
+   * cause in `details`.
    */
   async adminUpdateProject(
     id: number,
@@ -603,10 +605,13 @@ export class ProjectsService implements OnModuleInit {
         details:
           code === PROJECT_CATEGORY_CHANGE_BLOCKED
             ? { evaluationCount }
-            : { name },
+            : code === PROJECT_NAME_TAKEN
+              ? { name }
+              : {},
       });
     }
-    return response.project;
+    // Drops the oneof markers of the optional fields (_description: 'description')
+    return withoutOneofMarkers(response.project);
   }
 
   async changeToUnderReviewProject(projectId: number, actingUserId: number) {

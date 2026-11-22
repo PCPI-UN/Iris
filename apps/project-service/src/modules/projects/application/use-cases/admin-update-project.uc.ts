@@ -53,6 +53,12 @@ const basicData = (project: Project): ProjectBasicData => ({
  * category must belong to the project's event; changing the category of a project with juror
  * evaluations needs force. The edit is saved with its change log entries (INFO and CATEGORY,
  * only the fields that changed) in one transaction; a rejected edit leaves no entry.
+ *
+ * The write only applies if the changed fields still hold the values that were read, so the
+ * `before` of the entry is always the value replaced; otherwise nothing changes and the answer is
+ * PROJECT_CHANGED_MEANWHILE. The evaluations are counted in evaluation-service before the
+ * transaction (other services are not called inside it, docs/transactions.md): a first
+ * evaluation sent between the count and the write lets the category change without force.
  */
 @Injectable()
 export class AdminUpdateProjectUC {
@@ -147,15 +153,23 @@ export class AdminUpdateProjectUC {
     // Nothing differs from the current values: no write and no entry
     if (!entries.length) return project;
 
-    // Only the fields that changed are written, together with their entries
-    const changed = (entries.find((e) => e.action === 'INFO')?.after ??
-      {}) as Partial<ProjectBasicData>;
+    // Only the fields that changed are written, and only if they still hold the values read
+    const info = entries.find((e) => e.action === 'INFO');
+    const categoryChanged = courseId !== project.courseId;
+    const changed = (info?.after ?? {}) as Partial<ProjectBasicData>;
+    const ifCurrent = {
+      ...((info?.before ?? {}) as Partial<ProjectBasicData>),
+      ...(categoryChanged ? { courseId: project.courseId } : {}),
+    };
     return this.uow.run(async () => {
-      const updated = await this.updateProject.execute({
-        id: project.id,
-        ...changed,
-        ...(courseId !== project.courseId ? { courseId } : {}),
-      });
+      const updated = await this.updateProject.execute(
+        {
+          id: project.id,
+          ...changed,
+          ...(categoryChanged ? { courseId } : {}),
+        },
+        ifCurrent,
+      );
       for (const entry of entries) await this.changeLog.create(entry);
       return updated;
     });

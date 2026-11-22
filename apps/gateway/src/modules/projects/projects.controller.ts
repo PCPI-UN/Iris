@@ -737,7 +737,8 @@ export class ProjectsController {
       "category of the project's event (400 otherwise). A 409 changes nothing and its code says why: " +
       'PROJECT_NAME_TAKEN (another project of the event has the name; details.name) or ' +
       'PROJECT_CATEGORY_CHANGE_BLOCKED (the project has juror evaluations, scored with the rubrics of its ' +
-      'category; details.evaluationCount); resend with force: true to change the category anyway.',
+      'category; details.evaluationCount; resend with force: true to change the category anyway) or ' +
+      'PROJECT_CHANGED_MEANWHILE (another edit changed the same fields first; reload and retry).',
   })
   @ApiParam({ name: 'id', type: Number, description: 'Project ID', example: 1 })
   @ApiResponse({ status: 200, description: 'The project with its new values' })
@@ -751,7 +752,7 @@ export class ProjectsController {
   @ApiResponse({
     status: 409,
     description:
-      'Not changed: the name is taken in the event, or the category change needs force because the project has evaluations',
+      'Not changed: the name is taken in the event, the category change needs force because the project has evaluations, or another edit changed the same fields first',
     schema: {
       example: {
         statusCode: 409,

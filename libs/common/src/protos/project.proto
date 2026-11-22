@@ -797,6 +797,7 @@ message AdminUpdateProjectRequest {
 message AdminProjectEditConflict {
   // PROJECT_NAME_TAKEN: another project of the event has that name
   // PROJECT_CATEGORY_CHANGE_BLOCKED: the project has juror evaluations; resend with force
+  // PROJECT_CHANGED_MEANWHILE: another edit changed the same fields first; reload and retry
   string code = 1;
   // Spanish message for the user
   string message = 2;

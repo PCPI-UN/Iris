@@ -6,7 +6,20 @@ import { ProjectRepository, ProjectInScope } from '../../domain/repositories/pro
 import { ProjectReadScope } from '../../domain/read-scope';
 import { PendingProjectParticipant, PendingProjectTutor, PendingProjectTutorInput, Project, TypedDocument } from '../../domain/entities/project.entity';
 import { ProjectDocument, ProjectState, JurorKey, ProjectParticipant, UserParticipation, ProjectWithJurorIds, JUROR_ROLE_ID, isFillAcademicCourse } from '../../domain/entities/project.entity';
-import { ProjectNameTakenError } from '../../domain/admin-project-edit';
+import {
+  ProjectChangedMeanwhileError,
+  ProjectNameTakenError,
+} from '../../domain/admin-project-edit';
+
+/** The unique index of a P2002 covers the field (target is the column list or the index name). */
+const uniqueTargetIncludes = (
+  error: Prisma.PrismaClientKnownRequestError,
+  field: string,
+): boolean => {
+  const target = error.meta?.target;
+  if (Array.isArray(target)) return target.includes(field);
+  return typeof target === 'string' && target.includes(field);
+};
 
 
 type CreateProjectInput = {
@@ -164,14 +177,23 @@ export class PrismaProjectRepository implements ProjectRepository {
     })) as unknown as Project | null;
   }
 
-  async updateProject(input: {
-    id: number;
-    name?: string;
-    projectCode?: string | null;
-    description?: string | null;
-    eventNumber?: string | null;
-    courseId?: number;
-  }): Promise<Project> {
+  async updateProject(
+    input: {
+      id: number;
+      name?: string;
+      projectCode?: string | null;
+      description?: string | null;
+      eventNumber?: string | null;
+      courseId?: number;
+    },
+    ifCurrent?: {
+      name?: string;
+      projectCode?: string | null;
+      description?: string | null;
+      eventNumber?: string | null;
+      courseId?: number;
+    },
+  ): Promise<Project> {
     const data: Prisma.ProjectUpdateInput = {};
     if (input.name !== undefined) data.name = input.name;
     if (input.projectCode !== undefined) data.projectCode = input.projectCode;
@@ -180,16 +202,31 @@ export class PrismaProjectRepository implements ProjectRepository {
     if (input.courseId !== undefined) data.courseId = input.courseId;
 
     try {
-      return (await this.prisma.db.project.update({
-        where: { id: input.id },
+      if (!ifCurrent) {
+        return (await this.prisma.db.project.update({
+          where: { id: input.id },
+          data,
+        })) as unknown as Project;
+      }
+      // Optimistic check: the fields must still hold the values that were read
+      const expected = Object.fromEntries(
+        Object.entries(ifCurrent).filter(([, value]) => value !== undefined),
+      ) as Prisma.ProjectWhereInput;
+      const { count } = await this.prisma.db.project.updateMany({
+        where: { ...expected, id: input.id },
         data,
+      });
+      if (!count) throw new ProjectChangedMeanwhileError();
+      return (await this.prisma.db.project.findUnique({
+        where: { id: input.id },
       })) as unknown as Project;
     } catch (error) {
       // Another project of the event took the name after it was checked (@@unique([eventId, name]))
       if (
         input.name !== undefined &&
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
+        error.code === 'P2002' &&
+        uniqueTargetIncludes(error, 'name')
       ) {
         throw new ProjectNameTakenError(input.name);
       }

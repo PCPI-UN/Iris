@@ -130,6 +130,47 @@ describe('PATCH /projects/:id/admin', () => {
     });
   });
 
+  it('drops the oneof markers of the optional fields from the project', async () => {
+    const { service } = buildService({
+      project: {
+        id: 4,
+        name: 'Dron',
+        description: 'Nueva',
+        _description: 'description',
+        _projectCode: 'projectCode',
+      },
+    });
+
+    await expect(
+      service.adminUpdateProject(4, dto({ name: 'Dron' }), 7),
+    ).resolves.toEqual({ id: 4, name: 'Dron', description: 'Nueva' });
+  });
+
+  it('answers 409 PROJECT_CHANGED_MEANWHILE without details when another edit came first', async () => {
+    const message =
+      'Otro cambio modificó el proyecto mientras se aplicaba la edición. Vuelve a cargar el proyecto e inténtalo de nuevo.';
+    const { service } = buildService({
+      conflict: {
+        code: 'PROJECT_CHANGED_MEANWHILE',
+        message,
+        evaluationCount: 0,
+        name: '',
+      },
+    });
+
+    const error = await service
+      .adminUpdateProject(4, dto({ name: 'Dron' }), 7)
+      .catch((e: unknown) => e);
+
+    const { status, body } = httpBody(error);
+    expect(status).toHaveBeenCalledWith(409);
+    expect(body).toMatchObject({
+      message,
+      code: 'PROJECT_CHANGED_MEANWHILE',
+      details: {},
+    });
+  });
+
   it('answers 409 PROJECT_NAME_TAKEN with the name in details', async () => {
     const message =
       'Ya existe otro proyecto con el nombre "Dron" en este evento. Usa un nombre distinto.';

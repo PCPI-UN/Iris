@@ -1,6 +1,9 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { ProjectRepository } from '../../domain/repositories/project.repository';
-import { UpdateProjectDTO } from '../dto/update-project.dto';
+import {
+  UpdateProjectDTO,
+  UpdateProjectExpected,
+} from '../dto/update-project.dto';
 import { NotFoundError } from '../../domain/errors';
 
 /**
@@ -13,17 +16,21 @@ export class UpdateProjectUC {
     @Inject('ProjectRepository') private readonly repo: ProjectRepository,
   ) {}
 
-  async execute(input: UpdateProjectDTO) {
+  /** With ifCurrent, writes only if those fields still hold those values (else ProjectChangedMeanwhileError) */
+  async execute(input: UpdateProjectDTO, ifCurrent?: UpdateProjectExpected) {
     const exists = await this.repo.findById(input.id);
     if (!exists) throw new NotFoundError('No se encontró el proyecto');
 
-    return this.repo.updateProject({
-      id: input.id,
-      name: input.name,
-      projectCode: input.projectCode,
-      description: input.description,
-      eventNumber: input.eventNumber,
-      courseId: input.courseId,
-    });
+    return this.repo.updateProject(
+      {
+        id: input.id,
+        name: input.name,
+        projectCode: input.projectCode,
+        description: input.description,
+        eventNumber: input.eventNumber,
+        courseId: input.courseId,
+      },
+      ifCurrent,
+    );
   }
 }
