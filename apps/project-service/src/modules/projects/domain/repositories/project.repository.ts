@@ -141,6 +141,12 @@ export interface ProjectRepository {
    * its participants run one after the other. Only meaningful inside UnitOfWork.run.
    */
   lockProject(projectId: number): Promise<void>;
+  /**
+   * Locks one student (by normalized email) in one event until the current transaction ends, so
+   * two administrative additions of the same student to two projects of the event cannot both
+   * pass the "already in another project" check. Only meaningful inside UnitOfWork.run.
+   */
+  lockStudentInEvent(eventId: number, email: string): Promise<void>;
 
   markPendingJoined(projectId: number, studentCode: string, joinedAt: Date): Promise<boolean>;
 

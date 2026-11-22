@@ -498,6 +498,14 @@ export class PrismaProjectRepository implements ProjectRepository {
       .$queryRaw`SELECT id FROM projects WHERE id = ${projectId} FOR UPDATE`;
   }
 
+  async lockStudentInEvent(eventId: number, email: string): Promise<void> {
+    // Transaction-level advisory lock keyed by (event, email); the subquery keeps Prisma from
+    // reading the void result of pg_advisory_xact_lock
+    await this.prisma.db.$queryRaw`
+      SELECT 1 AS locked
+      FROM (SELECT pg_advisory_xact_lock(${eventId}::int, hashtext(${normalizeEmail(email)}))) AS l`;
+  }
+
   async addTutor(projectId: number, userId: number): Promise<void> {
     await this.prisma.db.projectTutor.upsert({
       where: { projectId_userId: { projectId, userId } },

@@ -68,6 +68,10 @@ describe('AdminAddParticipantUC', () => {
         if (open) inTransaction.push('lock');
         return Promise.resolve();
       }),
+      lockStudentInEvent: jest.fn(() => {
+        if (open) inTransaction.push('lockStudent');
+        return Promise.resolve();
+      }),
       listParticipants: jest.fn().mockResolvedValue(options.participants ?? []),
       listPendingParticipants: jest
         .fn()
@@ -94,10 +98,13 @@ describe('AdminAddParticipantUC', () => {
       listByProject: jest.fn(),
     };
     const activeSubmissions = {
-      execute: jest.fn().mockResolvedValue({
-        hasConflict: Boolean(options.conflicts?.length),
-        conflictEmails: (options.conflicts ?? []).map((c) => c.email),
-        conflicts: options.conflicts ?? [],
+      execute: jest.fn(() => {
+        if (open) inTransaction.push('check');
+        return Promise.resolve({
+          hasConflict: Boolean(options.conflicts?.length),
+          conflictEmails: (options.conflicts ?? []).map((c) => c.email),
+          conflicts: options.conflicts ?? [],
+        });
       }),
     };
     const auth = {
@@ -193,8 +200,15 @@ describe('AdminAddParticipantUC', () => {
         },
         reason: 'Faltaba en la inscripción',
       });
-      // Locked, saved and recorded in the same transaction
-      expect(inTransaction).toEqual(['lock', 'pending', 'changeLog']);
+      // Locked, checked, saved and recorded in the same transaction
+      expect(inTransaction).toEqual([
+        'lock',
+        'lockStudent',
+        'check',
+        'pending',
+        'changeLog',
+      ]);
+      expect(repo.lockStudentInEvent).toHaveBeenCalledWith(9, 'ana@uni.edu');
     });
 
     it('on an APPROVED project gets the approval email and becomes INVITED', async () => {
@@ -361,7 +375,61 @@ describe('AdminAddParticipantUC', () => {
           },
         }),
       );
-      expect(inTransaction).toEqual(['lock', 'participant', 'changeLog']);
+      expect(inTransaction).toEqual([
+        'lock',
+        'lockStudent',
+        'check',
+        'participant',
+        'changeLog',
+      ]);
+      expect(repo.lockStudentInEvent).toHaveBeenCalledWith(9, 'ana@uni.edu');
+    });
+
+    it('also joins a pending row of this project with the same email saved under another student code', async () => {
+      const { uc, repo } = setup({
+        account,
+        pendings: [
+          {
+            pendingId: 3,
+            projectId: 4,
+            firstName: 'Ana',
+            email: ' ANA@uni.edu',
+            studentCode: '1999',
+            semester: '6',
+            career: 'x',
+            status: 'PENDING',
+          },
+          {
+            pendingId: 5,
+            projectId: 4,
+            firstName: 'Luis',
+            email: 'luis@uni.edu',
+            studentCode: '2000',
+            semester: '6',
+            career: 'x',
+            status: 'PENDING',
+          },
+        ],
+        conflicts: [{ email: 'ana@uni.edu', projectId: 4 }],
+      });
+
+      await uc.execute({ ...base, userId: 42, studentCode: '2021' });
+
+      expect(repo.markPendingJoined).toHaveBeenCalledWith(
+        4,
+        '2021',
+        expect.any(Date),
+      );
+      expect(repo.markPendingJoined).toHaveBeenCalledWith(
+        4,
+        '1999',
+        expect.any(Date),
+      );
+      expect(repo.markPendingJoined).not.toHaveBeenCalledWith(
+        4,
+        '2000',
+        expect.any(Date),
+      );
     });
 
     it('answers PARTICIPANT_HAS_ACTIVE_PROJECT when the user is enrolled in another active project of the event', async () => {

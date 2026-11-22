@@ -76,7 +76,9 @@ export const INVITATION_FAILED_WARNING =
  * Administrative addition of a participant to a project: an enrolled one (platform user and
  * student code) or a pending one (name, email, code, semester and career). A student who is
  * already in the project, or in another project of the event that is not REJECTED, is not added
- * (409). The participant and its PARTICIPANTS change log entry are saved together.
+ * (409). Those checks, the participant and its PARTICIPANTS change log entry run in one
+ * transaction, with the project and the student (in the event) locked, so two concurrent
+ * additions cannot both pass the checks.
  *
  * A pending participant added to an APPROVED project gets the approval email, as the other
  * participants got it at the approval, and becomes INVITED; in other states it stays PENDING
@@ -134,22 +136,41 @@ export class AdminAddParticipantUC {
     }
     const email = normalizeEmail(account.email);
 
-    const participants = await this.repo.listParticipants(project.id);
-    if (participants.some((p) => p.userId === userId)) {
-      throw participantAlreadyInProject(email, userId);
-    }
-    await this.assertNotInOtherProject(project, email, userId);
-
     const entryValue = (participant: ProjectParticipant) =>
       enrolledLogValue(participant, account);
     const participant = await this.uow.run(async () => {
-      await this.repo.lockProject(project.id);
+      // The checks run under the locks, so a concurrent addition cannot slip past them
+      await this.lockStudent(project, email);
+      const participants = await this.repo.listParticipants(project.id);
+      if (participants.some((p) => p.userId === userId)) {
+        throw participantAlreadyInProject(email, userId);
+      }
+      await this.assertNotInOtherProject(project, email, userId);
+
       // Upserts the participant and marks their pending row (same student code) as joined
       const saved = await this.addParticipant.execute({
         projectId: project.id,
         userId,
         studentCode,
       });
+      // A pending row of this project with the same email is the same student even when it was
+      // saved with another student code: it is joined too, so they are not counted twice
+      const joinedAt = new Date();
+      const samePending = (
+        await this.repo.listPendingParticipants(project.id)
+      ).filter(
+        (p) =>
+          p.status !== 'JOINED' &&
+          p.studentCode !== studentCode &&
+          normalizeEmail(p.email) === email,
+      );
+      for (const pending of samePending) {
+        await this.repo.markPendingJoined(
+          project.id,
+          pending.studentCode,
+          joinedAt,
+        );
+      }
       await this.record(project.id, input, entryValue(saved));
       return saved;
     });
@@ -170,23 +191,26 @@ export class AdminAddParticipantUC {
       throw new ValidationError('El formato del correo no es válido');
     }
 
-    const samePending = (await this.repo.listPendingParticipants(project.id))
-      // Rows saved before emails were normalized may differ in case or spaces
-      .find((p) => normalizeEmail(p.email) === email);
-    if (samePending) throw participantAlreadyInProject(email);
+    // Read before the transaction: another service
     const account = await this.auth.findUserByEmail(email);
-    if (account) {
-      const participants = await this.repo.listParticipants(project.id);
-      if (participants.some((p) => p.userId === account.id)) {
-        throw participantAlreadyInProject(email, account.id);
-      }
-    }
-    await this.assertNotInOtherProject(project, email, account?.id);
 
     const saved = await this.uow.run(async () => {
-      await this.repo.lockProject(project.id);
+      // The checks run under the locks, so a concurrent addition cannot slip past them
+      await this.lockStudent(project, email);
+      const samePending = (await this.repo.listPendingParticipants(project.id))
+        // Rows saved before emails were normalized may differ in case or spaces
+        .find((p) => normalizeEmail(p.email) === email);
+      if (samePending) throw participantAlreadyInProject(email);
+      if (account) {
+        const participants = await this.repo.listParticipants(project.id);
+        if (participants.some((p) => p.userId === account.id)) {
+          throw participantAlreadyInProject(email, account.id);
+        }
+      }
+      await this.assertNotInOtherProject(project, email, account?.id);
+
       // Validates the email, code, semester and career; the email is not in the project
-      // (checked above), so this creates the row
+      // (checked above, under the lock), so this creates the row
       const row = await this.addPendingParticipant.execute({
         projectId: project.id,
         firstName,
@@ -233,6 +257,15 @@ export class AdminAddParticipantUC {
         warning: INVITATION_FAILED_WARNING,
       };
     }
+  }
+
+  /**
+   * Locks the project (same-project additions and removals run one after the other) and the
+   * student in the event (two projects of the event cannot both take them). Inside uow.run.
+   */
+  private async lockStudent(project: Project, email: string): Promise<void> {
+    await this.repo.lockProject(project.id);
+    await this.repo.lockStudentInEvent(project.eventId, email);
   }
 
   /** 409 when the student takes part in another project of the event that is not REJECTED. */
