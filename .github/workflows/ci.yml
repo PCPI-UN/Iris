@@ -1,0 +1,184 @@
+name: Backend CI
+
+on:
+  pull_request:
+    branches: ['dev', 'prod']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-24.04
+    outputs:
+      services: ${{ steps.resolve.outputs.services }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Detect changed services
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: .github/service-filters.yml
+
+      - name: Resolve services matrix
+        id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SHARED_CHANGED: ${{ steps.filter.outputs.shared || 'false' }}
+          FILTER_CHANGES: ${{ steps.filter.outputs.changes || '[]' }}
+        run: |
+          ALL_SERVICES='["auth-service","evaluation-service","event-service","invitation-service","project-service","notification-service","gateway","libs"]'
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] || [ "$SHARED_CHANGED" = "true" ]; then
+            SERVICES="$ALL_SERVICES"
+          else
+            SERVICES=$(echo "$FILTER_CHANGES" | jq -c '[.[] | select(. != "shared")]')
+          fi
+
+          echo "Services to validate: $SERVICES"
+          echo "services=$SERVICES" >> "$GITHUB_OUTPUT"
+
+  build-and-test:
+    name: Build & Test (${{ matrix.service }})
+    runs-on: ubuntu-24.04
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.services != '[]' && needs.detect-changes.outputs.services != '' }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.detect-changes.outputs.services) }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Generate gRPC protos
+        run: |
+          mkdir -p libs/common/src/generated
+          pnpm run proto:generate
+
+      - name: Generate Prisma client (if applicable)
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: |
+          if [ -f "apps/$SERVICE/prisma/schema.prisma" ]; then
+            npx prisma generate --schema="apps/$SERVICE/prisma/schema.prisma"
+          fi
+
+      - name: Build service
+        if: ${{ matrix.service != 'libs' }}
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: pnpm run build "$SERVICE"
+
+      - name: Run unit tests
+        env:
+          SERVICE: ${{ matrix.service }}
+        run: npx jest --selectProjects "$SERVICE" --passWithNoTests --maxWorkers=2
+
+  lint:
+    name: ESLint (Warning)
+    runs-on: ubuntu-24.04
+    needs: detect-changes
+    if: ${{ github.event_name == 'pull_request' && needs.detect-changes.outputs.services != '[]' }}
+    continue-on-error: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Generate gRPC protos
+        run: |
+          mkdir -p libs/common/src/generated
+          pnpm run proto:generate
+
+      - name: Lint changed TypeScript files
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          mapfile -t CHANGED_FILES < <(git diff --name-only --diff-filter=ACMR "origin/$BASE_REF...HEAD" -- 'apps/**/*.ts' 'libs/**/*.ts' 'test/**/*.ts' 'src/**/*.ts')
+
+          if [ "${#CHANGED_FILES[@]}" -eq 0 ]; then
+            echo "No modified TypeScript files to lint."
+            exit 0
+          fi
+
+          echo "Linting ${#CHANGED_FILES[@]} modified file(s)..."
+          if ! npx eslint "${CHANGED_FILES[@]}"; then
+            echo "::warning title=ESLint Warning::ESLint encontró problemas en los archivos modificados del PR (check no bloqueante)."
+            exit 1
+          fi
+
+  ci-gate:
+    name: CI Gate
+    runs-on: ubuntu-24.04
+    needs: [detect-changes, build-and-test]
+    if: always()
+
+    steps:
+      - name: Verify required checks
+        env:
+          DETECT_RESULT: ${{ needs.detect-changes.result }}
+          BUILD_TEST_RESULT: ${{ needs.build-and-test.result }}
+        run: |
+          echo "detect-changes: $DETECT_RESULT"
+          echo "build-and-test: $BUILD_TEST_RESULT"
+
+          if [ "$DETECT_RESULT" != "success" ]; then
+            echo "::error::detect-changes falló."
+            exit 1
+          fi
+
+          if [ "$BUILD_TEST_RESULT" != "success" ] && [ "$BUILD_TEST_RESULT" != "skipped" ]; then
+            echo "::error::build-and-test falló o fue cancelado."
+            exit 1
+          fi
+
+          echo "CI Gate aprobado."
