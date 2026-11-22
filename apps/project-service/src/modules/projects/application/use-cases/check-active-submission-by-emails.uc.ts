@@ -10,12 +10,18 @@ import { normalizeEmail } from '@app/common/utils/email.util';
 export class CheckActiveSubmissionByEmailsUC {
   constructor(private readonly prisma: PrismaService) {}
 
-  async execute(input: { eventId: number; emails: string[] }): Promise<{ hasConflict: boolean; conflictEmails: string[] }> {
+  async execute(input: { eventId: number; emails: string[] }): Promise<{
+    hasConflict: boolean;
+    conflictEmails: string[];
+    /** Each conflicting email with the project it is in */
+    conflicts: { email: string; projectId: number }[];
+  }> {
     const normalized = (input.emails ?? [])
       .map((e) => normalizeEmail(String(e ?? '')))
       .filter(Boolean);
 
-    if (!normalized.length) return { hasConflict: false, conflictEmails: [] };
+    if (!normalized.length)
+      return { hasConflict: false, conflictEmails: [], conflicts: [] };
 
     const rows = await this.prisma.db.pendingProjectParticipant.findMany({
       where: {
@@ -25,10 +31,18 @@ export class CheckActiveSubmissionByEmailsUC {
           state: { not: 'REJECTED' },
         },
       },
-      select: { email: true },
+      select: { email: true, projectId: true },
     });
 
     const conflictEmails: string[] = Array.from(new Set(rows.map((r: { email: string; }) => String(r.email))));
-    return { hasConflict: conflictEmails.length > 0, conflictEmails };
+    const conflicts = rows.map((r: { email: string; projectId: number }) => ({
+      email: String(r.email),
+      projectId: r.projectId,
+    }));
+    return {
+      hasConflict: conflictEmails.length > 0,
+      conflictEmails,
+      conflicts,
+    };
   }
 }

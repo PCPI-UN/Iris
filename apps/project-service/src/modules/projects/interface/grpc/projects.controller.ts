@@ -79,6 +79,10 @@ import { ProjectApprovalEffects } from '../../application/services/project-appro
 import { ProjectStateChangeBlockedError } from '../../domain/admin-state-change';
 import { AdminUpdateProjectUC } from '../../application/use-cases/admin-update-project.uc';
 import { AdminProjectEditConflictError } from '../../domain/admin-project-edit';
+import { AdminAddParticipantUC } from '../../application/use-cases/admin-add-participant.uc';
+import { AdminRemoveParticipantUC } from '../../application/use-cases/admin-remove-participant.uc';
+import { ReplaceProjectTutorsUC } from '../../application/use-cases/replace-project-tutors.uc';
+import { AdminParticipantsError } from '../../domain/admin-participants';
 
 interface InvitationGrpcService {
   CreateInvitation(data: {
@@ -143,6 +147,9 @@ export class ProjectsController {
     private readonly adminChangeProjectStateUC: AdminChangeProjectStateUC,
     private readonly approvalEffects: ProjectApprovalEffects,
     private readonly adminUpdateProjectUC: AdminUpdateProjectUC,
+    private readonly adminAddParticipantUC: AdminAddParticipantUC,
+    private readonly adminRemoveParticipantUC: AdminRemoveParticipantUC,
+    private readonly replaceProjectTutorsUC: ReplaceProjectTutorsUC,
     @Inject(INVITATION_SERVICE_NAME) private readonly client: ClientGrpc,
   ) {}
 
@@ -393,11 +400,16 @@ export class ProjectsController {
     projectId: number;
     tutorUserIds?: number[];
     pendingTutors?: { firstName: string; lastName?: string; email: string }[];
+    actingUserId?: number;
+    reason?: string;
   }) {
-    const tutors = await this.setProjectTutorsUC.execute({
+    // Records the replacement in the change log (TUTORS)
+    const tutors = await this.replaceProjectTutorsUC.execute({
       projectId: req.projectId,
+      actingUserId: req.actingUserId ?? 0,
       tutorUserIds: req.tutorUserIds ?? [],
       pendingTutors: req.pendingTutors ?? [],
+      reason: req.reason,
     });
     return { tutors: tutors.map(toProtoTutor) };
   }
@@ -820,6 +832,76 @@ export class ProjectsController {
       // Nothing changed: the gateway answers 409 with the cause
       if (error instanceof AdminProjectEditConflictError) {
         return { conflict: error.conflict };
+      }
+      throw error;
+    }
+  }
+
+  @GrpcMethod('ProjectsService', 'AdminAddParticipant')
+  async adminAddParticipantRpc(req: {
+    projectId: number;
+    actingUserId: number;
+    userId?: number;
+    studentCode?: string;
+    pending?: {
+      firstName: string;
+      lastName?: string;
+      email: string;
+      studentCode: string;
+      semester: string;
+      career: string;
+    };
+    reason?: string;
+  }) {
+    try {
+      const result = await this.adminAddParticipantUC.execute({
+        projectId: req.projectId,
+        actingUserId: req.actingUserId,
+        userId: req.userId,
+        studentCode: req.studentCode,
+        pending: req.pending,
+        reason: req.reason,
+      });
+      return {
+        participant: result.participant
+          ? toProtoParticipant(result.participant)
+          : undefined,
+        pendingParticipant: result.pendingParticipant
+          ? toProtoPendingParticipant(result.pendingParticipant)
+          : undefined,
+        failedEffects: result.failedEffects,
+        warning: result.warning ?? '',
+      };
+    } catch (error) {
+      // Nothing changed: the gateway answers 409 (or 400) with the cause
+      if (error instanceof AdminParticipantsError) {
+        return { rejected: error.rejection, failedEffects: [], warning: '' };
+      }
+      throw error;
+    }
+  }
+
+  @GrpcMethod('ProjectsService', 'AdminRemoveParticipant')
+  async adminRemoveParticipantRpc(req: {
+    projectId: number;
+    actingUserId: number;
+    userId?: number;
+    pendingId?: number;
+    reason?: string;
+  }) {
+    try {
+      await this.adminRemoveParticipantUC.execute({
+        projectId: req.projectId,
+        actingUserId: req.actingUserId,
+        userId: req.userId,
+        pendingId: req.pendingId,
+        reason: req.reason,
+      });
+      return {};
+    } catch (error) {
+      // Nothing changed: the gateway answers 400 with the cause
+      if (error instanceof AdminParticipantsError) {
+        return { rejected: error.rejection };
       }
       throw error;
     }

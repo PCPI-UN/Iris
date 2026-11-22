@@ -78,6 +78,8 @@ export interface ProjectParticipantWithUserInfo {
 }
 
 export interface PendingProjectParticipant {
+  /** Set on rows read from the database */
+  pendingId?: number;
   projectId: number;
   firstName: string;
   lastName?: string | null;

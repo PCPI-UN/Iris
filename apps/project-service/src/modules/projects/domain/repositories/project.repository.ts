@@ -129,6 +129,19 @@ export interface ProjectRepository {
 
   markPendingsInvited(projectId: number, emails: string[], invitedAt: Date): Promise<number>;
 
+  /** Deletes the enrolled participant; false when the user was not a participant of the project. */
+  removeParticipant(projectId: number, userId: number): Promise<boolean>;
+  /** Deletes these pending participants of the project; returns how many were deleted. */
+  removePendingParticipants(
+    projectId: number,
+    pendingIds: number[],
+  ): Promise<number>;
+  /**
+   * Locks the project row until the current transaction ends, so two administrative changes of
+   * its participants run one after the other. Only meaningful inside UnitOfWork.run.
+   */
+  lockProject(projectId: number): Promise<void>;
+
   markPendingJoined(projectId: number, studentCode: string, joinedAt: Date): Promise<boolean>;
 
   /** Idempotent: linking the same user twice keeps a single row. */
