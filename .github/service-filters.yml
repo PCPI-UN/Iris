@@ -1,0 +1,22 @@
+auth-service:
+  - 'apps/auth-service/**'
+evaluation-service:
+  - 'apps/evaluation-service/**'
+event-service:
+  - 'apps/event-service/**'
+invitation-service:
+  - 'apps/invitation-service/**'
+project-service:
+  - 'apps/project-service/**'
+notification-service:
+  - 'apps/notification-service/**'
+gateway:
+  - 'apps/gateway/**'
+shared:
+  - 'libs/**'
+  - 'package.json'
+  - 'pnpm-lock.yaml'
+  - 'pnpm-workspace.yaml'
+  - 'nest-cli.json'
+  - 'tsconfig*.json'
+  - 'jest.config.ts'
