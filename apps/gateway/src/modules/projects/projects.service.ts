@@ -86,6 +86,11 @@ import { AuthService } from '../auth/auth.service';
 import { withoutOneofMarkers } from '@app/common/utils/grpc-oneof.util';
 import { pendingStatus } from '@app/common/utils/pending-status.util';
 import { AdminAddParticipantDto } from './dto/admin-participant.dto';
+import {
+  ADMIN_DOCUMENT_MAX_FILE_SIZE,
+  AdminChangeProjectDocumentStateDto,
+  AdminReplaceProjectDocumentDto,
+} from './dto/admin-project-document.dto';
 import { FetchProjectJurorsUseCase } from './use-cases/fetch-project-jurors.use-case';
 import { FetchUserProfilesUseCase } from './use-cases/fetch-user-profiles.use-case';
 import { EnrichProjectsWithJurorsUseCase } from './use-cases/enrich-projects-with-jurors.use-case';
@@ -710,6 +715,80 @@ export class ProjectsService implements OnModuleInit {
     if (response.rejected) throw participantsRejection(response.rejected);
   }
 
+  /** Every document of the project, INACTIVE ones included (the other reads leave them out). */
+  async adminListProjectDocuments(
+    projectId: number,
+  ): Promise<ProjectDocument[]> {
+    const { items } = await lastValueFrom(
+      this.projectsService.listProjectDocuments({
+        projectId,
+        includeInactive: true,
+      }),
+    );
+    return items ?? [];
+  }
+
+  /**
+   * Administrative replacement of the file of a document. The file is checked and the document
+   * looked up in the project before the upload, so a wrong request leaves no blob behind; the
+   * document stores the blob name (the response signs it). The old blob is kept.
+   */
+  async adminReplaceProjectDocument(
+    projectId: number,
+    documentId: number,
+    file: Express.Multer.File | undefined,
+    dto: AdminReplaceProjectDocumentDto,
+    actingUserId: number,
+  ): Promise<ProjectDocument | undefined> {
+    if (!file) {
+      throw new BadRequestException(
+        'Adjunta el archivo nuevo del documento en el campo file',
+      );
+    }
+    if (file.size > ADMIN_DOCUMENT_MAX_FILE_SIZE) {
+      throw new BadRequestException(
+        `El archivo ${file.originalname} supera el límite de 5 MB. El tamaño máximo es 5 MB por archivo.`,
+      );
+    }
+    const documents = await this.adminListProjectDocuments(projectId);
+    if (!documents.some((document) => document.id === documentId)) {
+      throw new NotFoundException(
+        `No se encontró el documento ${documentId} en este proyecto`,
+      );
+    }
+
+    const { blobName } = await this.azureBlobUploadService.uploadFile(file);
+    const res = await firstValueFrom(
+      this.projectsService.adminReplaceProjectDocument({
+        projectId,
+        documentId,
+        actingUserId,
+        url: blobName,
+        reason: dto.reason ?? '',
+      }),
+    );
+    return res.document;
+  }
+
+  /** Administrative activation or deactivation of a document of the project. */
+  async adminChangeProjectDocumentState(
+    projectId: number,
+    documentId: number,
+    dto: AdminChangeProjectDocumentStateDto,
+    actingUserId: number,
+  ): Promise<ProjectDocument | undefined> {
+    const res = await firstValueFrom(
+      this.projectsService.adminChangeProjectDocumentState({
+        projectId,
+        documentId,
+        actingUserId,
+        state: this.mapDocumentStatusToProto(dto.state)!,
+        reason: dto.reason ?? '',
+      }),
+    );
+    return res.document;
+  }
+
   async changeToUnderReviewProject(projectId: number, actingUserId: number) {
     return firstValueFrom(
       this.projectsService.changeToUnderReviewProject({
@@ -922,7 +1001,11 @@ export class ProjectsService implements OnModuleInit {
     documentId: number,
   ): Promise<string> {
     const { items } = await lastValueFrom(
-      this.projectsService.listProjectDocuments({ projectId }),
+      // Only ACTIVE documents: an INACTIVE one was withdrawn and its link answers 404
+      this.projectsService.listProjectDocuments({
+        projectId,
+        includeInactive: false,
+      }),
     );
     const document = items?.find((item) => item.id === documentId);
     if (!document) {
