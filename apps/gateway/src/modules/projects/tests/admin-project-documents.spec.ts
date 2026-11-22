@@ -77,6 +77,7 @@ const buildService = (documents = [poster('viejo.pdf')]) => {
     uploadFile: jest
       .fn()
       .mockResolvedValue({ blobName: '1800-poster-nuevo.pdf' }),
+    deleteFile: jest.fn().mockResolvedValue(true),
   };
   Object.assign(service, {
     projectsService: grpc,
@@ -176,6 +177,7 @@ describe('Administrative document endpoints', () => {
         reason: 'Era de otro proyecto',
       });
       expect(result).toMatchObject({ id: 7, url: '1800-poster-nuevo.pdf' });
+      expect(blob.deleteFile).not.toHaveBeenCalled();
     });
 
     it('answers with a signed URL of the new file, so opening it shows the new poster', async () => {
@@ -225,8 +227,8 @@ describe('Administrative document endpoints', () => {
       expect(blob.uploadFile).not.toHaveBeenCalled();
     });
 
-    it('passes on the 404 of project-service (document moved to another project meanwhile)', async () => {
-      const { service, grpc } = buildService();
+    it('passes on the 404 of project-service (document moved to another project meanwhile) and deletes the new blob', async () => {
+      const { service, grpc, blob } = buildService();
       grpc.adminReplaceProjectDocument.mockReturnValue(
         throwError(() => ({
           code: GrpcStatus.NOT_FOUND,
@@ -239,6 +241,8 @@ describe('Administrative document endpoints', () => {
         .catch((e: unknown) => e);
 
       expect(httpStatus(error)).toBe(404);
+      // Nothing points to the uploaded file: it is not left orphaned in the storage
+      expect(blob.deleteFile).toHaveBeenCalledWith('1800-poster-nuevo.pdf');
     });
   });
 

@@ -318,7 +318,9 @@ export class ProjectsService implements OnModuleInit {
       );
       createdProject = response.project;
       if (!createdProject) {
-        throw new BadRequestException('La creación del proyecto no devolvió ningún proyecto');
+        throw new BadRequestException(
+          'La creación del proyecto no devolvió ningún proyecto',
+        );
       }
       this.logger.log(
         `Project created successfully with ID: ${createdProject.id}`,
@@ -447,9 +449,7 @@ export class ProjectsService implements OnModuleInit {
       status: dto.status ?? 1,
     };
 
-    return firstValueFrom(
-      this.projectsService.addPendingParticipant(request),
-    );
+    return firstValueFrom(this.projectsService.addPendingParticipant(request));
   }
 
   /**
@@ -516,7 +516,10 @@ export class ProjectsService implements OnModuleInit {
     return this.removeJurorFromProjectUseCase.execute(dto);
   }
 
-  async approveProject(dto: {id: number; eventType: string}, actingUserId: number) {
+  async approveProject(
+    dto: { id: number; eventType: string },
+    actingUserId: number,
+  ) {
     const response = await firstValueFrom(
       this.projectsService.approveProject({
         id: dto.id,
@@ -730,8 +733,9 @@ export class ProjectsService implements OnModuleInit {
 
   /**
    * Administrative replacement of the file of a document. The file is checked and the document
-   * looked up in the project before the upload, so a wrong request leaves no blob behind; the
-   * document stores the blob name (the response signs it). The old blob is kept.
+   * looked up in the project before the upload, so a wrong request leaves no blob behind; if
+   * project-service then fails, the new blob is deleted (best effort). The document stores the
+   * blob name (the response signs it). The old blob is kept.
    */
   async adminReplaceProjectDocument(
     projectId: number,
@@ -758,16 +762,22 @@ export class ProjectsService implements OnModuleInit {
     }
 
     const { blobName } = await this.azureBlobUploadService.uploadFile(file);
-    const res = await firstValueFrom(
-      this.projectsService.adminReplaceProjectDocument({
-        projectId,
-        documentId,
-        actingUserId,
-        url: blobName,
-        reason: dto.reason ?? '',
-      }),
-    );
-    return res.document;
+    try {
+      const res = await firstValueFrom(
+        this.projectsService.adminReplaceProjectDocument({
+          projectId,
+          documentId,
+          actingUserId,
+          url: blobName,
+          reason: dto.reason ?? '',
+        }),
+      );
+      return res.document;
+    } catch (error) {
+      // No document points to the new blob: remove it (best effort) so it is not left orphaned
+      await this.azureBlobUploadService.deleteFile(blobName);
+      throw error;
+    }
   }
 
   /** Administrative activation or deactivation of a document of the project. */
@@ -1014,7 +1024,9 @@ export class ProjectsService implements OnModuleInit {
 
     const url = this.azureBlobUploadService.openUrl(document.url);
     if (!url) {
-      throw new NotFoundException('El documento del proyecto no tiene un archivo guardado');
+      throw new NotFoundException(
+        'El documento del proyecto no tiene un archivo guardado',
+      );
     }
     return url;
   }
@@ -1284,7 +1296,9 @@ export class ProjectsService implements OnModuleInit {
     );
 
     if (typeCounts['LOGO'] > 1) {
-      throw new BadRequestException('Solo se permite 1 archivo de logo por solicitud');
+      throw new BadRequestException(
+        'Solo se permite 1 archivo de logo por solicitud',
+      );
     }
     if (typeCounts['POSTER'] > 1) {
       throw new BadRequestException(
@@ -1305,7 +1319,9 @@ export class ProjectsService implements OnModuleInit {
     const project = (projectGrpcResponse as any).project ?? projectGrpcResponse;
 
     if (!project) {
-      throw new NotFoundException(`No se encontró el proyecto con ID ${projectId}`);
+      throw new NotFoundException(
+        `No se encontró el proyecto con ID ${projectId}`,
+      );
     }
 
     this.logger.log(
@@ -1391,7 +1407,9 @@ export class ProjectsService implements OnModuleInit {
         `Failed to upload files to Azure: ${error.message}`,
         error.stack,
       );
-      throw new BadRequestException(`No se pudieron subir los archivos: ${error.message}`);
+      throw new BadRequestException(
+        `No se pudieron subir los archivos: ${error.message}`,
+      );
     }
 
     // 9. Adjuntar documentos al proyecto

@@ -27,7 +27,8 @@ const READ_SAS_TTL_SEC = 3600;
  */
 const OPEN_SAS_TTL_SEC = 3600;
 
-const STORAGE_UNAVAILABLE = 'El almacenamiento de documentos no está configurado';
+const STORAGE_UNAVAILABLE =
+  'El almacenamiento de documentos no está configurado';
 
 export interface AzureBlobUploadResponse {
   blobName: string;
@@ -189,6 +190,26 @@ export class AzureBlobUploadService {
       throw new Error(
         `No se pudo subir el archivo a Azure Blob Storage: ${error.message}`,
       );
+    }
+  }
+
+  /**
+   * Best-effort removal of a blob this gateway just uploaded and nothing points to (the request
+   * that uploaded it failed afterwards). Never throws: a failure, such as an upload SAS without
+   * delete permission, is logged and the blob stays. Returns whether it was deleted.
+   */
+  async deleteFile(blobName: string): Promise<boolean> {
+    if (!this.uploadContainer) return false;
+    try {
+      const res = await this.uploadContainer
+        .getBlockBlobClient(blobName)
+        .deleteIfExists();
+      return res.succeeded;
+    } catch (error) {
+      this.logger.warn(
+        `Could not delete the orphan blob ${blobName}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return false;
     }
   }
 
