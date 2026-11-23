@@ -36,6 +36,7 @@ import { AddPendingParticipantUC } from './application/use-cases/add-pending-par
 import { ListPendingParticipantsUC } from './application/use-cases/list-pending-participants.uc';
 import { SetProjectTutorsUC } from './application/use-cases/set-project-tutors.uc';
 import { ListProjectTutorsUC } from './application/use-cases/list-project-tutors.uc';
+import { ListMyEventRolesUC } from './application/use-cases/list-my-event-roles.uc';
 import { ListCourseSectionsUC } from './application/use-cases/list-course-sections.uc';
 import { ResolveProjectReadScopeUC } from './application/use-cases/resolve-project-read-scope.uc';
 import { AttachParticipantNamesUC } from './application/use-cases/attach-participant-names.uc';
@@ -134,6 +135,7 @@ import { EvaluationServiceAdapter } from './infrastructure/grpc-client/evaluatio
     AddProjectTutorUC,
     SetProjectTutorsUC,
     ListProjectTutorsUC,
+    ListMyEventRolesUC,
     ListCourseSectionsUC,
     ResolveProjectReadScopeUC,
     AttachParticipantNamesUC,
