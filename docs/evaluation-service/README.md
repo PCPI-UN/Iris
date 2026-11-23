@@ -94,15 +94,17 @@ It never returns juror ids nor how many jurors evaluated, and it does not check 
 
 ## Statistics per component
 
-`GetProjectStats` (one project) and `GetEventCriteriaStats` (the projects the gateway sends, for example every project of an event or of one category) return the average score of each rubric component, computed with the effective weights stored with each score:
+`GetEventCriteriaStats` returns the average score of each rubric component, and of each criterion inside it, over the projects the gateway sends: every project of an event, of one category, or a single project. It uses the effective weights stored with each score:
 
 1. In each evaluation, the score of a component is Σ(score × weight) ÷ Σ(weight) of its criteria.
 2. The score of the component in a project is the average of its jurors.
 3. Across projects, each evaluated project counts the same, whatever its number of jurors; projects without evaluations are left out (`projectCount`).
 
-Example: criteria scored 90 and 55 with weights 0.267 and 0.133 give their 0.4 component 78.33, not the plain average 72.5. Each component also returns its `weight` (sum of its criteria's stored weights) and, when asked, its criteria with their effective weight and average. Only the final averages are rounded, with `roundGrade`.
+Example: criteria scored 90 and 55 with weights 0.267 and 0.133 give their 0.4 component 78.33, not the plain average 72.5. Each component also returns its `weight`, the sum of its criteria's stored weights.
 
-Both also return `maxScore`, the highest level of the event's grading scale. `GetProjectStats` takes the event from the criteria scored, so it needs no call to project-service (which calls it to count evaluations); without evaluations, `maxScore` is 0.
+It also returns `maxScore`, the highest level of the event's grading scale. The averages do not depend on the scale, so an event without one still gets them, only without `maxScore`.
+
+`GetProjectStats` stays light (average grade, evaluation count and jurors) because the ranking and project-service call it once per project.
 
 ## Dependencies
 
