@@ -75,6 +75,11 @@ spec:
                 configMapKeyRef:
                   name: pcpi-config
                   key: FRONTEND_URL
+            - name: DIPLOMA_TEMPLATES
+              valueFrom:
+                configMapKeyRef:
+                  name: pcpi-config
+                  key: DIPLOMA_TEMPLATES
             - name: JWT_ACCESS_TOKEN_EXPIRATION
               valueFrom:
                 configMapKeyRef:

@@ -43,6 +43,10 @@ data:
   PROJECT_SERVICE_URL: "project-service:50055"
   NOTIFICATION_SERVICE_URL: "notification-service:50056"
 
+  # Gateway: award diploma design per event, "eventId:template" pairs separated by commas
+  # (templates: engineering-innovation-expo, feria-proyectos-stem). Empty: no diplomas.
+  DIPLOMA_TEMPLATES: ""
+
   # JWT
   JWT_ACCESS_TOKEN_EXPIRATION: "15m"
   JWT_REFRESH_TOKEN_EXPIRATION: "7d"

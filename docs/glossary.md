@@ -10,6 +10,7 @@ these docs stay in English.
 | course | categoría | Courses are the categories of an event (`courseIds`). |
 | category (ranking, awards) | categoría | |
 | award | premio | |
+| diploma | diploma | The PDF a project gets for winning an award. |
 | project | proyecto | |
 | participant | participante | |
 | tutor | tutor | |
