@@ -8,6 +8,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  MaxLength,
   ValidateNested,
 } from 'class-validator';
 
@@ -56,4 +57,15 @@ export class ProjectTutorsInputDto {
   @ValidateNested({ each: true })
   @Type(() => PendingTutorInputDto)
   pending: PendingTutorInputDto[] = [];
+
+  @ApiProperty({
+    description:
+      'PUT /projects/:id/tutors: why the tutors are replaced; stored in the change log',
+    required: false,
+    maxLength: 1000,
+  })
+  @IsOptional()
+  @IsString({ message: 'El motivo debe ser un texto' })
+  @MaxLength(1000, { message: 'El motivo no puede superar 1000 caracteres' })
+  reason?: string;
 }

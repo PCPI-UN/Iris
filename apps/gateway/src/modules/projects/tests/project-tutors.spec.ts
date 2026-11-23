@@ -7,6 +7,7 @@ import { ProjectsController } from '../projects.controller';
 import { parseProjectTutors } from '../parse-project-tutors';
 import { ProjectTutorsInputDto } from '../dto/project-tutors-input.dto';
 import { TutorCandidatesQueryDto } from '../dto/tutor-candidates-query.dto';
+import { AppUser } from '../../auth/types/app-user.type';
 
 describe('parseProjectTutors (tutors field of POST /projects)', () => {
   it('a missing field means no tutors', () => {
@@ -106,11 +107,14 @@ describe('Project tutors in the gateway service', () => {
       userIds: [5],
       pending: [{ firstName: 'Ana', email: 'ana@uni.edu' }],
     });
-    await service.setProjectTutors(3, dto);
+    await service.setProjectTutors(3, dto, 1);
     expect(grpc.setProjectTutors).toHaveBeenCalledWith({
       projectId: 3,
       tutorUserIds: [5],
       pendingTutors: [{ firstName: 'Ana', email: 'ana@uni.edu' }],
+      // project-service records the change (TUTORS) with who made it
+      actingUserId: 1,
+      reason: '',
     });
   });
 
@@ -163,6 +167,7 @@ describe('Project tutors in the gateway service', () => {
       controller.setProjectTutors(
         3,
         plainToInstance(ProjectTutorsInputDto, { userIds: [5] }),
+        { id: 1 } as AppUser,
       ),
     ).resolves.toEqual({ tutors: [] });
   });

@@ -8,10 +8,12 @@ import {
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { PERMISSIONS_KEY } from '../decorators/require-permission.decorator';
+import { ANY_PERMISSIONS_KEY } from '../decorators/require-any-permission.decorator';
 import { AppUser } from '../../modules/auth/types/app-user.type';
 
 /**
- * Checks the permissions declared with `@RequirePermission()` against the ones the
+ * Checks the permissions declared with `@RequirePermission()` (all of them) and
+ * `@RequireAnyPermission()` (at least one) against the ones the
  * auth-service returned for this request (`JwtStrategy` loads them on every call), so a
  * role change applies on the next request. The result is not cached: comparing a short
  * list in memory is cheaper than a cache lookup, and a cached result would outlive a
@@ -38,7 +40,12 @@ export class PermissionsGuard implements CanActivate {
       [context.getHandler(), context.getClass()],
     );
 
-    if (!requiredPermissions || requiredPermissions.length === 0) {
+    const anyPermissions = this.reflector.getAllAndOverride<string[]>(
+      ANY_PERMISSIONS_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+
+    if (!requiredPermissions?.length && !anyPermissions?.length) {
       return true;
     }
 
@@ -55,7 +62,18 @@ export class PermissionsGuard implements CanActivate {
       return true;
     }
 
-    const missingPermissions = requiredPermissions.filter(
+    if (
+      anyPermissions?.length &&
+      !anyPermissions.some((permission) =>
+        user.platformPermissions.includes(permission),
+      )
+    ) {
+      throw new ForbiddenException(
+        `Se necesita alguno de los permisos: ${anyPermissions.join(', ')}`,
+      );
+    }
+
+    const missingPermissions = (requiredPermissions ?? []).filter(
       (permission) => !user.platformPermissions.includes(permission),
     );
 

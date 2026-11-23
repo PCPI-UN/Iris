@@ -12,6 +12,7 @@ import {
   UseInterceptors,
   Get,
   Query,
+  HttpCode,
   HttpException,
   HttpStatus,
   Res,
@@ -59,6 +60,11 @@ import { RequirePermission } from '../../common/decorators/require-permission.de
 import { ProjectChangeLogResponseDto } from './dto/project-change-log-response.dto';
 import { AdminChangeProjectStateDto } from './dto/admin-change-project-state.dto';
 import { AdminUpdateProjectDto } from './dto/admin-update-project.dto';
+import {
+  AdminAddParticipantDto,
+  AdminRemoveParticipantQueryDto,
+} from './dto/admin-participant.dto';
+import { RequireAnyPermission } from '../../common/decorators/require-any-permission.decorator';
 
 @ApiTags('projects')
 @ApiSecurity('JWT-auth')
@@ -443,21 +449,28 @@ export class ProjectsController {
     return this.projectsService.searchTutorCandidates(query.search);
   }
 
-  @RequirePermission('manage:events')
+  @RequireAnyPermission('manage:events', 'manage:projects')
   @Put(':id/tutors')
   @ApiOperation({
     summary: 'Replace the tutors of a project',
     description:
       'Replaces the whole list. Tutors left out are unlinked (they keep their roles). On an approved ' +
       'project, linked tutors get the Tutor role and new tutors typed in by email are invited; ' +
-      'otherwise that happens when the project is approved. Returns the resulting tutors.',
+      'otherwise that happens when the project is approved. Returns the resulting tutors. ' +
+      'Requires manage:events or manage:projects. A replacement that changes the tutors is recorded in ' +
+      'the change log (TUTORS) with the linked and pending tutors before and after, and the optional reason.',
   })
   @ApiParam({ name: 'id', type: Number, description: 'Project ID', example: 1 })
+  @ApiResponse({
+    status: 403,
+    description: 'The user has neither manage:events nor manage:projects',
+  })
   async setProjectTutors(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: ProjectTutorsInputDto,
+    @GetUser() user: AppUser,
   ) {
-    return this.projectsService.setProjectTutors(id, body);
+    return this.projectsService.setProjectTutors(id, body, user.id);
   }
 
   @Get(':id/for-review')
@@ -770,6 +783,148 @@ export class ProjectsController {
     @GetUser() user: AppUser,
   ) {
     return this.projectsService.adminUpdateProject(id, dto, user.id);
+  }
+
+  @RequirePermission('manage:projects')
+  @Post(':id/admin/participants')
+  @ApiOperation({
+    summary: 'Add a participant to a project (administrative correction)',
+    description:
+      'With userId adds an enrolled participant (platform user) with its studentCode; without userId adds ' +
+      'a pending participant from firstName, lastName, email, studentCode, semester and career. On an ' +
+      'APPROVED project a pending participant gets the approval email, as the other participants got it, ' +
+      'and is INVITED; in other states it stays PENDING until the approval. If that email fails the ' +
+      'participant stays added (PENDING) and the answer carries failedEffects and a warning. Recorded in ' +
+      'the change log (PARTICIPANTS) with the participant data and the optional reason. A 409 changes ' +
+      'nothing and its code says why: PARTICIPANT_HAS_ACTIVE_PROJECT (the student is in another project ' +
+      'of the event that is not rejected; details.projectId) or PARTICIPANT_ALREADY_IN_PROJECT.',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Project ID', example: 1 })
+  @ApiResponse({
+    status: 201,
+    description:
+      '{ participant, pendingParticipant, failedEffects, warning }: one of participant (enrolled) or pendingParticipant is set',
+  })
+  @ApiResponse({ status: 400, description: 'Missing or invalid fields' })
+  @ApiResponse({ status: 403, description: 'The user lacks manage:projects' })
+  @ApiResponse({ status: 404, description: 'Project or user not found' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Not added: the student already takes part in this project or in another active project of the event',
+    schema: {
+      example: {
+        statusCode: 409,
+        message:
+          'El estudiante ana@uni.edu ya participa en otro proyecto activo de este evento (proyecto 12). Quítalo de ese proyecto antes de agregarlo aquí.',
+        code: 'PARTICIPANT_HAS_ACTIVE_PROJECT',
+        details: { email: 'ana@uni.edu', projectId: 12 },
+        timestamp: '2026-11-21T15:00:00.000Z',
+      },
+    },
+  })
+  adminAddParticipant(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AdminAddParticipantDto,
+    @GetUser() user: AppUser,
+  ) {
+    return this.projectsService.adminAddParticipant(id, dto, user.id);
+  }
+
+  // Declared before ':userId' so "pending" is not read as a user id
+  @RequirePermission('manage:projects')
+  @Delete(':id/admin/participants/pending/:pendingId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary:
+      'Remove a pending participant from a project (administrative correction)',
+    description:
+      'Removes a pending participant that has not joined (a joined one is removed as enrolled). The last ' +
+      'participant of a project cannot be removed (400, code LAST_PARTICIPANT). Recorded in the change log ' +
+      '(PARTICIPANTS) with the participant data and the optional reason. An invitation email already sent is not withdrawn.',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Project ID', example: 1 })
+  @ApiParam({
+    name: 'pendingId',
+    type: Number,
+    description: 'Pending participant ID',
+    example: 7,
+  })
+  @ApiResponse({ status: 204, description: 'Removed' })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Last participant of the project, or a pending participant that already joined',
+  })
+  @ApiResponse({ status: 403, description: 'The user lacks manage:projects' })
+  @ApiResponse({
+    status: 404,
+    description: 'Project or pending participant not found',
+  })
+  async adminRemovePendingParticipant(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('pendingId', ParseIntPipe) pendingId: number,
+    @Query() query: AdminRemoveParticipantQueryDto,
+    @GetUser() user: AppUser,
+  ): Promise<void> {
+    await this.projectsService.adminRemoveParticipant(
+      id,
+      { pendingId },
+      query.reason,
+      user.id,
+    );
+  }
+
+  @RequirePermission('manage:projects')
+  @Delete(':id/admin/participants/:userId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary:
+      'Remove an enrolled participant from a project (administrative correction)',
+    description:
+      'Removes the enrolled participant and their pending row in the project (same student code or email), ' +
+      'so they can join another project of the event. The last participant of a project cannot be removed ' +
+      '(400, code LAST_PARTICIPANT). Recorded in the change log (PARTICIPANTS) with the participant data and the optional reason.',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Project ID', example: 1 })
+  @ApiParam({
+    name: 'userId',
+    type: Number,
+    description: 'User ID of the participant',
+    example: 42,
+  })
+  @ApiResponse({ status: 204, description: 'Removed' })
+  @ApiResponse({
+    status: 400,
+    description: 'Last participant of the project',
+    schema: {
+      example: {
+        statusCode: 400,
+        message:
+          'No se puede quitar al único integrante del proyecto. Agrega otro integrante antes de quitar este.',
+        code: 'LAST_PARTICIPANT',
+        details: {},
+        timestamp: '2026-11-21T15:00:00.000Z',
+      },
+    },
+  })
+  @ApiResponse({ status: 403, description: 'The user lacks manage:projects' })
+  @ApiResponse({
+    status: 404,
+    description: 'Project not found or the user is not an enrolled participant',
+  })
+  async adminRemoveParticipant(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('userId', ParseIntPipe) userId: number,
+    @Query() query: AdminRemoveParticipantQueryDto,
+    @GetUser() user: AppUser,
+  ): Promise<void> {
+    await this.projectsService.adminRemoveParticipant(
+      id,
+      { userId },
+      query.reason,
+      user.id,
+    );
   }
 
   @Get(':id/jurors')

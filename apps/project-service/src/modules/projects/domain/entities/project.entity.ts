@@ -78,6 +78,8 @@ export interface ProjectParticipantWithUserInfo {
 }
 
 export interface PendingProjectParticipant {
+  /** Set on rows read from the database */
+  pendingId?: number;
   projectId: number;
   firstName: string;
   lastName?: string | null;
@@ -86,6 +88,8 @@ export interface PendingProjectParticipant {
   semester: string;
   career: string;
   status: StudentStatus;
+  /** Set once the invitation (approval email) was sent */
+  invitedAt?: Date | null;
 }
 
 /** Tutor typed in at submission who has no platform account yet. */

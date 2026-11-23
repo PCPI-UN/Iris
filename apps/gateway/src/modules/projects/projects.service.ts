@@ -38,6 +38,7 @@ import {
   AddPendingParticipantRequest,
   JurorKey,
   ListProjectsInScopeRequest,
+  AdminParticipantsRejection,
 } from '@app/common/generated/project';
 import { CreateProjectWithParticipantsDto } from './dto/create-project-with-participants.dto';
 import { CreateProjectWithParticipantsMultipartDto } from './dto/create-project-with-participants-multipart.dto';
@@ -83,6 +84,8 @@ import {
 import { ProjectForReviewResponseDto } from './dto/project-for-review-response.dto';
 import { AuthService } from '../auth/auth.service';
 import { withoutOneofMarkers } from '@app/common/utils/grpc-oneof.util';
+import { pendingStatus } from '@app/common/utils/pending-status.util';
+import { AdminAddParticipantDto } from './dto/admin-participant.dto';
 import { FetchProjectJurorsUseCase } from './use-cases/fetch-project-jurors.use-case';
 import { FetchUserProfilesUseCase } from './use-cases/fetch-user-profiles.use-case';
 import { EnrichProjectsWithJurorsUseCase } from './use-cases/enrich-projects-with-jurors.use-case';
@@ -112,6 +115,26 @@ export type {
 export const PROJECT_STATE_CHANGE_BLOCKED = 'PROJECT_STATE_CHANGE_BLOCKED';
 /** `code` of the 409 of an administrative edit: another project of the event has the name */
 export const PROJECT_NAME_TAKEN = 'PROJECT_NAME_TAKEN';
+export const LAST_PARTICIPANT = 'LAST_PARTICIPANT';
+
+/**
+ * HTTP error of a rejected change of the participants: 400 for LAST_PARTICIPANT, 409 for the
+ * others (PARTICIPANT_HAS_ACTIVE_PROJECT, PARTICIPANT_ALREADY_IN_PROJECT), with `code` and the
+ * known cause fields in `details`.
+ */
+export function participantsRejection(rejected: AdminParticipantsRejection) {
+  const { code, message, ...rest } = withoutOneofMarkers(rejected);
+  const details = Object.fromEntries(
+    Object.entries(rest).filter(
+      ([key, value]) =>
+        value !== undefined && value !== null && !key.startsWith('_'),
+    ),
+  );
+  const body = { message, code, details };
+  return code === LAST_PARTICIPANT
+    ? new BadRequestException(body)
+    : new ConflictException(body);
+}
 /** `code` of the 409 of an administrative category change of a project with evaluations */
 export const PROJECT_CATEGORY_CHANGE_BLOCKED =
   'PROJECT_CATEGORY_CHANGE_BLOCKED';
@@ -441,12 +464,19 @@ export class ProjectsService implements OnModuleInit {
     }));
   }
 
-  async setProjectTutors(projectId: number, dto: ProjectTutorsInputDto) {
+  /** Replaces the tutors; project-service records the change (TUTORS) with the acting user. */
+  async setProjectTutors(
+    projectId: number,
+    dto: ProjectTutorsInputDto,
+    actingUserId: number,
+  ) {
     const res = await firstValueFrom(
       this.projectsService.setProjectTutors({
         projectId,
         tutorUserIds: dto.userIds,
         pendingTutors: dto.pending,
+        actingUserId,
+        reason: dto.reason?.trim() ?? '',
       }),
     );
     return { ...res, tutors: toProjectTutorsResponse(res.tutors) };
@@ -613,6 +643,71 @@ export class ProjectsService implements OnModuleInit {
     }
     // Drops the oneof markers of the optional fields (_description: 'description')
     return withoutOneofMarkers(response.project);
+  }
+
+  /**
+   * Administrative addition of a participant. When project-service answers `rejected` nothing
+   * changed: 409 with `code` (PARTICIPANT_HAS_ACTIVE_PROJECT or PARTICIPANT_ALREADY_IN_PROJECT)
+   * and the cause in `details`.
+   */
+  async adminAddParticipant(
+    id: number,
+    dto: AdminAddParticipantDto,
+    actingUserId: number,
+  ) {
+    const enrolled = dto.userId !== undefined && dto.userId !== null;
+    const response = await firstValueFrom(
+      this.projectsService.adminAddParticipant({
+        projectId: id,
+        actingUserId,
+        userId: enrolled ? dto.userId : undefined,
+        studentCode: enrolled ? dto.studentCode : undefined,
+        pending: enrolled
+          ? undefined
+          : {
+              firstName: dto.firstName ?? '',
+              lastName: dto.lastName || undefined,
+              email: dto.email ?? '',
+              studentCode: dto.studentCode,
+              semester: dto.semester ?? '',
+              career: dto.career ?? '',
+            },
+        reason: dto.reason ?? '',
+      }),
+    );
+    if (response.rejected) throw participantsRejection(response.rejected);
+    const pending = response.pendingParticipant;
+    return {
+      participant: response.participant
+        ? withoutOneofMarkers(response.participant)
+        : null,
+      pendingParticipant: pending
+        ? { ...pending, status: pendingStatus(pending.status) }
+        : null,
+      failedEffects: response.failedEffects ?? [],
+      warning: response.warning || null,
+    };
+  }
+
+  /**
+   * Administrative removal of an enrolled (userId) or pending (pendingId) participant. Removing
+   * the last participant answers 400 with code LAST_PARTICIPANT.
+   */
+  async adminRemoveParticipant(
+    id: number,
+    target: { userId?: number; pendingId?: number },
+    reason: string | undefined,
+    actingUserId: number,
+  ): Promise<void> {
+    const response = await firstValueFrom(
+      this.projectsService.adminRemoveParticipant({
+        projectId: id,
+        actingUserId,
+        ...target,
+        reason: reason ?? '',
+      }),
+    );
+    if (response.rejected) throw participantsRejection(response.rejected);
   }
 
   async changeToUnderReviewProject(projectId: number, actingUserId: number) {

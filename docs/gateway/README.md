@@ -32,12 +32,12 @@ Single HTTP entry point of the platform. It authenticates the browser session, c
 | `academic` | Read-only views of the academic roles (`/academic/*`): projects, their events, registrations and grades (JSON or Excel) of the caller's scope. `project-service` decides the scope from the caller's scope permissions; grades of unpublished events are only sent to callers with `read:grades`. `/registrations` and `/grades` answer 404 for an event that is not in `/academic/events` (deleted, or without projects of the caller). The course section of a project carries its term code (such as `202610`), taken from `event-service` | `project`, `event`, `evaluation` (through the other modules) |
 | `terms` | Academic terms (`GET /terms`, `POST /terms`): every event belongs to one, and the NRC typed when submitting a project is looked up in it when the event requires a course section (`requiresCourse`) | `event` (through the events module) |
 
-Cross-cutting code lives in `src/common`: guards, decorators (`@Public`, `@RequirePermission`, `@GetUser`), the gRPC-to-HTTP exception filter and the cache.
+Cross-cutting code lives in `src/common`: guards, decorators (`@Public`, `@RequirePermission`, `@RequireAnyPermission`, `@GetUser`), the gRPC-to-HTTP exception filter and the cache.
 
 ## Authorization model
 
 - **Session**: the access and refresh tokens are httpOnly cookies set by `/auth/*`. The token carries the user id (`sub`) and email; the gateway verifies it with the public key and asks `auth-service` for the user, their platform roles and their permissions on every authenticated request.
-- **Endpoint access**: every endpoint requires a session unless it is marked `@Public()`. An endpoint can also declare permissions with `@RequirePermission('action:resource')`; the user must hold all of them. Users with the platform role `Admin` pass every permission check.
+- **Endpoint access**: every endpoint requires a session unless it is marked `@Public()`. An endpoint can also declare permissions with `@RequirePermission('action:resource')`, and the user must hold all of them, or with `@RequireAnyPermission('a:x', 'b:y')`, and one of them is enough (`PUT /projects/:id/tutors` takes `manage:events` or `manage:projects`). Users with the platform role `Admin` pass every permission check.
 - **Inside the services**: services trust the user id the gateway sends. Event-level rules (for example "the juror is assigned to this project") are checked by the service that owns that data.
 - **Read and write permissions**: reading and changing use different permissions, so read-only roles (the dean) can read without managing: `read:events` for events, rubrics and configuration, `read:grades` for rankings, top projects and tiebreaks, `read:invitations` for invitation lists, `read:academic_projects` for the academic views of `/academic/*`, and `manage:events` to change them. Roles and their permissions are described in [auth-service](../auth-service/README.md#roles-and-permissions).
 - **User administration**: `POST /users`, `PATCH /users/:id`, `DELETE /users/:id` and `PUT /users/:id/roles` send the id of the user making the request to `auth-service`, which enforces the administrator rules (a faculty administrator cannot create, edit, deactivate or grant administrators; nobody changes their own roles). `GET /users/roles` lists the roles with their ids.
@@ -51,7 +51,8 @@ Cross-cutting code lives in `src/common`: guards, decorators (`@Public`, `@Requi
 | `public` | No session |
 | `session` | Any authenticated user; `why` explains why that is enough (own data, or data that is not sensitive) |
 | `owner` | Only a session in the guard; the service named in `why` checks that the caller owns the resource (participant of the project, assigned juror) or is staff |
-| `permission` | The permissions listed |
+| `permission` | All the permissions listed (`@RequirePermission`) |
+| `anyPermission` | At least one of the permissions listed (`@RequireAnyPermission`) |
 
 There is no `pending` value: the type does not allow it, so every endpoint has a decision.
 

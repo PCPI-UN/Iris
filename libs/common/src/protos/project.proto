@@ -79,6 +79,13 @@ service ProjectsService {
   // category change with evaluations (without force) changes nothing and the answer carries `conflict`
   rpc AdminUpdateProject (AdminUpdateProjectRequest) returns (AdminUpdateProjectResponse);
 
+  // Administrative addition of a participant: enrolled (userId and studentCode) or pending. A student already
+  // in the project or in another active project of the event changes nothing and the answer carries `rejected`
+  rpc AdminAddParticipant (AdminAddParticipantRequest) returns (AdminAddParticipantResponse);
+  // Administrative removal of an enrolled (userId) or pending (pendingId) participant. Removing the last
+  // participant changes nothing and the answer carries `rejected`
+  rpc AdminRemoveParticipant (AdminRemoveParticipantRequest) returns (AdminRemoveParticipantResponse);
+
 }
 
 enum ProjectState {
@@ -389,6 +396,10 @@ message SetProjectTutorsRequest {
   int32 projectId = 1;
   repeated int32 tutorUserIds = 2;
   repeated PendingTutorInput pendingTutors = 3;
+  // auth-service user making the change; recorded in the change log (TUTORS)
+  int32 actingUserId = 4;
+  // Stored in the change log entry
+  string reason = 5;
 }
 message SetProjectTutorsResponse { repeated ProjectTutor tutors = 1; }
 
@@ -838,4 +849,66 @@ message AdminProjectEditConflict {
 message AdminUpdateProjectResponse {
   optional Project project = 1;
   optional AdminProjectEditConflict conflict = 2;
+}
+
+/************** Administrative participants **************/
+message AdminPendingParticipantInput {
+  string firstName = 1;
+  optional string lastName = 2;
+  string email = 3;
+  string studentCode = 4;
+  string semester = 5;
+  string career = 6;
+}
+
+// Exactly one of userId (enrolled, with studentCode) or pending is set
+message AdminAddParticipantRequest {
+  int32 projectId = 1;
+  // auth-service user making the change
+  int32 actingUserId = 2;
+  optional int32 userId = 3;
+  optional string studentCode = 4;
+  optional AdminPendingParticipantInput pending = 5;
+  // Stored in the change log entry
+  string reason = 6;
+}
+
+// Why nothing changed
+message AdminParticipantsRejection {
+  // PARTICIPANT_HAS_ACTIVE_PROJECT: the student is in another active project of the event (projectId)
+  // PARTICIPANT_ALREADY_IN_PROJECT: the student is already a participant of this project
+  // LAST_PARTICIPANT: the project would be left without participants
+  string code = 1;
+  // Spanish message for the user
+  string message = 2;
+  optional string email = 3;
+  optional int32 projectId = 4;
+  optional int32 userId = 5;
+}
+
+// Exactly one of participant, pendingParticipant (added) or rejected (nothing changed) is set
+message AdminAddParticipantResponse {
+  optional ProjectParticipant participant = 1;
+  optional PendingProjectParticipant pendingParticipant = 2;
+  optional AdminParticipantsRejection rejected = 3;
+  // Work in other services that failed after the participant was saved: NOTIFICATION
+  repeated string failedEffects = 4;
+  // Spanish warning for failedEffects; empty when nothing failed
+  string warning = 5;
+}
+
+// Exactly one of userId or pendingId is set
+message AdminRemoveParticipantRequest {
+  int32 projectId = 1;
+  // auth-service user making the change
+  int32 actingUserId = 2;
+  optional int32 userId = 3;
+  optional int32 pendingId = 4;
+  // Stored in the change log entry
+  string reason = 5;
+}
+
+// rejected is set when nothing changed
+message AdminRemoveParticipantResponse {
+  optional AdminParticipantsRejection rejected = 1;
 }

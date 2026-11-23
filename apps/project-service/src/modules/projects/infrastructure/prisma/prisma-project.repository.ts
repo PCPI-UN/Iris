@@ -475,6 +475,37 @@ export class PrismaProjectRepository implements ProjectRepository {
     return res.count; // cuántos registros actualizó
   }
 
+  async removeParticipant(projectId: number, userId: number): Promise<boolean> {
+    const res = await this.prisma.db.projectParticipant.deleteMany({
+      where: { projectId, userId },
+    });
+    return res.count > 0;
+  }
+
+  async removePendingParticipants(
+    projectId: number,
+    pendingIds: number[],
+  ): Promise<number> {
+    if (!pendingIds.length) return 0;
+    const res = await this.prisma.db.pendingProjectParticipant.deleteMany({
+      where: { projectId, pendingId: { in: pendingIds } },
+    });
+    return res.count;
+  }
+
+  async lockProject(projectId: number): Promise<void> {
+    await this.prisma.db
+      .$queryRaw`SELECT id FROM projects WHERE id = ${projectId} FOR UPDATE`;
+  }
+
+  async lockStudentInEvent(eventId: number, email: string): Promise<void> {
+    // Transaction-level advisory lock keyed by (event, email); the subquery keeps Prisma from
+    // reading the void result of pg_advisory_xact_lock
+    await this.prisma.db.$queryRaw`
+      SELECT 1 AS locked
+      FROM (SELECT pg_advisory_xact_lock(${eventId}::int, hashtext(${normalizeEmail(email)}))) AS l`;
+  }
+
   async addTutor(projectId: number, userId: number): Promise<void> {
     await this.prisma.db.projectTutor.upsert({
       where: { projectId_userId: { projectId, userId } },
