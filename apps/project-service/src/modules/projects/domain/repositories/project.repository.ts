@@ -164,6 +164,10 @@ export interface ProjectRepository {
   /** Linked tutors of several projects in one query. */
   listTutorLinksByProjects(projectIds: number[]): Promise<{ projectId: number; userId: number }[]>;
   listPendingTutorsByProjects(projectIds: number[]): Promise<PendingProjectTutor[]>;
+  /** Distinct events of the projects where the user is a participant, in any project state. */
+  listEventIdsAsParticipant(userId: number): Promise<number[]>;
+  /** Distinct events of the projects where the user is a linked tutor, in any project state. */
+  listEventIdsAsTutor(userId: number): Promise<number[]>;
   markPendingTutorsInvited(projectId: number, emails: string[], invitedAt: Date): Promise<number>;
   markPendingTutorJoined(projectId: number, email: string, joinedAt: Date): Promise<boolean>;
 

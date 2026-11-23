@@ -39,5 +39,17 @@ export abstract class EventRepository {
     total: number;
   }>;
 
+  /**
+   * Active events among `ids`. `current` = endDate >= now, startDate asc;
+   * `past` = endDate < now, endDate desc.
+   */
+  abstract findByIdsAndPeriod(params: {
+    ids: number[];
+    period: 'current' | 'past';
+    now: Date;
+    page: number;
+    limit: number;
+  }): Promise<{ events: DomainEvent[]; total: number }>;
+
   abstract findActiveWithCoordinates(): Promise<DomainEvent[]>;
 }

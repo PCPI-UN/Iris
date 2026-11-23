@@ -153,6 +153,10 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'POST /events/members': { permission: ['create:event-members'] },
   'GET /events/members/:eventId': { permission: ['read:event-members'] },
   'DELETE /events/members/delete': { permission: ['delete:event-members'] },
+  'GET /me/events': {
+    access: 'session',
+    why: 'events of the caller with their roles in each; only own data',
+  },
   'GET /events/my-events': {
     access: 'session',
     why: 'events of the caller; platform staff (read:events) sees every event',

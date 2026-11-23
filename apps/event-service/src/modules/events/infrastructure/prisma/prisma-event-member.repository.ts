@@ -66,6 +66,17 @@ export class PrismaEventMemberRepository implements EventMemberRepository {
     return result as EventMember | null;
   }
 
+  async findActiveEventIdsByUserAndRole(
+    userId: number,
+    roleId: number,
+  ): Promise<number[]> {
+    const rows = await this.db.staffEventMember.findMany({
+      where: { userId, roleId, active: true },
+      select: { eventId: true },
+    });
+    return rows.map((row: { eventId: number }) => row.eventId);
+  }
+
   async findByEventId(
     eventId: number,
     roleId?: number,

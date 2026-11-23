@@ -4,6 +4,7 @@ import {
   GetEventResponse,
   DeleteEventResponse,
   ListMyEventsResponse,
+  ListMyEventsWithRolesResponse,
   ListEventsResponse,
   ListEventsByIdsResponse,
   EventProto,
@@ -155,6 +156,28 @@ export class EventMapper {
     return {
       events: eventProtos,
       meta,
+    };
+  }
+
+  static toListMyEventsWithRolesResponse(result: {
+    items: Array<{ event: Event; roles: string[] }>;
+    total: number;
+    page: number;
+    limit: number;
+  }): ListMyEventsWithRolesResponse {
+    const { items, total, page, limit } = result;
+    return {
+      events: items.map(({ event, roles }) => ({
+        event: this.toEventProto(event),
+        roles,
+      })),
+      meta: {
+        total,
+        itemsOnCurrentPage: items.length,
+        itemsPerPage: limit,
+        currentPage: page,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
     };
   }
 

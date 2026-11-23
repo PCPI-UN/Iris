@@ -30,6 +30,8 @@ service ProjectsService {
   rpc AddProjectTutor (AddProjectTutorRequest) returns (AddProjectTutorResponse);
   // Replaces the tutors of a project (linked and pending); on an approved project, gives the Tutor role and invites the new pending ones
   rpc SetProjectTutors (SetProjectTutorsRequest) returns (SetProjectTutorsResponse);
+  // Events where the user has a role derived from projects (PARTICIPANT, TUTOR), with those roles
+  rpc ListMyEventRoles (ListMyEventRolesRequest) returns (ListMyEventRolesResponse);
 
   rpc UpdateProject (UpdateProjectRequest) returns (ProjectResponse);      
   rpc ApproveProject (ApproveProjectRequest) returns (ProjectResponse);
@@ -413,6 +415,14 @@ message SetProjectTutorsRequest {
   string reason = 5;
 }
 message SetProjectTutorsResponse { repeated ProjectTutor tutors = 1; }
+
+message ListMyEventRolesRequest { int32 userId = 1; }
+message EventRoles {
+  int32 eventId = 1;
+  // PARTICIPANT | TUTOR
+  repeated string roles = 2;
+}
+message ListMyEventRolesResponse { repeated EventRoles events = 1; }
 
 message ListPendingParticipantsRequest {  int32 projectId = 1; }
 message ListPendingParticipantsResponse {  repeated PendingProjectParticipant items = 1;}

@@ -41,6 +41,7 @@ import { AddPendingParticipantUC } from '../../application/use-cases/add-pending
 import { AddProjectTutorUC } from '../../application/use-cases/add-project-tutor.uc';
 import { SetProjectTutorsUC } from '../../application/use-cases/set-project-tutors.uc';
 import { ListProjectTutorsUC } from '../../application/use-cases/list-project-tutors.uc';
+import { ListMyEventRolesUC } from '../../application/use-cases/list-my-event-roles.uc';
 import { ListCourseSectionsUC } from '../../application/use-cases/list-course-sections.uc';
 import { ListPendingParticipantsUC } from '../../application/use-cases/list-pending-participants.uc';
 import { ListProjectsAssignedToJurorUC } from '../../application/use-cases/list-projects-assigned-to-juror.uc';
@@ -129,6 +130,7 @@ export class ProjectsController {
     private readonly addProjectTutorUC: AddProjectTutorUC,
     private readonly setProjectTutorsUC: SetProjectTutorsUC,
     private readonly listProjectTutorsUC: ListProjectTutorsUC,
+    private readonly listMyEventRolesUC: ListMyEventRolesUC,
     private readonly listCourseSectionsUC: ListCourseSectionsUC,
     private readonly listAssignedToJurorUC: ListProjectsAssignedToJurorUC,
     private readonly notificateStudentUC: NotificateStudentUC,
@@ -404,6 +406,11 @@ export class ProjectsController {
       userId: req.userId,
       email: req.email,
     });
+  }
+
+  @GrpcMethod('ProjectsService', 'ListMyEventRoles')
+  async listMyEventRolesRpc(req: { userId: number }) {
+    return { events: await this.listMyEventRolesUC.execute(req.userId) };
   }
 
   @GrpcMethod('ProjectsService', 'SetProjectTutors')

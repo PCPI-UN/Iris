@@ -6,6 +6,8 @@ import { UpdateEventUC } from '@events/application/use-cases/update-event.uc';
 import { GetEventUC } from '@events/application/use-cases/get-event.uc';
 import { DeleteEventUC } from '@events/application/use-cases/delete-event.uc';
 import { ListMyEventsUseCase } from '@events/application/use-cases/list-my-events.use-case';
+import { ListMyEventsWithRolesUseCase } from '@events/application/use-cases/list-my-events-with-roles.use-case';
+import { ListMyEventsWithRolesDto } from '@events/application/dto/list-my-events-with-roles.dto';
 import { ListEventsUC } from '@events/application/use-cases/list-events.uc';
 import { GetEventStatusesUC } from '@events/application/use-cases/get-event-statuses.uc';
 import { EventMapper } from '@events/application/mappers/event.mapper';
@@ -28,6 +30,7 @@ export class EventsController {
     private readonly getUC: GetEventUC,
     private readonly deleteUC: DeleteEventUC,
     private readonly listMyEventsUC: ListMyEventsUseCase,
+    private readonly listMyEventsWithRolesUC: ListMyEventsWithRolesUseCase,
     private readonly listEventsUC: ListEventsUC,
     private readonly getEventStatusesUC: GetEventStatusesUC,
     private readonly getDashboardStatsUC: GetEventDashboardStatsUC,
@@ -63,6 +66,12 @@ export class EventsController {
   async listMyEvents(request: ListMyEventsDto) {
     const result = await this.listMyEventsUC.execute(request);
     return EventMapper.toListMyEventsResponse(result);
+  }
+
+  @GrpcMethod(EVENT_SERVICE_NAME, 'ListMyEventsWithRoles')
+  async listMyEventsWithRoles(request: ListMyEventsWithRolesDto) {
+    const result = await this.listMyEventsWithRolesUC.execute(request);
+    return EventMapper.toListMyEventsWithRolesResponse(result);
   }
 
   @GrpcMethod(EVENT_SERVICE_NAME, 'ListEvents')

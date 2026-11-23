@@ -13,6 +13,7 @@ import { DeleteEventDTO } from './dto/events/delete-event.dto';
 import { GetEventDTO } from './dto/events/get-event.dto';
 import { ListEventsDTO } from './dto/events/list-events.dto';
 import { ListMyEventsDTO } from './dto/events/list-my-events.dto';
+import { ListMyEventsWithRolesDTO } from './dto/events/list-my-events-with-roles.dto';
 import { UpdateEventDTO } from './dto/events/update-event.dto';
 import { CreateEventMemberDTO } from './dto/event-members/create-event-member.dto';
 import { DeleteEventMemberDTO } from './dto/event-members/delete-event-member.dto';
@@ -1591,6 +1592,28 @@ export class EventService implements OnModuleInit {
     return events.map((event) =>
       this.enrichSingleEventWithStatus(event, statuses),
     );
+  }
+
+  /**
+   * Events of the user with every role they hold in each one (GET /me/events)
+   */
+  async listMyEventsWithRoles(userId: number, dto: ListMyEventsWithRolesDTO) {
+    const response = await firstValueFrom(
+      this.eventService.listMyEventsWithRoles({ userId, ...dto }),
+    );
+    const items = (response.events ?? []).filter(
+      (item): item is typeof item & { event: EventProto } => !!item.event,
+    );
+    const statuses = items.length ? await this.getAndCacheStatuses() : [];
+    return {
+      events: items.map(({ event, roles }) => {
+        // accessCode is left out: any role in the event would receive the join code
+        const { accessCode: _accessCode, ...publicEvent } =
+          this.enrichSingleEventWithStatus(event, statuses);
+        return { ...publicEvent, roles };
+      }),
+      meta: response.meta,
+    };
   }
 
   /**

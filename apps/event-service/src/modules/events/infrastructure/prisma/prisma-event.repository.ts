@@ -250,6 +250,39 @@ export class PrismaEventRepository extends EventRepository {
     return toDomainEvent(row);
   }
 
+  async findByIdsAndPeriod(params: {
+    ids: number[];
+    period: 'current' | 'past';
+    now: Date;
+    page: number;
+    limit: number;
+  }): Promise<{ events: DomainEvent[]; total: number }> {
+    const { ids, period, now, page, limit } = params;
+    if (!ids.length) return { events: [], total: 0 };
+
+    const where = {
+      id: { in: ids },
+      active: true,
+      endDate: period === 'current' ? { gte: now } : { lt: now },
+    };
+    const orderBy =
+      period === 'current'
+        ? [{ startDate: 'asc' as const }, { id: 'asc' as const }]
+        : [{ endDate: 'desc' as const }, { id: 'desc' as const }];
+
+    const [rows, total] = await Promise.all([
+      this.prisma.event.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.event.count({ where }),
+    ]);
+
+    return { events: rows.map(toDomainEvent), total };
+  }
+
   async findByIds(ids: number[]): Promise<DomainEvent[]> {
     if (!ids.length) return [];
 

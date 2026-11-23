@@ -571,6 +571,24 @@ export class PrismaProjectRepository implements ProjectRepository {
     return rows as unknown as PendingProjectTutor[];
   }
 
+  async listEventIdsAsParticipant(userId: number): Promise<number[]> {
+    const rows = await this.prisma.db.project.findMany({
+      where: { participants: { some: { userId } } },
+      select: { eventId: true },
+      distinct: ['eventId'],
+    });
+    return rows.map((row) => row.eventId);
+  }
+
+  async listEventIdsAsTutor(userId: number): Promise<number[]> {
+    const rows = await this.prisma.db.project.findMany({
+      where: { tutors: { some: { userId } } },
+      select: { eventId: true },
+      distinct: ['eventId'],
+    });
+    return rows.map((row) => row.eventId);
+  }
+
   async listTutorLinksByProjects(projectIds: number[]): Promise<{ projectId: number; userId: number }[]> {
     if (!projectIds.length) return [];
     return this.prisma.db.projectTutor.findMany({
