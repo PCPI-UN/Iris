@@ -236,7 +236,7 @@ export class CriterionsController {
       'add up to 100% and every component has at least one criterion of that category. ' +
       'Evaluations of a category whose rubric is not ready are rejected. ' +
       '`componentsLocked` (event with evaluations) and `locked` (category with evaluated projects) tell ' +
-      'what can no longer change; both are omitted when false.',
+      'what can no longer change.',
   })
   @ApiQuery({ name: 'eventId', type: Number, example: 1 })
   @ApiQuery({
