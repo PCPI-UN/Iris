@@ -143,7 +143,11 @@ export class EvaluationsService implements OnModuleInit {
 
   async getProjectStats(projectId: number): Promise<GetProjectStatsResponse> {
     const request: GetProjectStatsRequest = { projectId };
-    return await lastValueFrom(this.evaluationService.getProjectStats(request));
+    const stats = await lastValueFrom(
+      this.evaluationService.getProjectStats(request),
+    );
+    // proto3 omits empty lists: a project without evaluations has no components
+    return { ...stats, components: stats.components ?? [] };
   }
 
   /**
