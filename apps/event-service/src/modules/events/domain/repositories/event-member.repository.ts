@@ -29,4 +29,10 @@ export abstract class EventMemberRepository {
     limit?: number,
     activeOnly?: boolean,
   ): Promise<[EventMember[], number]>; // [data, total]
+
+  /** Events where the user has an active membership with the given role. */
+  abstract findActiveEventIdsByUserAndRole(
+    userId: number,
+    roleId: number,
+  ): Promise<number[]>;
 }

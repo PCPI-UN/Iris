@@ -23,6 +23,13 @@ import { GrpcAuthClientAdapter } from '@events/infrastructure/adapters/grpc-auth
 import { EventRepository } from '@events/domain/repositories/event.repository';
 import { EventMemberRepository } from '@events/domain/repositories/event-member.repository';
 import { AUTH_SERVICE_NAME, protobufPackage } from '@app/common/generated/auth';
+import {
+  PROJECTS_SERVICE_NAME,
+  protobufPackage as projectProtobufPackage,
+} from '@app/common/generated/project';
+import { ProjectClientPort } from '@events/infrastructure/ports/project-client.port';
+import { GrpcProjectClientAdapter } from '@events/infrastructure/adapters/grpc-project-client.adapter';
+import { ListMyEventsWithRolesUseCase } from '@events/application/use-cases/list-my-events-with-roles.use-case';
 import { EventCatalogService } from '@events/application/event-catalog.service';
 import { GetEventDashboardStatsUC } from '@events/application/use-cases/get-dashboard-stats.uc';
 import { RankingEventController } from '@events/interface/grpc/ranking-event.controller';
@@ -61,6 +68,15 @@ import { CreateTermUC } from '@events/application/use-cases/create-term.uc';
           url: process.env.AUTH_SERVICE_URL || 'auth-service:50051',
         },
       },
+      {
+        name: PROJECTS_SERVICE_NAME,
+        transport: Transport.GRPC,
+        options: {
+          package: projectProtobufPackage,
+          protoPath: 'libs/common/src/protos/project.proto',
+          url: process.env.PROJECT_SERVICE_URL || 'project-service:50055',
+        },
+      },
     ]),
   ],
   controllers: [EventsController, EventMemberController, EventCatalogController, RankingEventController, TermsController],
@@ -79,6 +95,10 @@ import { CreateTermUC } from '@events/application/use-cases/create-term.uc';
       provide: AuthClientPort,
       useClass: GrpcAuthClientAdapter,
     },
+    {
+      provide: ProjectClientPort,
+      useClass: GrpcProjectClientAdapter,
+    },
     // Event use cases
     CreateEventUC,
     UpdateEventUC,
@@ -86,6 +106,7 @@ import { CreateTermUC } from '@events/application/use-cases/create-term.uc';
     ListEventsUC,
     DeleteEventUC,
     ListMyEventsUseCase,
+    ListMyEventsWithRolesUseCase,
     GetEventStatusesUC,
     GetEventDashboardStatsUC,
     GetEventsForARUseCase,
