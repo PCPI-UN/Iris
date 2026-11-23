@@ -24,6 +24,22 @@ export class CategoryLockService {
   ) { }
 
   /**
+   * Ids of the categories of an event that already have evaluations.
+   */
+  async findEvaluatedCategoryIds(eventId: number): Promise<Set<number>> {
+    const evaluatedProjectIds = await this.criterionRepository.findEvaluatedProjectIds(eventId);
+    if (evaluatedProjectIds.length === 0) return new Set();
+
+    // Every project of the event (all pages): a missing one was deleted
+    const projectCategories = await this.projectService.getProjectCategories(eventId);
+    return new Set(
+      evaluatedProjectIds
+        .map((projectId) => projectCategories.get(projectId))
+        .filter((categoryId): categoryId is number => categoryId !== undefined),
+    );
+  }
+
+  /**
    * Rejects a change of the rubric of the given categories of an event when any of them
    * already has evaluations.
    */
@@ -31,17 +47,7 @@ export class CategoryLockService {
     const affected = Array.from(new Set(categoryIds));
     if (affected.length === 0) return;
 
-    const evaluatedProjectIds = await this.criterionRepository.findEvaluatedProjectIds(eventId);
-    if (evaluatedProjectIds.length === 0) return;
-
-    // Every project of the event (all pages): a missing one was deleted
-    const projectCategories = await this.projectService.getProjectCategories(eventId);
-    const evaluatedCategories = new Set(
-      evaluatedProjectIds
-        .map((projectId) => projectCategories.get(projectId))
-        .filter((categoryId): categoryId is number => categoryId !== undefined),
-    );
-
+    const evaluatedCategories = await this.findEvaluatedCategoryIds(eventId);
     const locked = affected.filter((categoryId) => evaluatedCategories.has(categoryId));
     if (locked.length > 0) {
       throw new RpcException({

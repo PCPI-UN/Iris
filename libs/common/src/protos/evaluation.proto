@@ -313,6 +313,8 @@ message RubricCategoryReadiness {
   repeated int32 missingComponentIds = 4;
   // Criteria of this category that are not inside a component of the event
   repeated int32 criteriaWithoutComponent = 5;
+  // The category has evaluated projects: its criteria can no longer change
+  bool locked = 6;
 }
 
 message GetRubricReadinessResponse {
@@ -321,6 +323,8 @@ message GetRubricReadinessResponse {
   double componentsWeight = 2;
   repeated ComponentProto components = 3;
   repeated RubricCategoryReadiness categories = 4;
+  // The event has evaluations: its components can no longer change
+  bool componentsLocked = 5;
 }
 
 message UpdateComponentRequest {

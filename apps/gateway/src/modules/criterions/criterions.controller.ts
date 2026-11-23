@@ -234,7 +234,10 @@ export class CriterionsController {
     description:
       'For each category (course) of the event, tells whether its rubric is ready: the event components ' +
       'add up to 100% and every component has at least one criterion of that category. ' +
-      'Evaluations of a category whose rubric is not ready are rejected.',
+      'Evaluations of a category whose rubric is not ready are rejected. ' +
+      '`componentsLocked` is true when the event has evaluations (its components cannot change) and ' +
+      '`locked` is true for a category with evaluated projects (its criteria cannot change); ' +
+      'saving those changes is rejected with FAILED_PRECONDITION.',
   })
   @ApiQuery({ name: 'eventId', type: Number, example: 1 })
   @ApiQuery({
