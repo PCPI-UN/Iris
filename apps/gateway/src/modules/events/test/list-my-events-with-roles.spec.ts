@@ -21,11 +21,14 @@ describe('GET /me/events', () => {
     expect(await errorsFor({ status: 'current', page: '0' })).toEqual(['page']);
   });
 
-  it('forwards the user and flattens each event with its roles, without the access code', async () => {
+  it('forwards the user and flattens each event with its roles and status name, without the access code', async () => {
     const eventGrpc = {
+      getEventStatuses: jest.fn(() =>
+        of({ statuses: [{ value: 3, name: 'AVAILABLE', description: 'Event is currently happening' }] }),
+      ),
       listMyEventsWithRoles: jest.fn(() =>
         of({
-          events: [{ event: { id: 12, name: 'Feria', accessCode: 'X7K2' }, roles: ['JURY', 'TUTOR'] }],
+          events: [{ event: { id: 12, name: 'Feria', accessCode: 'X7K2', status: 3 }, roles: ['JURY', 'TUTOR'] }],
           meta: { total: 1, itemsOnCurrentPage: 1, itemsPerPage: 10, currentPage: 1, totalPages: 1 },
         }),
       ),
@@ -37,7 +40,15 @@ describe('GET /me/events', () => {
     const result = await service.listMyEventsWithRoles(7, { status: 'past', page: 2, limit: 5 });
 
     expect(eventGrpc.listMyEventsWithRoles).toHaveBeenCalledWith({ userId: 7, status: 'past', page: 2, limit: 5 });
-    expect(result.events).toEqual([{ id: 12, name: 'Feria', roles: ['JURY', 'TUTOR'] }]);
+    expect(result.events).toEqual([
+      {
+        id: 12,
+        name: 'Feria',
+        statusName: 'AVAILABLE',
+        statusDescription: 'Event is currently happening',
+        roles: ['JURY', 'TUTOR'],
+      },
+    ]);
     expect(result.meta?.total).toBe(1);
   });
 });

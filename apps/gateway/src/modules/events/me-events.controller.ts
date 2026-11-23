@@ -1,5 +1,10 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { GetUser } from '../../common/decorators/get-user.decorator';
 import { EventService } from './events.service';
 import { ListMyEventsWithRolesDTO } from './dto/events/list-my-events-with-roles.dto';
@@ -31,6 +36,8 @@ export class MeEventsController {
             name: 'Feria de proyectos 2026-2',
             startDate: '2026-11-10T13:00:00.000Z',
             endDate: '2026-12-05T23:59:00.000Z',
+            statusName: 'AVAILABLE',
+            statusDescription: 'Event is currently happening',
             roles: ['JURY', 'TUTOR'],
           },
         ],
@@ -44,8 +51,15 @@ export class MeEventsController {
       },
     },
   })
-  @ApiResponse({ status: 400, description: 'status is missing or not current/past, or page/limit out of range' })
-  @ApiResponse({ status: 401, description: 'Unauthorized - Authentication required' })
+  @ApiResponse({
+    status: 400,
+    description:
+      'status is missing or not current/past, or page/limit out of range',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Authentication required',
+  })
   async listMyEvents(
     @GetUser('id') userId: number,
     @Query() query: ListMyEventsWithRolesDTO,

@@ -1601,12 +1601,15 @@ export class EventService implements OnModuleInit {
     const response = await firstValueFrom(
       this.eventService.listMyEventsWithRoles({ userId, ...dto }),
     );
+    const items = (response.events ?? []).filter(
+      (item): item is typeof item & { event: EventProto } => !!item.event,
+    );
+    const statuses = items.length ? await this.getAndCacheStatuses() : [];
     return {
-      // accessCode is left out: any role in the event would receive the join code
-      events: (response.events ?? []).map(({ event, roles }) => {
-        const { accessCode: _accessCode, ...publicEvent } = event ?? {
-          accessCode: undefined,
-        };
+      events: items.map(({ event, roles }) => {
+        // accessCode is left out: any role in the event would receive the join code
+        const { accessCode: _accessCode, ...publicEvent } =
+          this.enrichSingleEventWithStatus(event, statuses);
         return { ...publicEvent, roles };
       }),
       meta: response.meta,
