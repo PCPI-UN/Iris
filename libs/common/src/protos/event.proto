@@ -12,6 +12,8 @@ service EventService {
   rpc GetEvent (GetEventRequest) returns (GetEventResponse) {}
   rpc DeleteEvent (DeleteEventRequest) returns (DeleteEventResponse) {}
   rpc ListMyEvents (ListMyEventsRequest) returns (ListMyEventsResponse) {}
+  // Events of the user with every role they hold in each one (JURY, PARTICIPANT, TUTOR), filtered by current/past
+  rpc ListMyEventsWithRoles (ListMyEventsWithRolesRequest) returns (ListMyEventsWithRolesResponse) {}
   rpc ListEvents (ListEventsRequest) returns (ListEventsResponse) {}
   rpc GetEventStatuses (GetEventStatusesRequest) returns (GetEventStatusesResponse) {}
   rpc GetDashboardStats (GetEventDashboardStatsRequest) returns (GetEventDashboardStatsResponse) {}
@@ -282,6 +284,25 @@ message EventWithRole {
 
 message ListMyEventsResponse {
   repeated EventWithRole events = 1;
+  PaginationMetadata meta = 2;
+}
+
+message ListMyEventsWithRolesRequest {
+  int32 userId = 1;
+  // "current" (endDate >= now, startDate asc) | "past" (endDate < now, endDate desc)
+  string status = 2;
+  optional int32 page = 3;
+  optional int32 limit = 4;
+}
+
+message EventWithRoles {
+  EventProto event = 1;
+  // JURY | PARTICIPANT | TUTOR | PROFESSOR | DIRECTOR
+  repeated string roles = 2;
+}
+
+message ListMyEventsWithRolesResponse {
+  repeated EventWithRoles events = 1;
   PaginationMetadata meta = 2;
 }
 
