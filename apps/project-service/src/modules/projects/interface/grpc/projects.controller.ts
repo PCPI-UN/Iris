@@ -83,6 +83,9 @@ import { AdminAddParticipantUC } from '../../application/use-cases/admin-add-par
 import { AdminRemoveParticipantUC } from '../../application/use-cases/admin-remove-participant.uc';
 import { ReplaceProjectTutorsUC } from '../../application/use-cases/replace-project-tutors.uc';
 import { AdminParticipantsError } from '../../domain/admin-participants';
+import { Status } from '../../domain/entities/project.entity';
+import { AdminReplaceProjectDocumentUC } from '../../application/use-cases/admin-replace-project-document.uc';
+import { AdminChangeProjectDocumentStateUC } from '../../application/use-cases/admin-change-project-document-state.uc';
 
 interface InvitationGrpcService {
   CreateInvitation(data: {
@@ -150,6 +153,8 @@ export class ProjectsController {
     private readonly adminAddParticipantUC: AdminAddParticipantUC,
     private readonly adminRemoveParticipantUC: AdminRemoveParticipantUC,
     private readonly replaceProjectTutorsUC: ReplaceProjectTutorsUC,
+    private readonly adminReplaceProjectDocumentUC: AdminReplaceProjectDocumentUC,
+    private readonly adminChangeProjectDocumentStateUC: AdminChangeProjectDocumentStateUC,
     @Inject(INVITATION_SERVICE_NAME) private readonly client: ClientGrpc,
   ) {}
 
@@ -231,8 +236,14 @@ export class ProjectsController {
   }
 
   @GrpcMethod('ProjectsService', 'ListProjectDocuments')
-  async listProjectDocumentsRpc(req: { projectId: number }) {
-    const items = await this.listDocs.execute({ projectId: req.projectId });
+  async listProjectDocumentsRpc(req: {
+    projectId: number;
+    includeInactive?: boolean;
+  }) {
+    const items = await this.listDocs.execute({
+      projectId: req.projectId,
+      includeInactive: req.includeInactive === true,
+    });
     return { items: items.map(toProtoDocument) };
   }
 
@@ -625,7 +636,9 @@ export class ProjectsController {
       id: req.id,
       url: req.url,
       type: req.type ? protoToTypedDocument(req.type) : undefined,
-      state: req.state ? protoToDocumentStatus(req.state) : undefined,
+      state: req.state
+        ? (protoToDocumentStatus(req.state) as Status)
+        : undefined,
     });
     return { document: toProtoDocument(updatedDoc) };
   }
@@ -905,5 +918,44 @@ export class ProjectsController {
       }
       throw error;
     }
+  }
+
+  @GrpcMethod('ProjectsService', 'AdminReplaceProjectDocument')
+  async adminReplaceProjectDocumentRpc(req: {
+    projectId: number;
+    documentId: number;
+    actingUserId: number;
+    url?: string;
+    reason?: string;
+  }) {
+    const document = await this.adminReplaceProjectDocumentUC.execute({
+      projectId: req.projectId,
+      documentId: req.documentId,
+      actingUserId: req.actingUserId,
+      url: req.url ?? '',
+      reason: req.reason,
+    });
+    return { document: toProtoDocument(document) };
+  }
+
+  @GrpcMethod('ProjectsService', 'AdminChangeProjectDocumentState')
+  async adminChangeProjectDocumentStateRpc(req: {
+    projectId: number;
+    documentId: number;
+    actingUserId: number;
+    state?: number;
+    reason?: string;
+  }) {
+    const document = await this.adminChangeProjectDocumentStateUC.execute({
+      projectId: req.projectId,
+      documentId: req.documentId,
+      actingUserId: req.actingUserId,
+      // 0 (unspecified) stays undefined: protoToDocumentStatus would read it as ACTIVE
+      state: req.state
+        ? (protoToDocumentStatus(req.state) as Status)
+        : undefined,
+      reason: req.reason,
+    });
+    return { document: toProtoDocument(document) };
   }
 }

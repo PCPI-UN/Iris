@@ -102,7 +102,11 @@ export interface ProjectRepository {
 
   addDocument(projectId: number, url: string, type: TypedDocument ): Promise<ProjectDocument>;
 
-  listDocuments(projectId: number): Promise<ProjectDocument[]>;
+  /** ACTIVE documents of the project, newest first; with includeInactive also the INACTIVE ones */
+  listDocuments(
+    projectId: number,
+    opts?: { includeInactive?: boolean },
+  ): Promise<ProjectDocument[]>;
 
   upsertAssignment(projectId: number, juror: JurorKey): Promise<void>;
   // Bulk assign juror to multiple projects in one operation

@@ -48,11 +48,14 @@ type AddPendingParticipantInput = {
   status: 'PENDING' | 'INVITED' | 'JOINED';
 };
 
+/** Documents shown with a project: INACTIVE ones were withdrawn by an administrator. */
+const ACTIVE_DOCUMENTS = { where: { state: 'ACTIVE' } } as const;
+
 /** Relations loaded for the academic read endpoints. */
 const IN_SCOPE_INCLUDE = {
   participants: true,
   pendingParticipants: true,
-  documents: true,
+  documents: ACTIVE_DOCUMENTS,
   academicCourse: { include: { department: { select: { name: true } } } },
   _count: { select: { jurorsAssigned: true } },
 } as const;
@@ -181,7 +184,7 @@ export class PrismaProjectRepository implements ProjectRepository {
         take: itemsPerPage,
         include: {
           participants: true,
-          documents: true,
+          documents: ACTIVE_DOCUMENTS,
           pendingParticipants: true,
         },
       }),
@@ -300,9 +303,15 @@ export class PrismaProjectRepository implements ProjectRepository {
     })) as unknown as ProjectDocument;
   }
 
-  async listDocuments(projectId: number): Promise<ProjectDocument[]> {
+  async listDocuments(
+    projectId: number,
+    opts?: { includeInactive?: boolean },
+  ): Promise<ProjectDocument[]> {
     return (await this.prisma.db.projectDocument.findMany({
-      where: { projectId },
+      where: {
+        projectId,
+        ...(opts?.includeInactive ? {} : { state: 'ACTIVE' as const }),
+      },
       orderBy: { createdAt: 'desc' },
     })) as unknown as ProjectDocument[];
   }
@@ -617,7 +626,7 @@ export class PrismaProjectRepository implements ProjectRepository {
         },
         include: {
           participants: true,
-          documents: true,
+          documents: ACTIVE_DOCUMENTS,
           pendingParticipants: true,
         },
         skip,

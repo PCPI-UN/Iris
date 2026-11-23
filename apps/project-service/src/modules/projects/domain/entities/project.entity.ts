@@ -18,7 +18,7 @@ export interface Project {
 export interface ProjectDocument {
   id: number;
   projectId: number;
-  type: DocumentType;
+  type: TypedDocument;
   state : Status;
   url: string;
 }

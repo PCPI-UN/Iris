@@ -229,6 +229,13 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'DELETE /projects/:id/admin/participants/pending/:pendingId': {
     permission: ['manage:projects'],
   },
+  'GET /projects/:id/admin/documents': { permission: ['manage:projects'] },
+  'PUT /projects/:id/admin/documents/:documentId': {
+    permission: ['manage:projects'],
+  },
+  'PATCH /projects/:id/admin/documents/:documentId/state': {
+    permission: ['manage:projects'],
+  },
   'POST /projects/:id/change-to-under-review': {
     access: 'owner',
     why: 'project-service requires a confirmed participant and the REQUEST_CHANGES state',

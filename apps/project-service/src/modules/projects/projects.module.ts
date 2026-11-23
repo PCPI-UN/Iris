@@ -17,6 +17,8 @@ import { AdminUpdateProjectUC } from './application/use-cases/admin-update-proje
 import { AdminAddParticipantUC } from './application/use-cases/admin-add-participant.uc';
 import { AdminRemoveParticipantUC } from './application/use-cases/admin-remove-participant.uc';
 import { ReplaceProjectTutorsUC } from './application/use-cases/replace-project-tutors.uc';
+import { AdminReplaceProjectDocumentUC } from './application/use-cases/admin-replace-project-document.uc';
+import { AdminChangeProjectDocumentStateUC } from './application/use-cases/admin-change-project-document-state.uc';
 import { ApproveProjectUC } from './application/use-cases/approve-project.uc';
 import { RejectProjectUC } from './application/use-cases/reject-project.uc';
 import { RequestChangesProjectUC } from './application/use-cases/request-changes-project.uc';
@@ -116,6 +118,8 @@ import { EvaluationServiceAdapter } from './infrastructure/grpc-client/evaluatio
     AdminAddParticipantUC,
     AdminRemoveParticipantUC,
     ReplaceProjectTutorsUC,
+    AdminReplaceProjectDocumentUC,
+    AdminChangeProjectDocumentStateUC,
     ApproveProjectUC,
     RejectProjectUC,
     AssignJurorBulkUC,

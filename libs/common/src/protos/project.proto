@@ -86,6 +86,13 @@ service ProjectsService {
   // participant changes nothing and the answer carries `rejected`
   rpc AdminRemoveParticipant (AdminRemoveParticipantRequest) returns (AdminRemoveParticipantResponse);
 
+  // Administrative replacement of the file of a document of the project (the gateway uploads it first).
+  // NOT_FOUND when the document does not exist or belongs to another project
+  rpc AdminReplaceProjectDocument (AdminReplaceProjectDocumentRequest) returns (ProjectDocumentResponse);
+  // Administrative activation or deactivation of a document of the project; INACTIVE documents are left
+  // out of every read except ListProjectDocuments with includeInactive. INVALID_ARGUMENT when it already has that state
+  rpc AdminChangeProjectDocumentState (AdminChangeProjectDocumentStateRequest) returns (ProjectDocumentResponse);
+
 }
 
 enum ProjectState {
@@ -362,7 +369,11 @@ message IssueUploadUrlResponse { string uploadUrl = 1; string publicUrl = 2; }
 message AddProjectDocumentFromUrlRequest { int32 projectId = 1; string url = 2; TypedDocument type = 3; }
 message ProjectDocumentResponse { ProjectDocument document = 1; }
 
-message ListProjectDocumentsRequest { int32 projectId = 1; }
+message ListProjectDocumentsRequest {
+  int32 projectId = 1;
+  // true (administrative list): also the INACTIVE documents, which every other read leaves out
+  bool includeInactive = 2;
+}
 message ListProjectDocumentsResponse { repeated ProjectDocument items = 1; }
 
 message AddParticipantRequest {  int32 projectId = 1;  int32 userId = 2;  string studentCode = 3;}
@@ -911,4 +922,26 @@ message AdminRemoveParticipantRequest {
 // rejected is set when nothing changed
 message AdminRemoveParticipantResponse {
   optional AdminParticipantsRejection rejected = 1;
+}
+
+/************** Administrative documents **************/
+message AdminReplaceProjectDocumentRequest {
+  int32 projectId = 1;
+  int32 documentId = 2;
+  // auth-service user making the change
+  int32 actingUserId = 3;
+  // Blob name of the new file (not a signed URL)
+  string url = 4;
+  // Stored in the change log entry
+  string reason = 5;
+}
+
+message AdminChangeProjectDocumentStateRequest {
+  int32 projectId = 1;
+  int32 documentId = 2;
+  // auth-service user making the change
+  int32 actingUserId = 3;
+  DocumentStatus state = 4;
+  // Stored in the change log entry
+  string reason = 5;
 }

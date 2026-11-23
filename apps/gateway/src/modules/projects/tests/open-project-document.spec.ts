@@ -38,7 +38,10 @@ describe('Open project document', () => {
     await expect(service.getDocumentOpenUrl(3, 7)).resolves.toBe(
       'https://signed/1-poster.png',
     );
-    expect(grpc.listProjectDocuments).toHaveBeenCalledWith({ projectId: 3 });
+    expect(grpc.listProjectDocuments).toHaveBeenCalledWith({
+      projectId: 3,
+      includeInactive: false,
+    });
   });
 
   it('answers 404 for a document of another project or that does not exist', async () => {

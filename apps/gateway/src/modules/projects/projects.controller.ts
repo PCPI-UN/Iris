@@ -43,10 +43,7 @@ import { ReassignProjectJurorDto } from './dto/reassign-project-juror.dto';
 import { RemoveJurorFromProjectDto } from './dto/remove-juror-from-project.dto';
 import { RejectProjectDto } from './dto/reject-project.dto';
 import { ListProjectsByEventDto } from './dto/list-projects-by-event.dto';
-import {
-  DocumentStatusFilter,
-  UpdateProjectDocumentDto,
-} from './dto/update-project-document.dto';
+import { UpdateProjectDocumentDto } from './dto/update-project-document.dto';
 import { TypedDocument } from './dto/project-document-input.dto';
 import { ListProjectsAssignedToJurorDto } from './dto/list-projects-assigned-to-juror.dto';
 import { AddProjectDocumentsMultipartDto } from './dto/add-project-files-multipart.dto';
@@ -65,6 +62,11 @@ import {
   AdminRemoveParticipantQueryDto,
 } from './dto/admin-participant.dto';
 import { RequireAnyPermission } from '../../common/decorators/require-any-permission.decorator';
+import {
+  ADMIN_DOCUMENT_MAX_FILE_SIZE,
+  AdminChangeProjectDocumentStateDto,
+  AdminReplaceProjectDocumentDto,
+} from './dto/admin-project-document.dto';
 
 @ApiTags('projects')
 @ApiSecurity('JWT-auth')
@@ -530,8 +532,10 @@ export class ProjectsController {
   @ApiOperation({
     summary: 'Update project document',
     description:
-      'Update the document file, type, or state of a project document. ' +
-      'Only a participant of the project or a user with manage:events; checked before the file is uploaded.',
+      'Update the document file or type of a project document. ' +
+      'Only a participant of the project or a user with manage:events; checked before the file is uploaded. ' +
+      'The state is not editable here (403): it changes only through PATCH /projects/:id/admin/documents/:documentId/state, ' +
+      'which records it in the change log. A document withdrawn by an administrator (INACTIVE) cannot be edited here either (403).',
   })
   @ApiParam({
     name: 'id',
@@ -554,13 +558,13 @@ export class ProjectsController {
           enum: Object.values(TypedDocument),
           description: 'New document type (optional)',
         },
-        state: {
-          type: 'string',
-          enum: Object.values(DocumentStatusFilter),
-          description: 'Document state (optional)',
-        },
       },
     },
+  })
+  @ApiResponse({
+    status: 403,
+    description:
+      'No access to the project, a state was sent, or the document was withdrawn by an administrator',
   })
   async updateDocument(
     @Param('id', ParseIntPipe) id: number,
@@ -923,6 +927,135 @@ export class ProjectsController {
       id,
       { userId },
       query.reason,
+      user.id,
+    );
+  }
+
+  @RequirePermission('manage:projects')
+  @Get(':id/admin/documents')
+  @ApiOperation({
+    summary: 'List every document of a project (administrative correction)',
+    description:
+      'Logo, poster and supporting documents of the project, INACTIVE ones included, newest first, with a ' +
+      'signed read URL (valid for 1 hour). Every other read of the project leaves the INACTIVE documents out.',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Project ID', example: 1 })
+  @ApiResponse({ status: 200, description: '{ items: ProjectDocument[] }' })
+  @ApiResponse({ status: 403, description: 'The user lacks manage:projects' })
+  @ApiResponse({ status: 404, description: 'Project not found' })
+  async adminListProjectDocuments(@Param('id', ParseIntPipe) id: number) {
+    return {
+      items: await this.projectsService.adminListProjectDocuments(id),
+    };
+  }
+
+  @RequirePermission('manage:projects')
+  @Put(':id/admin/documents/:documentId')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: ADMIN_DOCUMENT_MAX_FILE_SIZE },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary:
+      'Replace the file of a project document (administrative correction)',
+    description:
+      'Uploads the new file to the platform storage (5 MB at most, the limit of POST /projects/:projectId/documents) ' +
+      'and points the document to it; the document keeps its id, type (LOGO, POSTER, SUPPORTING_DOCUMENT) and state. ' +
+      'Recorded in the change log (DOCUMENTS) with the document before and after (type, stored file name, state) and ' +
+      'the optional reason. The document is looked up in the project before the upload: a document of another ' +
+      'project is 404 and uploads nothing. The old file stays in the storage.',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Project ID', example: 1 })
+  @ApiParam({
+    name: 'documentId',
+    type: Number,
+    description: 'Project document ID',
+    example: 7,
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'New file of the document',
+        },
+        reason: {
+          type: 'string',
+          description: 'Why the file is replaced (optional)',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'The document with a signed read URL of its new file',
+  })
+  @ApiResponse({ status: 400, description: 'No file sent' })
+  @ApiResponse({ status: 403, description: 'The user lacks manage:projects' })
+  @ApiResponse({
+    status: 404,
+    description: 'Project not found, or the document is not one of the project',
+  })
+  @ApiResponse({ status: 413, description: 'File larger than 5 MB' })
+  async adminReplaceProjectDocument(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('documentId', ParseIntPipe) documentId: number,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() dto: AdminReplaceProjectDocumentDto,
+    @GetUser() user: AppUser,
+  ) {
+    return this.projectsService.adminReplaceProjectDocument(
+      id,
+      documentId,
+      file,
+      dto,
+      user.id,
+    );
+  }
+
+  @RequirePermission('manage:projects')
+  @Patch(':id/admin/documents/:documentId/state')
+  @ApiOperation({
+    summary:
+      'Activate or deactivate a project document (administrative correction)',
+    description:
+      'INACTIVE withdraws the document from every read of the project (public listings, detail, review, the ' +
+      "students' own project and the stable open link); only GET /projects/:id/admin/documents still lists it. " +
+      'ACTIVE shows it again. Recorded in the change log (DOCUMENTS) with the state before and after and the ' +
+      'optional reason. Setting the state the document already has is 400 and records nothing.',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Project ID', example: 1 })
+  @ApiParam({
+    name: 'documentId',
+    type: Number,
+    description: 'Project document ID',
+    example: 7,
+  })
+  @ApiResponse({ status: 200, description: 'The document with its new state' })
+  @ApiResponse({
+    status: 400,
+    description: 'Unknown state, or the document already has it',
+  })
+  @ApiResponse({ status: 403, description: 'The user lacks manage:projects' })
+  @ApiResponse({
+    status: 404,
+    description: 'Project not found, or the document is not one of the project',
+  })
+  async adminChangeProjectDocumentState(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('documentId', ParseIntPipe) documentId: number,
+    @Body() dto: AdminChangeProjectDocumentStateDto,
+    @GetUser() user: AppUser,
+  ) {
+    return this.projectsService.adminChangeProjectDocumentState(
+      id,
+      documentId,
+      dto,
       user.id,
     );
   }

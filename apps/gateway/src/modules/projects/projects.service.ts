@@ -9,6 +9,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
+import { status as GrpcStatus } from '@grpc/grpc-js';
 import { firstValueFrom, lastValueFrom } from 'rxjs';
 import type { CourseSectionsResponse } from '../events/dto/events/course-sections.response';
 import { MAX_LIST_PROJECTS_BY_IDS } from '@app/common/constants/projects';
@@ -86,6 +87,11 @@ import { AuthService } from '../auth/auth.service';
 import { withoutOneofMarkers } from '@app/common/utils/grpc-oneof.util';
 import { pendingStatus } from '@app/common/utils/pending-status.util';
 import { AdminAddParticipantDto } from './dto/admin-participant.dto';
+import {
+  ADMIN_DOCUMENT_MAX_FILE_SIZE,
+  AdminChangeProjectDocumentStateDto,
+  AdminReplaceProjectDocumentDto,
+} from './dto/admin-project-document.dto';
 import { FetchProjectJurorsUseCase } from './use-cases/fetch-project-jurors.use-case';
 import { FetchUserProfilesUseCase } from './use-cases/fetch-user-profiles.use-case';
 import { EnrichProjectsWithJurorsUseCase } from './use-cases/enrich-projects-with-jurors.use-case';
@@ -135,6 +141,26 @@ export function participantsRejection(rejected: AdminParticipantsRejection) {
     ? new BadRequestException(body)
     : new ConflictException(body);
 }
+/** 403 of PATCH /projects/documents/:id when it is asked to change the state */
+export const DOCUMENT_STATE_ADMIN_ONLY =
+  'El estado de un documento solo lo cambia un administrador de proyectos (PATCH /projects/:id/admin/documents/:documentId/state)';
+
+/** gRPC codes with which project-service refuses a change without saving anything */
+const REJECTION_CODES = new Set<number>([
+  GrpcStatus.INVALID_ARGUMENT,
+  GrpcStatus.NOT_FOUND,
+  GrpcStatus.ALREADY_EXISTS,
+  GrpcStatus.PERMISSION_DENIED,
+  GrpcStatus.FAILED_PRECONDITION,
+  GrpcStatus.OUT_OF_RANGE,
+]);
+
+/** project-service explicitly refused the change (as opposed to a timeout or a lost answer). */
+export function isExplicitRejection(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === 'number' && REJECTION_CODES.has(code);
+}
+
 /** `code` of the 409 of an administrative category change of a project with evaluations */
 export const PROJECT_CATEGORY_CHANGE_BLOCKED =
   'PROJECT_CATEGORY_CHANGE_BLOCKED';
@@ -313,7 +339,9 @@ export class ProjectsService implements OnModuleInit {
       );
       createdProject = response.project;
       if (!createdProject) {
-        throw new BadRequestException('La creación del proyecto no devolvió ningún proyecto');
+        throw new BadRequestException(
+          'La creación del proyecto no devolvió ningún proyecto',
+        );
       }
       this.logger.log(
         `Project created successfully with ID: ${createdProject.id}`,
@@ -442,9 +470,7 @@ export class ProjectsService implements OnModuleInit {
       status: dto.status ?? 1,
     };
 
-    return firstValueFrom(
-      this.projectsService.addPendingParticipant(request),
-    );
+    return firstValueFrom(this.projectsService.addPendingParticipant(request));
   }
 
   /**
@@ -511,7 +537,10 @@ export class ProjectsService implements OnModuleInit {
     return this.removeJurorFromProjectUseCase.execute(dto);
   }
 
-  async approveProject(dto: {id: number; eventType: string}, actingUserId: number) {
+  async approveProject(
+    dto: { id: number; eventType: string },
+    actingUserId: number,
+  ) {
     const response = await firstValueFrom(
       this.projectsService.approveProject({
         id: dto.id,
@@ -708,6 +737,105 @@ export class ProjectsService implements OnModuleInit {
       }),
     );
     if (response.rejected) throw participantsRejection(response.rejected);
+  }
+
+  /** Every document of the project, INACTIVE ones included (the other reads leave them out). */
+  async adminListProjectDocuments(
+    projectId: number,
+  ): Promise<ProjectDocument[]> {
+    const { items } = await lastValueFrom(
+      this.projectsService.listProjectDocuments({
+        projectId,
+        includeInactive: true,
+      }),
+    );
+    return items ?? [];
+  }
+
+  /**
+   * Administrative replacement of the file of a document. The file is checked and the document
+   * looked up in the project before the upload, so a wrong request leaves no blob behind; if
+   * project-service then fails, the new blob is deleted (best effort). The document stores the
+   * blob name (the response signs it). The old blob is kept.
+   */
+  async adminReplaceProjectDocument(
+    projectId: number,
+    documentId: number,
+    file: Express.Multer.File | undefined,
+    dto: AdminReplaceProjectDocumentDto,
+    actingUserId: number,
+  ): Promise<ProjectDocument | undefined> {
+    if (!file) {
+      throw new BadRequestException(
+        'Adjunta el archivo nuevo del documento en el campo file',
+      );
+    }
+    if (file.size > ADMIN_DOCUMENT_MAX_FILE_SIZE) {
+      throw new BadRequestException(
+        `El archivo ${file.originalname} supera el límite de 5 MB. El tamaño máximo es 5 MB por archivo.`,
+      );
+    }
+    const documents = await this.adminListProjectDocuments(projectId);
+    if (!documents.some((document) => document.id === documentId)) {
+      throw new NotFoundException(
+        `No se encontró el documento ${documentId} en este proyecto`,
+      );
+    }
+
+    const { blobName } = await this.azureBlobUploadService.uploadFile(file);
+    try {
+      const res = await firstValueFrom(
+        this.projectsService.adminReplaceProjectDocument({
+          projectId,
+          documentId,
+          actingUserId,
+          url: blobName,
+          reason: dto.reason ?? '',
+        }),
+      );
+      return res.document;
+    } catch (error) {
+      await this.removeRejectedUpload(blobName, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Deletes (best effort) a blob just uploaded for a document change that project-service
+   * rejected, so it is not left orphaned. Only on an explicit rejection: after a timeout or an
+   * unavailable service the change may have been saved, and the document would point to a
+   * deleted file, so the blob is kept.
+   */
+  private async removeRejectedUpload(
+    blobName: string,
+    error: unknown,
+  ): Promise<void> {
+    if (isExplicitRejection(error)) {
+      await this.azureBlobUploadService.deleteFile(blobName);
+    } else {
+      this.logger.warn(
+        `Kept the blob ${blobName}: the document change may have been saved before the error`,
+      );
+    }
+  }
+
+  /** Administrative activation or deactivation of a document of the project. */
+  async adminChangeProjectDocumentState(
+    projectId: number,
+    documentId: number,
+    dto: AdminChangeProjectDocumentStateDto,
+    actingUserId: number,
+  ): Promise<ProjectDocument | undefined> {
+    const res = await firstValueFrom(
+      this.projectsService.adminChangeProjectDocumentState({
+        projectId,
+        documentId,
+        actingUserId,
+        state: this.mapDocumentStatusToProto(dto.state)!,
+        reason: dto.reason ?? '',
+      }),
+    );
+    return res.document;
   }
 
   async changeToUnderReviewProject(projectId: number, actingUserId: number) {
@@ -922,7 +1050,11 @@ export class ProjectsService implements OnModuleInit {
     documentId: number,
   ): Promise<string> {
     const { items } = await lastValueFrom(
-      this.projectsService.listProjectDocuments({ projectId }),
+      // Only ACTIVE documents: an INACTIVE one was withdrawn and its link answers 404
+      this.projectsService.listProjectDocuments({
+        projectId,
+        includeInactive: false,
+      }),
     );
     const document = items?.find((item) => item.id === documentId);
     if (!document) {
@@ -931,7 +1063,9 @@ export class ProjectsService implements OnModuleInit {
 
     const url = this.azureBlobUploadService.openUrl(document.url);
     if (!url) {
-      throw new NotFoundException('El documento del proyecto no tiene un archivo guardado');
+      throw new NotFoundException(
+        'El documento del proyecto no tiene un archivo guardado',
+      );
     }
     return url;
   }
@@ -941,6 +1075,10 @@ export class ProjectsService implements OnModuleInit {
     dto: UpdateProjectDocumentDto,
     file?: any,
   ): Promise<ProjectDocument> {
+    // Checked before the upload; project-service also rejects it (and edits of INACTIVE documents)
+    if (dto.state !== undefined) {
+      throw new ForbiddenException(DOCUMENT_STATE_ADMIN_ONLY);
+    }
     const request: UpdateProjectDocumentRequest = { id };
 
     if (file) {
@@ -950,13 +1088,16 @@ export class ProjectsService implements OnModuleInit {
     if (dto.type !== undefined) {
       request.type = this.mapDocumentTypeToProto(dto.type);
     }
-    if (dto.state !== undefined) {
-      request.state = this.mapDocumentStatusToProto(dto.state);
-    }
 
-    const res: ProjectDocumentResponse = await lastValueFrom(
-      this.projectsService.updateProjectDocument(request),
-    );
+    let res: ProjectDocumentResponse;
+    try {
+      res = await lastValueFrom(
+        this.projectsService.updateProjectDocument(request),
+      );
+    } catch (error) {
+      if (request.url) await this.removeRejectedUpload(request.url, error);
+      throw error;
+    }
 
     if (!res.document) {
       throw new NotFoundException('No se encontró el documento del proyecto');
@@ -1201,7 +1342,9 @@ export class ProjectsService implements OnModuleInit {
     );
 
     if (typeCounts['LOGO'] > 1) {
-      throw new BadRequestException('Solo se permite 1 archivo de logo por solicitud');
+      throw new BadRequestException(
+        'Solo se permite 1 archivo de logo por solicitud',
+      );
     }
     if (typeCounts['POSTER'] > 1) {
       throw new BadRequestException(
@@ -1222,7 +1365,9 @@ export class ProjectsService implements OnModuleInit {
     const project = (projectGrpcResponse as any).project ?? projectGrpcResponse;
 
     if (!project) {
-      throw new NotFoundException(`No se encontró el proyecto con ID ${projectId}`);
+      throw new NotFoundException(
+        `No se encontró el proyecto con ID ${projectId}`,
+      );
     }
 
     this.logger.log(
@@ -1308,7 +1453,9 @@ export class ProjectsService implements OnModuleInit {
         `Failed to upload files to Azure: ${error.message}`,
         error.stack,
       );
-      throw new BadRequestException(`No se pudieron subir los archivos: ${error.message}`);
+      throw new BadRequestException(
+        `No se pudieron subir los archivos: ${error.message}`,
+      );
     }
 
     // 9. Adjuntar documentos al proyecto
