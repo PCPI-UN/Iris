@@ -68,6 +68,18 @@ describe('ListMyEventsWithRolesUseCase', () => {
     });
   });
 
+  it('puts a role it does not know after the known ones', async () => {
+    const { uc } = build({
+      jurorEventIds: [10],
+      projectRoles: [{ eventId: 10, roles: ['COORDINATOR', 'TUTOR'] }],
+      events: [{ id: 10 }],
+    });
+
+    const result = await uc.execute({ userId: 5, status: 'current' });
+
+    expect(result.items[0].roles).toEqual(['JURY', 'TUTOR', 'COORDINATOR']);
+  });
+
   it('asks for the past period with the clock of the call and caps the limit at 50', async () => {
     const { uc, eventRepository } = build({
       jurorEventIds: [10],

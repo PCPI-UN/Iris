@@ -1595,22 +1595,28 @@ export class EventService implements OnModuleInit {
   }
 
   /**
-   * List events where the user is a member (with role information)
-   * Enriches events with human-readable status names and role details
+   * Events of the user with every role they hold in each one (GET /me/events)
    */
   async listMyEventsWithRoles(userId: number, dto: ListMyEventsWithRolesDTO) {
     const response = await firstValueFrom(
       this.eventService.listMyEventsWithRoles({ userId, ...dto }),
     );
     return {
-      events: (response.events ?? []).map(({ event, roles }) => ({
-        ...event,
-        roles,
-      })),
+      // accessCode is left out: any role in the event would receive the join code
+      events: (response.events ?? []).map(({ event, roles }) => {
+        const { accessCode: _accessCode, ...publicEvent } = event ?? {
+          accessCode: undefined,
+        };
+        return { ...publicEvent, roles };
+      }),
       meta: response.meta,
     };
   }
 
+  /**
+   * List events where the user is a member (with role information)
+   * Enriches events with human-readable status names and role details
+   */
   async listMyEvents(
     userId: number,
     dto: ListMyEventsDTO,

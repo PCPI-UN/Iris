@@ -21,11 +21,11 @@ describe('GET /me/events', () => {
     expect(await errorsFor({ status: 'current', page: '0' })).toEqual(['page']);
   });
 
-  it('forwards the user and flattens each event with its roles', async () => {
+  it('forwards the user and flattens each event with its roles, without the access code', async () => {
     const eventGrpc = {
       listMyEventsWithRoles: jest.fn(() =>
         of({
-          events: [{ event: { id: 12, name: 'Feria' }, roles: ['JURY', 'TUTOR'] }],
+          events: [{ event: { id: 12, name: 'Feria', accessCode: 'X7K2' }, roles: ['JURY', 'TUTOR'] }],
           meta: { total: 1, itemsOnCurrentPage: 1, itemsPerPage: 10, currentPage: 1, totalPages: 1 },
         }),
       ),

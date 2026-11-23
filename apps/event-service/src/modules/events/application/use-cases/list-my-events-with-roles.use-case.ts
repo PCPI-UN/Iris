@@ -8,6 +8,12 @@ import { Event as DomainEvent } from '../../domain/entities/event.entity';
 const JUROR_ROLE_ID = 4;
 const ROLE_ORDER = ['JURY', 'PARTICIPANT', 'TUTOR', 'PROFESSOR', 'DIRECTOR'];
 
+// Unknown roles go after the known ones instead of before JURY
+const roleRank = (role: string): number => {
+  const index = ROLE_ORDER.indexOf(role);
+  return index < 0 ? ROLE_ORDER.length : index;
+};
+
 export interface EventWithRolesOutput {
   event: DomainEvent;
   roles: string[];
@@ -74,7 +80,7 @@ export class ListMyEventsWithRolesUseCase {
       items: events.map((event) => ({
         event,
         roles: [...(rolesByEvent.get(event.id) ?? [])].sort(
-          (a, b) => ROLE_ORDER.indexOf(a) - ROLE_ORDER.indexOf(b),
+          (a, b) => roleRank(a) - roleRank(b),
         ),
       })),
       total,
