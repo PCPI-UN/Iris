@@ -25,7 +25,7 @@ Single HTTP entry point of the platform. It authenticates the browser session, c
 | `events` | Events, courses and categories, awards, inscription details, recaps, members, ranking configuration, rankings and the public winners page | `event`, `auth`, `evaluation`, `invitation`, `project` |
 | `projects` | Project submission with files, review, participants, juror assignment, documents | `project`, `event`, `evaluation` |
 | `criterions` | Evaluation criteria and components | `evaluation` |
-| `evaluations` | Evaluate a project, project statistics, top projects per course | `evaluation`, `project` |
+| `evaluations` | Evaluate a project, project statistics, average per rubric component of an event, top projects per course | `evaluation`, `project` |
 | `tiebreaks` | Manual tiebreak order | `evaluation` |
 | `invitations` | Invitations, juror invitations, acceptance | `invitation`, `auth`, `event`, `project` |
 | `dashboard` | Admin summary figures; student dashboard (`GET /students/me/dashboard`) and results of the student's project (`GET /events/:eventId/my-project/results`), own data only | `event`, `project`, `evaluation` (through the other modules) |
