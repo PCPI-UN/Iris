@@ -1,288 +1,113 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { GetProjectStatsUseCase } from '../get-project-stats.use-case';
-import { EvaluationRepositoryPort, CategoryStats } from '../../../domain/repositories/evaluation.repository.port';
-import { GetProjectStatsDto } from '../../dto/get-project-stats.dto';
+import {
+  EvaluationRepositoryPort,
+  ProjectStats,
+} from '../../../domain/repositories/evaluation.repository.port';
+import { StatsEvaluation } from '../../../domain/services/criteria-stats';
+import {
+  buildResolver,
+  customScale,
+  InMemoryGradingScaleRepository,
+} from '../../../../grading-scales/testing/grading-scales.fixture';
 
 describe('GetProjectStatsUseCase', () => {
-    let useCase: GetProjectStatsUseCase;
-    let evaluationRepository: EvaluationRepositoryPort;
+  const evaluation = (scores: [number, number]): StatsEvaluation => ({
+    details: scores.map((score, i) => ({
+      criterionId: i + 1,
+      criterionName: `Criterio ${i + 1}`,
+      componentId: 10,
+      componentName: 'Planos y Cálculo',
+      score,
+      // Relative weights 2 and 1 inside a component of 0.4
+      weight: i === 0 ? 0.4 * (2 / 3) : 0.4 * (1 / 3),
+    })),
+  });
 
-    const mockEvaluationRepository = {
-        getProjectStats: jest.fn(),
+  const build = (
+    stats: ProjectStats,
+    evaluations: StatsEvaluation[],
+    scaleId = 1,
+  ) => {
+    const repo = {
+      getProjectStats: jest.fn().mockResolvedValue(stats),
+      findEvaluationsForStats: jest
+        .fn()
+        .mockResolvedValue(evaluations.length ? [evaluations] : []),
     };
+    const scales = new InMemoryGradingScaleRepository();
+    scales.scales.set(50, customScale(50, [10, 20, 30, 40]));
+    scales.eventScales.set(3, scaleId);
+    const uc = new GetProjectStatsUseCase(
+      repo as unknown as EvaluationRepositoryPort,
+      buildResolver(scales),
+    );
+    return { uc, repo };
+  };
 
-    beforeEach(async () => {
-        const module: TestingModule = await Test.createTestingModule({
-            providers: [
-                GetProjectStatsUseCase,
-                {
-                    provide: EvaluationRepositoryPort,
-                    useValue: mockEvaluationRepository,
-                },
-            ],
-        }).compile();
+  const evaluated: ProjectStats = {
+    averageGrade: 61.33,
+    evaluationCount: 1,
+    evaluatorIds: [7],
+    eventId: 3,
+  };
 
-        useCase = module.get<GetProjectStatsUseCase>(GetProjectStatsUseCase);
-        evaluationRepository = module.get<EvaluationRepositoryPort>(EvaluationRepositoryPort);
+  it('returns the weighted average of each component with its criteria', async () => {
+    const { uc, repo } = build(evaluated, [evaluation([90, 55])]);
 
-        jest.clearAllMocks();
+    const result = await uc.execute({ projectId: 5 });
+
+    expect(repo.getProjectStats).toHaveBeenCalledWith(5);
+    expect(repo.findEvaluationsForStats).toHaveBeenCalledWith([5]);
+    expect(result).toMatchObject({
+      averageGrade: 61.33,
+      evaluationCount: 1,
+      evaluatorIds: [7],
     });
+    expect(result).not.toHaveProperty('eventId');
+    // (90·2 + 55·1) / 3, not the plain average 72.5
+    expect(result.components).toEqual([
+      expect.objectContaining({
+        id: 10,
+        average: 78.33,
+        projectCount: 1,
+        criteria: [
+          expect.objectContaining({ id: 1, average: 90 }),
+          expect.objectContaining({ id: 2, average: 55 }),
+        ],
+      }),
+    ]);
+  });
 
-    it('should be defined', () => {
-        expect(useCase).toBeDefined();
+  it.each<[string, number, number]>([
+    ['Proyectos finales', 1, 90],
+    ['Cero a cinco', 2, 5],
+    ['Cero a cien', 3, 100],
+    ['a custom scale', 50, 40],
+  ])(
+    'uses the highest level of %s as maxScore',
+    async (_name, scaleId, max) => {
+      const { uc } = build(evaluated, [evaluation([4, 3])], scaleId);
+
+      const result = await uc.execute({ projectId: 5 });
+
+      expect(result.maxScore).toBe(max);
+    },
+  );
+
+  it('returns no components and maxScore 0 when the project has no evaluations', async () => {
+    const { uc } = build(
+      { averageGrade: 0, evaluationCount: 0, evaluatorIds: [], eventId: null },
+      [],
+    );
+
+    const result = await uc.execute({ projectId: 5 });
+
+    expect(result).toEqual({
+      averageGrade: 0,
+      evaluationCount: 0,
+      evaluatorIds: [],
+      components: [],
+      maxScore: 0,
     });
-
-    it('should return category-based statistics correctly', async () => {
-        const dto: GetProjectStatsDto = {
-            projectId: 1,
-        };
-
-        const mockStats = {
-            averageGrade: 75.5,
-            evaluationCount: 3,
-            categoryStats: [
-                {
-                    category: 'Comunicación Escrita',
-                    averageScore: 72.5,
-                    weight: 0.3,
-                },
-                {
-                    category: 'Descripción del Diseño',
-                    averageScore: 80.0,
-                    weight: 0.4,
-                },
-                {
-                    category: 'Comunicación Oral',
-                    averageScore: 70.0,
-                    weight: 0.3,
-                },
-            ],
-        };
-
-        mockEvaluationRepository.getProjectStats.mockResolvedValue(mockStats);
-
-        const result = await useCase.execute(dto);
-
-        expect(result.averageGrade).toBe(75.5);
-        expect(result.evaluationCount).toBe(3);
-        expect(result.categoryStats).toHaveLength(3);
-        expect(result.categoryStats[0].category).toBe('Comunicación Escrita');
-        expect(result.categoryStats[0].averageScore).toBe(72.5);
-        expect(result.categoryStats[0].weight).toBe(0.3);
-    });
-
-    it('should return numeric score values (90, 75, 55, 25 range) not mapped values', async () => {
-        const dto: GetProjectStatsDto = {
-            projectId: 1,
-        };
-
-        // Test that averageScore is in the 25-90 range (stored values), not 1-4 (input values)
-        const mockStats = {
-            averageGrade: 78.33,
-            evaluationCount: 1,
-            categoryStats: [
-                {
-                    category: 'Category A',
-                    averageScore: 85.0, // This should be 85, not 3.7 or something
-                    weight: 0.5,
-                },
-                {
-                    category: 'Category B',
-                    averageScore: 71.67, // Average of 90, 75, 55, 55
-                    weight: 0.5,
-                },
-            ],
-        };
-
-        mockEvaluationRepository.getProjectStats.mockResolvedValue(mockStats);
-
-        const result = await useCase.execute(dto);
-
-        // Verify scores are in the correct range
-        expect(result.categoryStats[0].averageScore).toBeGreaterThanOrEqual(25);
-        expect(result.categoryStats[0].averageScore).toBeLessThanOrEqual(90);
-        expect(result.categoryStats[1].averageScore).toBeGreaterThanOrEqual(25);
-        expect(result.categoryStats[1].averageScore).toBeLessThanOrEqual(90);
-    });
-
-    it('should handle single evaluation correctly', async () => {
-        const dto: GetProjectStatsDto = {
-            projectId: 1,
-        };
-
-        const mockStats = {
-            averageGrade: 82.0,
-            evaluationCount: 1,
-            categoryStats: [
-                {
-                    category: 'Category A',
-                    averageScore: 82.0,
-                    weight: 1.0,
-                },
-            ],
-        };
-
-        mockEvaluationRepository.getProjectStats.mockResolvedValue(mockStats);
-
-        const result = await useCase.execute(dto);
-
-        expect(result.evaluationCount).toBe(1);
-        expect(result.averageGrade).toBe(82.0);
-        expect(result.categoryStats).toHaveLength(1);
-    });
-
-    it('should return zeros for project with no evaluations', async () => {
-        const dto: GetProjectStatsDto = {
-            projectId: 999,
-        };
-
-        const mockStats = {
-            averageGrade: 0,
-            evaluationCount: 0,
-            categoryStats: [],
-        };
-
-        mockEvaluationRepository.getProjectStats.mockResolvedValue(mockStats);
-
-        const result = await useCase.execute(dto);
-
-        expect(result.averageGrade).toBe(0);
-        expect(result.evaluationCount).toBe(0);
-        expect(result.categoryStats).toHaveLength(0);
-    });
-
-    it('should handle multiple evaluations with average per category', async () => {
-        const dto: GetProjectStatsDto = {
-            projectId: 1,
-        };
-
-        // Simulating 2 jurors evaluating the project
-        // Juror 1: Category A avg = 85, Category B avg = 70
-        // Juror 2: Category A avg = 75, Category B avg = 80
-        // Expected: Category A avg = 80, Category B avg = 75
-        const mockStats = {
-            averageGrade: 77.5,
-            evaluationCount: 2,
-            categoryStats: [
-                {
-                    category: 'Category A',
-                    averageScore: 80.0, // (85 + 75) / 2
-                    weight: 0.5,
-                },
-                {
-                    category: 'Category B',
-                    averageScore: 75.0, // (70 + 80) / 2
-                    weight: 0.5,
-                },
-            ],
-        };
-
-        mockEvaluationRepository.getProjectStats.mockResolvedValue(mockStats);
-
-        const result = await useCase.execute(dto);
-
-        expect(result.evaluationCount).toBe(2);
-        expect(result.categoryStats[0].averageScore).toBe(80.0);
-        expect(result.categoryStats[1].averageScore).toBe(75.0);
-    });
-
-    it('should work with realistic rubric scenario (3 categories with distributed weights)', async () => {
-        const dto: GetProjectStatsDto = {
-            projectId: 1,
-        };
-
-        // Comunicación Escrita: 30% - 5 criterions (0.06 each)
-        // Descripción del Diseño: 40% - 7 criterions (~0.057 each)
-        // Comunicación Oral: 30% - 3 criterions (0.1 each)
-        const mockStats = {
-            averageGrade: 76.28,
-            evaluationCount: 2,
-            categoryStats: [
-                {
-                    category: 'Comunicación Escrita',
-                    averageScore: 73.0, // Avg of all scores in this category across all evaluations
-                    weight: 0.3,
-                },
-                {
-                    category: 'Descripción del Diseño',
-                    averageScore: 78.57,
-                    weight: 0.4,
-                },
-                {
-                    category: 'Comunicación Oral',
-                    averageScore: 77.5,
-                    weight: 0.3,
-                },
-            ],
-        };
-
-        mockEvaluationRepository.getProjectStats.mockResolvedValue(mockStats);
-
-        const result = await useCase.execute(dto);
-
-        expect(result.evaluationCount).toBe(2);
-        expect(result.categoryStats).toHaveLength(3);
-        
-        // Verify category weights sum to 1.0
-        const totalWeight = result.categoryStats.reduce((sum: number, cat: any) => sum + cat.weight, 0);
-        expect(totalWeight).toBeCloseTo(1.0, 5);
-
-        // Verify each category has reasonable scores
-        result.categoryStats.forEach((cat: any) => {
-            expect(cat.averageScore).toBeGreaterThanOrEqual(25);
-            expect(cat.averageScore).toBeLessThanOrEqual(90);
-        });
-    });
-
-    it('should call repository with correct projectId', async () => {
-        const dto: GetProjectStatsDto = {
-            projectId: 12345,
-        };
-
-        mockEvaluationRepository.getProjectStats.mockResolvedValue({
-            averageGrade: 0,
-            evaluationCount: 0,
-            categoryStats: [],
-        });
-
-        await useCase.execute(dto);
-
-        expect(mockEvaluationRepository.getProjectStats).toHaveBeenCalledWith(12345);
-    });
-
-    it('should handle categories with different score distributions', async () => {
-        const dto: GetProjectStatsDto = {
-            projectId: 1,
-        };
-
-        const mockStats = {
-            averageGrade: 70.0,
-            evaluationCount: 1,
-            categoryStats: [
-                {
-                    category: 'Excellent Category',
-                    averageScore: 88.0, // Mostly 90s (Excelente)
-                    weight: 0.33,
-                },
-                {
-                    category: 'Good Category',
-                    averageScore: 73.0, // Mostly 75s (Bueno)
-                    weight: 0.33,
-                },
-                {
-                    category: 'Acceptable Category',
-                    averageScore: 50.0, // Mix of 55s and 25s (Aceptable/Insuficiente)
-                    weight: 0.34,
-                },
-            ],
-        };
-
-        mockEvaluationRepository.getProjectStats.mockResolvedValue(mockStats);
-
-        const result = await useCase.execute(dto);
-
-        expect(result.categoryStats[0].averageScore).toBe(88.0);
-        expect(result.categoryStats[1].averageScore).toBe(73.0);
-        expect(result.categoryStats[2].averageScore).toBe(50.0);
-    });
+  });
 });

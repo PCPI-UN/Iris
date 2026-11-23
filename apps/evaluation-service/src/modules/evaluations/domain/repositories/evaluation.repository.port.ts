@@ -8,17 +8,12 @@ export interface PaginatedEvaluations {
     total: number;
 }
 
-export interface CategoryStats {
-    category: string;
-    averageScore: number;
-    weight: number;
-}
-
 export interface ProjectStats {
     averageGrade: number;
     evaluationCount: number;
-    categoryStats: CategoryStats[];
     evaluatorIds?: number[];
+    /** Event of the rubric the project was evaluated with; null when it has no evaluations */
+    eventId: number | null;
 }
 
 export interface EvaluationWithDetails {

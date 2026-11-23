@@ -117,18 +117,17 @@ message GetProjectStatsRequest {
   int32 projectId = 1;
 }
 
-message CategoryStatsResponse {
-  string category = 1;
-  double averageScore = 2;
-  double weight = 3;
-}
-
 message GetProjectStatsResponse {
+  reserved 4;
+  reserved "categoryStats";
   int32 projectId = 1;
   double averageGrade = 2;
   int32 evaluationCount = 3;
-  repeated CategoryStatsResponse categoryStats = 4;
   repeated int32 evaluatorIds = 5;
+  // Average score per rubric component, with its criteria; empty without evaluations
+  repeated ComponentStatsProto components = 6;
+  // Highest grade possible with the event's evaluation type; 0 without evaluations
+  double maxScore = 7;
 }
 
 message GetProjectResultRequest {

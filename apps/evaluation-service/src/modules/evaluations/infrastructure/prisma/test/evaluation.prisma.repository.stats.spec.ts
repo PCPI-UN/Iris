@@ -5,10 +5,7 @@ import { PrismaService } from '../../../../../common/prisma/prisma.service';
  * Statistics consumed by the ranking and the reports (CU-86e3vmxar / IRIS-V3-EVAL-02).
  */
 describe('EvaluationPrismaRepository - project statistics', () => {
-    const buildRepository = (
-        grades: number[],
-        details: Array<{ criterionId: number; category: string | null; weight: number; score: number }> = [],
-    ) => {
+    const buildRepository = (grades: number[]) => {
         const average = grades.length ? grades.reduce((a, b) => a + b, 0) / grades.length : null;
         const prisma = {
             evaluation: {
@@ -19,14 +16,8 @@ describe('EvaluationPrismaRepository - project statistics', () => {
                 ),
             },
             evaluationDetail: {
-                findMany: jest.fn().mockResolvedValue(
-                    details.map((d) => ({
-                        score: d.score,
-                        // Effective weight stored with the evaluation detail
-                        weight: d.weight,
-                        criterion: { id: d.criterionId, category: d.category },
-                    })),
-                ),
+                // Any scored criterion of the project; they all belong to event 3
+                findFirst: jest.fn().mockResolvedValue(grades.length ? { criterion: { eventId: 3 } } : null),
             },
         };
 
@@ -35,31 +26,12 @@ describe('EvaluationPrismaRepository - project statistics', () => {
     };
 
     describe('getProjectStats', () => {
-        it('computes the category weight as the sum of the stored criterion weights, even when they differ', async () => {
-            // Comunicación Oral in the approved report: 0.1 + 0.09 + 0.09 = 0.28
-            const repository = buildRepository([90], [
-                { criterionId: 13, category: 'Comunicación Oral', weight: 0.1, score: 90 },
-                { criterionId: 14, category: 'Comunicación Oral', weight: 0.09, score: 90 },
-                { criterionId: 15, category: 'Comunicación Oral', weight: 0.09, score: 90 },
-            ]);
+        it('takes the event from the criteria scored', async () => {
+            const repository = buildRepository([90]);
 
             const stats = await repository.getProjectStats(1);
 
-            expect(stats.categoryStats[0].weight).toBeCloseTo(0.28, 10);
-        });
-
-        it('counts each criterion weight once although several jurors scored it', async () => {
-            const repository = buildRepository([90, 75], [
-                { criterionId: 1, category: 'Comunicación Escrita', weight: 0.06, score: 90 },
-                { criterionId: 2, category: 'Comunicación Escrita', weight: 0.06, score: 75 },
-                { criterionId: 1, category: 'Comunicación Escrita', weight: 0.06, score: 75 },
-                { criterionId: 2, category: 'Comunicación Escrita', weight: 0.06, score: 75 },
-            ]);
-
-            const stats = await repository.getProjectStats(1);
-
-            expect(stats.categoryStats[0].weight).toBeCloseTo(0.12, 10);
-            expect(stats.categoryStats[0].averageScore).toBe(78.75);
+            expect(stats.eventId).toBe(3);
         });
 
         it('rounds the average grade to 2 decimals so ranking and report use the same value', async () => {
@@ -79,7 +51,7 @@ describe('EvaluationPrismaRepository - project statistics', () => {
 
             expect(stats.averageGrade).toBe(0);
             expect(stats.evaluationCount).toBe(0);
-            expect(stats.categoryStats).toEqual([]);
+            expect(stats.eventId).toBeNull();
         });
     });
 
