@@ -10,7 +10,9 @@ import {
   GetTopProjectsByCourseResponse,
   TopProjectProto,
   GetProjectResultResponse,
+  GetEventCriteriaStatsResponse,
 } from '@app/common/generated/evaluation';
+import { EventCriteriaStats } from '../use-cases/get-event-criteria-stats.use-case';
 import { ProjectResultWithScale } from '../use-cases/get-project-result.use-case';
 import { Evaluation } from '@evaluations/domain/entities/evaluation.entity';
 import { EvaluationDetail } from '@evaluations/domain/entities/evaluation-detail.entity';
@@ -117,6 +119,22 @@ export class EvaluationMapper {
         score: c.score,
       })),
       consolidatedFeedback: result.consolidatedFeedback,
+    };
+  }
+
+  static toGetEventCriteriaStatsResponse(
+    stats: EventCriteriaStats,
+  ): GetEventCriteriaStatsResponse {
+    return {
+      maxScore: stats.maxScore,
+      components: stats.components.map((component) => ({
+        ...(component.id !== null && { id: component.id }),
+        name: component.name,
+        weight: component.weight,
+        average: component.average,
+        projectCount: component.projectCount,
+        criteria: component.criteria ?? [],
+      })),
     };
   }
 

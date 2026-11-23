@@ -13,6 +13,8 @@ service EvaluationService {
   rpc CheckEvaluationStatus(CheckEvaluationStatusRequest) returns (CheckEvaluationStatusResponse);
   rpc GetTopProjectsByCourse(GetTopProjectsByCourseRequest) returns (GetTopProjectsByCourseResponse);
   rpc GetDashboardStats(GetEvaluationDashboardStatsRequest) returns (GetEvaluationDashboardStatsResponse);
+  // Average score per rubric component over a set of projects, with the effective weights
+  rpc GetEventCriteriaStats(GetEventCriteriaStatsRequest) returns (GetEventCriteriaStatsResponse);
 
 }
 
@@ -153,6 +155,43 @@ message GetProjectResultResponse {
   repeated CriterionResultProto criteria = 4;
   // The jurors' comments in one text, without saying who wrote each one
   string consolidatedFeedback = 5;
+}
+
+message GetEventCriteriaStatsRequest {
+  // Event whose grading scale gives maxScore
+  int32 eventId = 1;
+  // Projects to average; the ones without evaluations are left out
+  repeated int32 projectIds = 2;
+  // Also return the criteria of each component
+  bool withCriteria = 3;
+}
+
+message CriterionStatsProto {
+  int32 id = 1;
+  string name = 2;
+  // Effective weight of the criterion in the grade (fraction, 0-1)
+  double weight = 3;
+  double average = 4;
+}
+
+message ComponentStatsProto {
+  // Absent for the criteria without component
+  optional int32 id = 1;
+  string name = 2;
+  // Sum of the effective weights of its criteria (fraction, 0-1)
+  double weight = 3;
+  // Weighted score of the component, averaged per project and then across projects
+  double average = 4;
+  // Projects with at least one evaluation of this component
+  int32 projectCount = 5;
+  // Only when the criteria were requested
+  repeated CriterionStatsProto criteria = 6;
+}
+
+message GetEventCriteriaStatsResponse {
+  // Highest grade possible with the event's evaluation type
+  double maxScore = 1;
+  repeated ComponentStatsProto components = 2;
 }
 
 message CheckEvaluationStatusRequest {

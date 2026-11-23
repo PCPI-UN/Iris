@@ -1,6 +1,7 @@
 import { Evaluation } from '../entities/evaluation.entity';
 import { EvaluationDetail } from '../entities/evaluation-detail.entity';
 import { ResultEvaluation } from '../services/project-result';
+import { StatsEvaluation } from '../services/criteria-stats';
 
 export interface PaginatedEvaluations {
     evaluations: Evaluation[];
@@ -54,6 +55,8 @@ export abstract class EvaluationRepositoryPort {
     abstract getProjectStats(projectId: number): Promise<ProjectStats>;
     /** Every evaluation of the project with its scores, criteria and components, oldest first */
     abstract findProjectEvaluationsForResult(projectId: number): Promise<ResultEvaluation[]>;
+    /** The evaluations of each project that has any, with each score's criterion and component */
+    abstract findEvaluationsForStats(projectIds: number[]): Promise<StatsEvaluation[][]>;
     abstract countAll(): Promise<number>;
     abstract findByProjectIdsAndEvaluator(
         projectIds: number[],

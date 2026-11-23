@@ -12,6 +12,7 @@ import { Evaluation } from '@evaluations/domain/entities/evaluation.entity';
 import { EvaluationDetail } from '@evaluations/domain/entities/evaluation-detail.entity';
 import { roundGrade } from '../../../../common/utils/grade.utils';
 import { ResultEvaluation } from '../../domain/services/project-result';
+import { StatsEvaluation } from '../../domain/services/criteria-stats';
 
 @Injectable()
 export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
@@ -265,6 +266,45 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
                 weight: detail.weight,
             })),
         }));
+    }
+
+    async findEvaluationsForStats(projectIds: number[]): Promise<StatsEvaluation[][]> {
+        const evaluations = await this.prisma.db.evaluation.findMany({
+            where: { projectId: { in: projectIds } },
+            select: {
+                projectId: true,
+                scores: {
+                    select: {
+                        score: true,
+                        weight: true,
+                        criterion: {
+                            select: {
+                                id: true,
+                                name: true,
+                                component: { select: { id: true, name: true } },
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        const byProject = new Map<number, StatsEvaluation[]>();
+        for (const evaluation of evaluations) {
+            const projectEvaluations = byProject.get(evaluation.projectId) ?? [];
+            projectEvaluations.push({
+                details: evaluation.scores.map((detail) => ({
+                    criterionId: detail.criterion.id,
+                    criterionName: detail.criterion.name,
+                    componentId: detail.criterion.component?.id ?? null,
+                    componentName: detail.criterion.component?.name ?? null,
+                    score: detail.score,
+                    weight: detail.weight,
+                })),
+            });
+            byProject.set(evaluation.projectId, projectEvaluations);
+        }
+        return [...byProject.values()];
     }
 
     async getProjectStats(projectId: number): Promise<ProjectStats> {

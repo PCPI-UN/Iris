@@ -94,4 +94,41 @@ describe('EvaluationPrismaRepository - project statistics', () => {
             expect(top.averageGrade).toBe(stats.averageGrade);
         });
     });
+
+    describe('findEvaluationsForStats', () => {
+        it('groups the evaluations by project, with the criterion and component of each score', async () => {
+            const detail = (score: number, component: { id: number; name: string } | null) => ({
+                score,
+                weight: 0.5,
+                criterion: { id: 1, name: 'Problema', component },
+            });
+            const findMany = jest.fn().mockResolvedValue([
+                { projectId: 1, scores: [detail(80, { id: 10, name: 'Fundamentación' })] },
+                { projectId: 2, scores: [detail(70, null)] },
+                { projectId: 1, scores: [detail(60, { id: 10, name: 'Fundamentación' })] },
+            ]);
+            const repository = new EvaluationPrismaRepository({
+                db: { evaluation: { findMany } },
+            } as unknown as PrismaService);
+
+            const projects = await repository.findEvaluationsForStats([1, 2]);
+
+            expect(findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { projectId: { in: [1, 2] } } }),
+            );
+            expect(projects.map((evaluations) => evaluations.map((e) => e.details[0].score))).toEqual([
+                [80, 60],
+                [70],
+            ]);
+            expect(projects[0][0].details[0]).toEqual({
+                criterionId: 1,
+                criterionName: 'Problema',
+                componentId: 10,
+                componentName: 'Fundamentación',
+                score: 80,
+                weight: 0.5,
+            });
+            expect(projects[1][0].details[0]).toMatchObject({ componentId: null, componentName: null });
+        });
+    });
 });
