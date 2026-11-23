@@ -105,7 +105,7 @@ export class GetRubricReadinessUseCase {
   }
 
   /**
-   * Finding the evaluated categories asks project-service for every project of the event. If it fails, the
+   * Finding the evaluated categories asks project-service for the category of the evaluated projects. If it fails, the
    * rubric is still shown (without category locks) rather than breaking the screen; saving still rejects.
    */
   private async findEvaluatedCategoryIds(eventId: number): Promise<Set<number>> {

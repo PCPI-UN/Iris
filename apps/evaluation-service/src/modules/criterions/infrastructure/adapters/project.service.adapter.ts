@@ -5,9 +5,9 @@ import {
     PROJECTS_SERVICE_NAME,
     ProjectsServiceClient,
 } from '@app/common/generated/project';
+import { MAX_LIST_PROJECTS_BY_IDS } from '@app/common/constants/projects';
 import { ProjectServicePort } from '../ports/project.service.port';
 
-const PAGE_SIZE = 100;
 
 @Injectable()
 export class ProjectServiceAdapter implements ProjectServicePort, OnModuleInit {
@@ -22,25 +22,21 @@ export class ProjectServiceAdapter implements ProjectServicePort, OnModuleInit {
             this.client.getService<ProjectsServiceClient>(PROJECTS_SERVICE_NAME);
     }
 
-    async getProjectCategories(eventId: number): Promise<Map<number, number>> {
+    async getProjectCategories(projectIds: number[]): Promise<Map<number, number>> {
+        const uniqueIds = [...new Set(projectIds)];
         const categories = new Map<number, number>();
-        let currentPage = 1;
-        let totalPages = 1;
 
-        do {
+        // project-service accepts a bounded number of ids per call
+        for (let i = 0; i < uniqueIds.length; i += MAX_LIST_PROJECTS_BY_IDS) {
             const response = await lastValueFrom(
-                this.projectsService.listProjectsByEvent({
-                    eventId,
-                    currentPage,
-                    itemsPerPage: PAGE_SIZE,
+                this.projectsService.listProjectsByIds({
+                    ids: uniqueIds.slice(i, i + MAX_LIST_PROJECTS_BY_IDS),
                 })
             );
             for (const project of response.items ?? []) {
                 categories.set(project.id, project.courseId);
             }
-            totalPages = response.totalPages ?? 1;
-            currentPage++;
-        } while (currentPage <= totalPages);
+        }
 
         return categories;
     }

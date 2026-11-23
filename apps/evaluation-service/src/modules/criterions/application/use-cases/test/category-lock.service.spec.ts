@@ -26,6 +26,14 @@ describe('CategoryLockService', () => {
             await expect(service.findEvaluatedCategoryIds(5)).resolves.toEqual(new Set([10]));
         });
 
+        it('asks project-service only for the evaluated projects', async () => {
+            const { service, projectService } = buildService([1, 2], [[1, 10], [2, 10], [3, 20]]);
+
+            await service.findEvaluatedCategoryIds(5);
+
+            expect(projectService.getProjectCategories).toHaveBeenCalledWith([1, 2]);
+        });
+
         it('does not ask project-service when nothing was evaluated', async () => {
             const { service, projectService } = buildService([], [[1, 10]]);
 

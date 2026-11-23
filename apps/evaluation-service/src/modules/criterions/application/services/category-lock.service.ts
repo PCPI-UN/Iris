@@ -12,8 +12,9 @@ import { ProjectServicePort } from '../../infrastructure/ports/project.service.p
  * criterion an unevaluated category is missing.
  *
  * The category of each evaluation is the category of the evaluated project, asked to
- * project-service. It cannot be deduced from the scored criteria: a criterion shared by
- * two categories would mark both as evaluated. Evaluations of projects that no longer
+ * project-service (only for the evaluated projects, not for the whole event). It cannot be
+ * deduced from the scored criteria: a criterion shared by two categories would mark both as
+ * evaluated. Evaluations of projects that no longer
  * exist (deleted projects) are ignored: they are not part of any ranking anymore.
  */
 @Injectable()
@@ -30,8 +31,8 @@ export class CategoryLockService {
     const evaluatedProjectIds = await this.criterionRepository.findEvaluatedProjectIds(eventId);
     if (evaluatedProjectIds.length === 0) return new Set();
 
-    // Every project of the event (all pages): a missing one was deleted
-    const projectCategories = await this.projectService.getProjectCategories(eventId);
+    // Only the evaluated projects are asked for; one that comes back missing was deleted
+    const projectCategories = await this.projectService.getProjectCategories(evaluatedProjectIds);
     return new Set(
       evaluatedProjectIds
         .map((projectId) => projectCategories.get(projectId))
