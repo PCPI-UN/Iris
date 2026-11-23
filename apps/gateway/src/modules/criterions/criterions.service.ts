@@ -87,12 +87,36 @@ export class CriterionsService implements OnModuleInit {
     eventId: number,
     courseId?: number,
   ): Promise<GetRubricReadinessResponse> {
-    return firstValueFrom(
+    const readiness = await firstValueFrom(
       this.criterionsService.getRubricReadiness({
         eventId,
         ...(courseId !== undefined && { courseId }),
       }),
     );
+    return this.withReadinessDefaults(readiness);
+  }
+
+  /**
+   * This client does not fill proto3 defaults, so false, 0 and empty lists would be missing
+   * from the JSON; clients get every field of the contract.
+   */
+  private withReadinessDefaults(
+    readiness: GetRubricReadinessResponse,
+  ): GetRubricReadinessResponse {
+    return {
+      ...readiness,
+      componentsWeight: readiness.componentsWeight ?? 0,
+      componentsLocked: readiness.componentsLocked ?? false,
+      components: readiness.components ?? [],
+      categories: (readiness.categories ?? []).map((category) => ({
+        ...category,
+        ready: category.ready ?? false,
+        criteriaCount: category.criteriaCount ?? 0,
+        missingComponentIds: category.missingComponentIds ?? [],
+        criteriaWithoutComponent: category.criteriaWithoutComponent ?? [],
+        locked: category.locked ?? false,
+      })),
+    };
   }
 
   // Component methods

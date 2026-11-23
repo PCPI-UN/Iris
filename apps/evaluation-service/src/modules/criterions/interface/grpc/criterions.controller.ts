@@ -128,6 +128,7 @@ export class CriterionsController {
       componentsWeight: readiness.componentsWeight,
       components: readiness.components.map((c) => this.componentToProto(c)),
       categories: readiness.categories,
+      componentsLocked: readiness.componentsLocked,
     };
   }
 
