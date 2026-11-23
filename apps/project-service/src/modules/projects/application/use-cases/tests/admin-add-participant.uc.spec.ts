@@ -3,6 +3,7 @@ import { UnitOfWork } from '@app/common/ports/unit-of-work.port';
 import {
   AdminAddParticipantUC,
   INVITATION_FAILED_WARNING,
+  INVITED_NOT_MARKED_WARNING,
 } from '../admin-add-participant.uc';
 import { AddParticipantUC } from '../add-participant.uc';
 import { AddPendingParticipantUC } from '../add-pending-participant.us';
@@ -228,9 +229,51 @@ describe('AdminAddParticipantUC', () => {
         expect.any(Date),
       );
       expect(result).toMatchObject({
-        pendingParticipant: { status: 'INVITED' },
+        pendingParticipant: {
+          status: 'INVITED',
+          invitedAt: expect.any(Date) as unknown,
+        },
         failedEffects: [],
         warning: null,
+      });
+    });
+
+    it('reads the state under the lock: a project approved in between sends the invitation', async () => {
+      const { uc, repo, notifications } = setup();
+      // UNDER_REVIEW when first read, APPROVED once the locks are taken
+      repo.findById
+        .mockResolvedValueOnce({
+          id: 4,
+          eventId: 9,
+          courseId: 3,
+          name: 'Robot',
+          state: 'UNDER_REVIEW',
+        })
+        .mockResolvedValueOnce({
+          id: 4,
+          eventId: 9,
+          courseId: 3,
+          name: 'Robot',
+          state: 'APPROVED',
+        });
+
+      const result = await uc.execute({ ...base, pending: PENDING });
+
+      expect(notifications.sendEmail).toHaveBeenCalledTimes(1);
+      expect(result.pendingParticipant?.status).toBe('INVITED');
+    });
+
+    it('does not say the email failed when only marking it as invited failed', async () => {
+      const { uc, repo, notifications } = setup({ state: 'APPROVED' });
+      repo.markPendingsInvited.mockRejectedValue(new Error('db down'));
+
+      const result = await uc.execute({ ...base, pending: PENDING });
+
+      expect(notifications.sendEmail).toHaveBeenCalledTimes(1);
+      expect(result).toMatchObject({
+        pendingParticipant: { status: 'PENDING' },
+        failedEffects: [],
+        warning: INVITED_NOT_MARKED_WARNING,
       });
     });
 
@@ -316,6 +359,58 @@ describe('AdminAddParticipantUC', () => {
 
       await expect(
         uc.execute({ ...base, pending: PENDING }),
+      ).rejects.toMatchObject({
+        rejection: { code: 'PARTICIPANT_ALREADY_IN_PROJECT' },
+      });
+      expect(repo.addPendingParticipant).not.toHaveBeenCalled();
+    });
+
+    it('answers PARTICIPANT_ALREADY_IN_PROJECT when an enrolled participant has the same student code, under another email', async () => {
+      const { uc, repo, changeLog } = setup({
+        participants: [{ userId: 42, projectId: 4, studentCode: '2021123456' }],
+      });
+
+      await expect(
+        uc.execute({
+          ...base,
+          pending: {
+            ...PENDING,
+            email: 'ana.personal@gmail.com',
+            studentCode: ' 2021123456 ',
+          },
+        }),
+      ).rejects.toMatchObject({
+        rejection: {
+          code: 'PARTICIPANT_ALREADY_IN_PROJECT',
+          email: 'ana.personal@gmail.com',
+          message: expect.stringContaining('2021123456') as unknown,
+        },
+      });
+      expect(repo.addPendingParticipant).not.toHaveBeenCalled();
+      expect(changeLog.create).not.toHaveBeenCalled();
+    });
+
+    it('answers PARTICIPANT_ALREADY_IN_PROJECT when a pending participant who has not joined has the same student code', async () => {
+      const { uc, repo } = setup({
+        pendings: [
+          {
+            pendingId: 3,
+            projectId: 4,
+            firstName: 'Ana',
+            email: 'ana@uni.edu',
+            studentCode: '2021123456',
+            semester: '6',
+            career: 'x',
+            status: 'INVITED',
+          },
+        ],
+      });
+
+      await expect(
+        uc.execute({
+          ...base,
+          pending: { ...PENDING, email: 'ana.personal@gmail.com' },
+        }),
       ).rejects.toMatchObject({
         rejection: { code: 'PARTICIPANT_ALREADY_IN_PROJECT' },
       });

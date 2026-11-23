@@ -56,6 +56,17 @@ export const participantAlreadyInProject = (email: string, userId?: number) =>
     message: `El estudiante ${email} ya es integrante de este proyecto.`,
   });
 
+/** Another participant of the project (enrolled, or pending not joined) has that student code. */
+export const studentCodeAlreadyInProject = (
+  email: string,
+  studentCode: string,
+) =>
+  new AdminParticipantsError({
+    code: 'PARTICIPANT_ALREADY_IN_PROJECT',
+    email,
+    message: `Ya hay un integrante con el código de estudiante ${studentCode} en este proyecto: es el mismo estudiante aunque tenga otro correo.`,
+  });
+
 export const lastParticipant = () =>
   new AdminParticipantsError({
     code: 'LAST_PARTICIPANT',

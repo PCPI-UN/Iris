@@ -21,6 +21,7 @@ import {
   participantAlreadyInProject,
   participantHasActiveProject,
   pendingLogValue,
+  studentCodeAlreadyInProject,
 } from '../../domain/admin-participants';
 import { AUTH_SERVICE_PORT, AuthServicePort } from '../ports/auth-service.port';
 import {
@@ -68,6 +69,9 @@ export interface AdminAddParticipantResult {
   /** Spanish warning for failedEffects, null when nothing failed */
   warning: string | null;
 }
+
+export const INVITED_NOT_MARKED_WARNING =
+  'El integrante se agregó y se le envió el correo de invitación, pero no se pudo marcar como invitado; sigue figurando como pendiente.';
 
 export const INVITATION_FAILED_WARNING =
   'El integrante se agregó, pero no se pudo enviar el correo de invitación; queda como pendiente sin invitar.';
@@ -191,21 +195,36 @@ export class AdminAddParticipantUC {
       throw new ValidationError('El formato del correo no es válido');
     }
 
+    const studentCode = pending.studentCode?.trim();
+
     // Read before the transaction: another service
     const account = await this.auth.findUserByEmail(email);
 
-    const saved = await this.uow.run(async () => {
+    const { saved, state } = await this.uow.run(async () => {
       // The checks run under the locks, so a concurrent addition cannot slip past them
       await this.lockStudent(project, email);
-      const samePending = (await this.repo.listPendingParticipants(project.id))
-        // Rows saved before emails were normalized may differ in case or spaces
-        .find((p) => normalizeEmail(p.email) === email);
-      if (samePending) throw participantAlreadyInProject(email);
-      if (account) {
-        const participants = await this.repo.listParticipants(project.id);
-        if (participants.some((p) => p.userId === account.id)) {
-          throw participantAlreadyInProject(email, account.id);
-        }
+      // Read again under the lock: an approval in between decides whether the invitation goes out
+      const current = (await this.repo.findById(project.id)) ?? project;
+      const pendings = await this.repo.listPendingParticipants(project.id);
+      const participants = await this.repo.listParticipants(project.id);
+      // Rows saved before emails were normalized may differ in case or spaces
+      if (pendings.some((p) => normalizeEmail(p.email) === email)) {
+        throw participantAlreadyInProject(email);
+      }
+      if (account && participants.some((p) => p.userId === account.id)) {
+        throw participantAlreadyInProject(email, account.id);
+      }
+      // The same student code is the same student, even under another email: an enrolled
+      // participant, or a pending one who has not joined (a joined row is an enrolled one)
+      if (
+        studentCode &&
+        (participants.some((p) => p.studentCode?.trim() === studentCode) ||
+          pendings.some(
+            (p) =>
+              p.status !== 'JOINED' && p.studentCode?.trim() === studentCode,
+          ))
+      ) {
+        throw studentCodeAlreadyInProject(email, studentCode);
       }
       await this.assertNotInOtherProject(project, email, account?.id);
 
@@ -216,47 +235,63 @@ export class AdminAddParticipantUC {
         firstName,
         lastName: pending.lastName?.trim() || null,
         email,
-        studentCode: pending.studentCode?.trim(),
+        studentCode,
         semester: pending.semester,
         career: pending.career,
         status: 'PENDING',
       });
       await this.record(project.id, input, pendingLogValue(row));
-      return row;
+      return { saved: row, state: current.state };
     });
 
-    if (project.state !== 'APPROVED') {
+    if (state !== 'APPROVED') {
       return { pendingParticipant: saved, failedEffects: [], warning: null };
     }
     // Saved: from here on a failure is reported, not thrown, because the participant stays added
+    let sent: boolean;
     try {
       const event = (await this.events.getEventById(project.eventId)) as {
         eventType?: unknown;
       } | null;
-      const sent = await this.approvalEffects.notifyPendingParticipant(
+      sent = await this.approvalEffects.notifyPendingParticipant(
         saved,
         { id: project.id, name: project.name },
         eventTypeName(event),
       );
-      if (!sent) throw new Error('The invitation email was not sent');
-      const invitedAt = new Date();
-      await this.repo.markPendingsInvited(project.id, [email], invitedAt);
-      return {
-        pendingParticipant: { ...saved, status: 'INVITED' },
-        failedEffects: [],
-        warning: null,
-      };
     } catch (error) {
       this.logger.error(
-        `Invitation failed after adding a pending participant to project ${project.id}`,
+        `Invitation email failed after adding a pending participant to project ${project.id}`,
         error instanceof Error ? error.stack : String(error),
       );
+      sent = false;
+    }
+    if (!sent) {
       return {
         pendingParticipant: saved,
         failedEffects: ['NOTIFICATION'],
         warning: INVITATION_FAILED_WARNING,
       };
     }
+    // The email went out: a failure here only leaves the row PENDING
+    const invitedAt = new Date();
+    try {
+      await this.repo.markPendingsInvited(project.id, [email], invitedAt);
+    } catch (error) {
+      this.logger.error(
+        `Could not mark as invited the pending participant ${email} of project ${project.id}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      return {
+        pendingParticipant: saved,
+        failedEffects: [],
+        warning: INVITED_NOT_MARKED_WARNING,
+      };
+    }
+    return {
+      pendingParticipant: { ...saved, status: 'INVITED', invitedAt },
+      failedEffects: [],
+      warning: null,
+    };
   }
 
   /**

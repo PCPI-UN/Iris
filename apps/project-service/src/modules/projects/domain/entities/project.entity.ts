@@ -88,6 +88,8 @@ export interface PendingProjectParticipant {
   semester: string;
   career: string;
   status: StudentStatus;
+  /** Set once the invitation (approval email) was sent */
+  invitedAt?: Date | null;
 }
 
 /** Tutor typed in at submission who has no platform account yet. */
