@@ -92,6 +92,7 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
     permission: ['read:grades'],
   },
   'GET /evaluations/projects/:projectId/stats': { permission: ['read:grades'] },
+  'GET /evaluations/events/:eventId/stats': { permission: ['read:grades'] },
   'POST /evaluations/projects/evaluate': {
     access: 'session',
     why: 'evaluation-service checks that the caller is a juror assigned to the project, evaluations are open and the event dates',
