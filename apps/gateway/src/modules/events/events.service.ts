@@ -13,6 +13,7 @@ import { DeleteEventDTO } from './dto/events/delete-event.dto';
 import { GetEventDTO } from './dto/events/get-event.dto';
 import { ListEventsDTO } from './dto/events/list-events.dto';
 import { ListMyEventsDTO } from './dto/events/list-my-events.dto';
+import { ListMyEventsWithRolesDTO } from './dto/events/list-my-events-with-roles.dto';
 import { UpdateEventDTO } from './dto/events/update-event.dto';
 import { CreateEventMemberDTO } from './dto/event-members/create-event-member.dto';
 import { DeleteEventMemberDTO } from './dto/event-members/delete-event-member.dto';
@@ -1597,6 +1598,19 @@ export class EventService implements OnModuleInit {
    * List events where the user is a member (with role information)
    * Enriches events with human-readable status names and role details
    */
+  async listMyEventsWithRoles(userId: number, dto: ListMyEventsWithRolesDTO) {
+    const response = await firstValueFrom(
+      this.eventService.listMyEventsWithRoles({ userId, ...dto }),
+    );
+    return {
+      events: (response.events ?? []).map(({ event, roles }) => ({
+        ...event,
+        roles,
+      })),
+      meta: response.meta,
+    };
+  }
+
   async listMyEvents(
     userId: number,
     dto: ListMyEventsDTO,
