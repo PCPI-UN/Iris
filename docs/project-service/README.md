@@ -26,7 +26,7 @@ The service has a single module, `projects`, following the layering described in
 | --- | --- |
 | Projects | Creation, update, listing by event, project detail, dashboard count, student participation statistics, projects by ids (`ListProjectsByIds`) |
 | Review | Approve, reject, request changes, send back to review |
-| Documents | Logo, poster and supporting documents stored as URLs |
+| Documents | Logo, poster and supporting documents, stored as the blob name of their file. An administrator (`manage:projects`) replaces the file or sets the state ACTIVE/INACTIVE (`AdminReplaceProjectDocument`, `AdminChangeProjectDocumentState`), recorded in the change log as DOCUMENTS. INACTIVE documents are left out of every read (listings, detail, review, the student's own project, the open link); only `ListProjectDocuments` with `includeInactive` (`GET /projects/:id/admin/documents`) lists them. `UpdateProjectDocument` (`PATCH /projects/documents/:id`) changes the file or type only: never the state, and never an INACTIVE document |
 | Participants | Pending participants and confirmed participants |
 | Jurors | Assign, reassign, remove and list jurors; projects assigned to a juror |
 

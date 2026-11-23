@@ -43,10 +43,7 @@ import { ReassignProjectJurorDto } from './dto/reassign-project-juror.dto';
 import { RemoveJurorFromProjectDto } from './dto/remove-juror-from-project.dto';
 import { RejectProjectDto } from './dto/reject-project.dto';
 import { ListProjectsByEventDto } from './dto/list-projects-by-event.dto';
-import {
-  DocumentStatusFilter,
-  UpdateProjectDocumentDto,
-} from './dto/update-project-document.dto';
+import { UpdateProjectDocumentDto } from './dto/update-project-document.dto';
 import { TypedDocument } from './dto/project-document-input.dto';
 import { ListProjectsAssignedToJurorDto } from './dto/list-projects-assigned-to-juror.dto';
 import { AddProjectDocumentsMultipartDto } from './dto/add-project-files-multipart.dto';
@@ -535,8 +532,10 @@ export class ProjectsController {
   @ApiOperation({
     summary: 'Update project document',
     description:
-      'Update the document file, type, or state of a project document. ' +
-      'Only a participant of the project or a user with manage:events; checked before the file is uploaded.',
+      'Update the document file or type of a project document. ' +
+      'Only a participant of the project or a user with manage:events; checked before the file is uploaded. ' +
+      'The state is not editable here (403): it changes only through PATCH /projects/:id/admin/documents/:documentId/state, ' +
+      'which records it in the change log. A document withdrawn by an administrator (INACTIVE) cannot be edited here either (403).',
   })
   @ApiParam({
     name: 'id',
@@ -559,13 +558,13 @@ export class ProjectsController {
           enum: Object.values(TypedDocument),
           description: 'New document type (optional)',
         },
-        state: {
-          type: 'string',
-          enum: Object.values(DocumentStatusFilter),
-          description: 'Document state (optional)',
-        },
       },
     },
+  })
+  @ApiResponse({
+    status: 403,
+    description:
+      'No access to the project, a state was sent, or the document was withdrawn by an administrator',
   })
   async updateDocument(
     @Param('id', ParseIntPipe) id: number,

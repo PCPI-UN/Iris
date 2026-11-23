@@ -24,8 +24,10 @@ export class UpdateProjectDocumentDto {
   @Transform(({ value }: { value: any }) => value === '' ? undefined : value)
   type?: TypedDocument;
 
+  /** Rejected with 403: the state changes only through the administrative route */
   @ApiPropertyOptional({
-    description: 'New document status',
+    description:
+      'Not accepted (403): use PATCH /projects/:id/admin/documents/:documentId/state',
     enum: DocumentStatusFilter,
     example: DocumentStatusFilter.ACTIVE,
   })

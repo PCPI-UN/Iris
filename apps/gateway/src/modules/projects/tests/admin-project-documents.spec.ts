@@ -72,6 +72,9 @@ const buildService = (documents = [poster('viejo.pdf')]) => {
     adminChangeProjectDocumentState: jest.fn(() =>
       of({ document: poster('viejo.pdf', DocumentStatus.INACTIVE) }),
     ),
+    updateProjectDocument: jest.fn(() =>
+      of({ document: poster('1800-poster-nuevo.pdf') }),
+    ),
   };
   const blob = {
     uploadFile: jest
@@ -242,6 +245,73 @@ describe('Administrative document endpoints', () => {
 
       expect(httpStatus(error)).toBe(404);
       // Nothing points to the uploaded file: it is not left orphaned in the storage
+      expect(blob.deleteFile).toHaveBeenCalledWith('1800-poster-nuevo.pdf');
+    });
+  });
+
+  it.each([
+    ['DEADLINE_EXCEEDED', GrpcStatus.DEADLINE_EXCEEDED],
+    ['UNAVAILABLE', GrpcStatus.UNAVAILABLE],
+  ])(
+    'keeps the new blob when the answer is lost (%s): the replacement may have been saved',
+    async (_name, code) => {
+      const { service, grpc, blob } = buildService();
+      grpc.adminReplaceProjectDocument.mockReturnValue(
+        throwError(() => ({ code, details: 'sin respuesta' })),
+      );
+
+      await service
+        .adminReplaceProjectDocument(4, 7, file(), {}, 12)
+        .catch(() => undefined);
+
+      expect(blob.deleteFile).not.toHaveBeenCalled();
+    },
+  );
+
+  describe('PATCH /projects/documents/:id (participants and event managers)', () => {
+    it('answers 403 to a state change before uploading anything', async () => {
+      const { service, grpc, blob } = buildService();
+
+      const error = await service
+        .updateProjectDocument(
+          7,
+          { state: DocumentStatusFilter.ACTIVE },
+          file(),
+        )
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(ForbiddenException);
+      expect(httpStatus(error)).toBe(403);
+      expect(blob.uploadFile).not.toHaveBeenCalled();
+      expect(grpc.updateProjectDocument).not.toHaveBeenCalled();
+    });
+
+    it('still replaces the file of an ACTIVE document without sending a state', async () => {
+      const { service, grpc } = buildService();
+
+      await service.updateProjectDocument(7, {}, file());
+
+      expect(grpc.updateProjectDocument).toHaveBeenCalledWith({
+        id: 7,
+        url: '1800-poster-nuevo.pdf',
+      });
+    });
+
+    it('deletes the new blob when project-service refuses a withdrawn (INACTIVE) document', async () => {
+      const { service, grpc, blob } = buildService();
+      grpc.updateProjectDocument.mockReturnValue(
+        throwError(() => ({
+          code: GrpcStatus.PERMISSION_DENIED,
+          details:
+            'Este documento fue retirado por un administrador y no se puede modificar',
+        })),
+      );
+
+      const error = await service
+        .updateProjectDocument(7, {}, file())
+        .catch((e: unknown) => e);
+
+      expect(httpStatus(error)).toBe(403);
       expect(blob.deleteFile).toHaveBeenCalledWith('1800-poster-nuevo.pdf');
     });
   });

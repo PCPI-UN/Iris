@@ -65,10 +65,10 @@ export class AdminChangeProjectDocumentStateUC {
         );
       }
 
-      const updated = await this.updateDocument.execute({
-        id: current.id,
-        state,
-      });
+      const updated = await this.updateDocument.execute(
+        { id: current.id, state },
+        { administrative: true },
+      );
       // The state differs, so the entry is never null
       const entry = buildProjectChangeLogEntry({
         projectId: project.id,

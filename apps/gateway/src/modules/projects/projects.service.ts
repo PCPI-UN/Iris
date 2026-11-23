@@ -9,6 +9,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
+import { status as GrpcStatus } from '@grpc/grpc-js';
 import { firstValueFrom, lastValueFrom } from 'rxjs';
 import type { CourseSectionsResponse } from '../events/dto/events/course-sections.response';
 import { MAX_LIST_PROJECTS_BY_IDS } from '@app/common/constants/projects';
@@ -140,6 +141,26 @@ export function participantsRejection(rejected: AdminParticipantsRejection) {
     ? new BadRequestException(body)
     : new ConflictException(body);
 }
+/** 403 of PATCH /projects/documents/:id when it is asked to change the state */
+export const DOCUMENT_STATE_ADMIN_ONLY =
+  'El estado de un documento solo lo cambia un administrador de proyectos (PATCH /projects/:id/admin/documents/:documentId/state)';
+
+/** gRPC codes with which project-service refuses a change without saving anything */
+const REJECTION_CODES = new Set<number>([
+  GrpcStatus.INVALID_ARGUMENT,
+  GrpcStatus.NOT_FOUND,
+  GrpcStatus.ALREADY_EXISTS,
+  GrpcStatus.PERMISSION_DENIED,
+  GrpcStatus.FAILED_PRECONDITION,
+  GrpcStatus.OUT_OF_RANGE,
+]);
+
+/** project-service explicitly refused the change (as opposed to a timeout or a lost answer). */
+export function isExplicitRejection(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === 'number' && REJECTION_CODES.has(code);
+}
+
 /** `code` of the 409 of an administrative category change of a project with evaluations */
 export const PROJECT_CATEGORY_CHANGE_BLOCKED =
   'PROJECT_CATEGORY_CHANGE_BLOCKED';
@@ -774,9 +795,27 @@ export class ProjectsService implements OnModuleInit {
       );
       return res.document;
     } catch (error) {
-      // No document points to the new blob: remove it (best effort) so it is not left orphaned
-      await this.azureBlobUploadService.deleteFile(blobName);
+      await this.removeRejectedUpload(blobName, error);
       throw error;
+    }
+  }
+
+  /**
+   * Deletes (best effort) a blob just uploaded for a document change that project-service
+   * rejected, so it is not left orphaned. Only on an explicit rejection: after a timeout or an
+   * unavailable service the change may have been saved, and the document would point to a
+   * deleted file, so the blob is kept.
+   */
+  private async removeRejectedUpload(
+    blobName: string,
+    error: unknown,
+  ): Promise<void> {
+    if (isExplicitRejection(error)) {
+      await this.azureBlobUploadService.deleteFile(blobName);
+    } else {
+      this.logger.warn(
+        `Kept the blob ${blobName}: the document change may have been saved before the error`,
+      );
     }
   }
 
@@ -1036,6 +1075,10 @@ export class ProjectsService implements OnModuleInit {
     dto: UpdateProjectDocumentDto,
     file?: any,
   ): Promise<ProjectDocument> {
+    // Checked before the upload; project-service also rejects it (and edits of INACTIVE documents)
+    if (dto.state !== undefined) {
+      throw new ForbiddenException(DOCUMENT_STATE_ADMIN_ONLY);
+    }
     const request: UpdateProjectDocumentRequest = { id };
 
     if (file) {
@@ -1045,13 +1088,16 @@ export class ProjectsService implements OnModuleInit {
     if (dto.type !== undefined) {
       request.type = this.mapDocumentTypeToProto(dto.type);
     }
-    if (dto.state !== undefined) {
-      request.state = this.mapDocumentStatusToProto(dto.state);
-    }
 
-    const res: ProjectDocumentResponse = await lastValueFrom(
-      this.projectsService.updateProjectDocument(request),
-    );
+    let res: ProjectDocumentResponse;
+    try {
+      res = await lastValueFrom(
+        this.projectsService.updateProjectDocument(request),
+      );
+    } catch (error) {
+      if (request.url) await this.removeRejectedUpload(request.url, error);
+      throw error;
+    }
 
     if (!res.document) {
       throw new NotFoundException('No se encontró el documento del proyecto');

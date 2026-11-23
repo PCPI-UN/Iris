@@ -55,10 +55,10 @@ export class AdminReplaceProjectDocumentUC {
       const current = await this.repo.findDocumentById(input.documentId);
       assertDocumentOfProject(current, project.id, input.documentId);
 
-      const updated = await this.updateDocument.execute({
-        id: current.id,
-        url,
-      });
+      const updated = await this.updateDocument.execute(
+        { id: current.id, url },
+        { administrative: true },
+      );
       const entry = buildProjectChangeLogEntry({
         projectId: project.id,
         actorUserId: input.actingUserId,
