@@ -15,6 +15,7 @@ import {
   EvaluateProjectRequest,
   EvaluationProto,
   GetTopProjectsByCourseResponse,
+  GetEventCriteriaStatsResponse,
 } from '@app/common/generated/evaluation';
 import {
   PROJECTS_SERVICE_NAME,
@@ -143,6 +144,44 @@ export class EvaluationsService implements OnModuleInit {
   async getProjectStats(projectId: number): Promise<GetProjectStatsResponse> {
     const request: GetProjectStatsRequest = { projectId };
     return await lastValueFrom(this.evaluationService.getProjectStats(request));
+  }
+
+  /**
+   * Average score of each rubric component over the projects of an event, with the
+   * effective weights, and the highest grade of the event's scale. With a course, each
+   * component also lists its criteria. Projects of any state count; the ones without
+   * evaluations are left out by evaluation-service.
+   */
+  async getEventCriteriaStats(
+    eventId: number,
+    courseId?: number,
+  ): Promise<GetEventCriteriaStatsResponse> {
+    const projectsResponse = await lastValueFrom(
+      this.projectsService.listProjectsByEvent({
+        eventId,
+        courseId,
+        currentPage: 1,
+        itemsPerPage: 1000, // Every project of the event, as getTopProjectsByCourse
+      }),
+    );
+
+    // Called even without projects: maxScore comes from the event's scale
+    const response = await lastValueFrom(
+      this.evaluationService.getEventCriteriaStats({
+        eventId,
+        projectIds: (projectsResponse.items ?? []).map((p) => p.id),
+        withCriteria: courseId !== undefined,
+      }),
+    );
+
+    // proto3 omits empty lists
+    return {
+      maxScore: response.maxScore,
+      components: (response.components ?? []).map((component) => ({
+        ...component,
+        criteria: component.criteria ?? [],
+      })),
+    };
   }
 
   async getDashboardStats() {
