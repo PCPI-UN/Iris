@@ -45,22 +45,20 @@ describe('buildCriteriaStats', () => {
   });
 
   it('returns no components when no project was evaluated', () => {
-    expect(buildCriteriaStats([], true)).toEqual([]);
-    expect(buildCriteriaStats([[], []], true)).toEqual([]);
+    expect(buildCriteriaStats([])).toEqual([]);
+    expect(buildCriteriaStats([[], []])).toEqual([]);
   });
 
   it('weights each criterion inside its component, so the components add up to the grade', () => {
-    const components = buildCriteriaStats(
-      [[evaluation({ 1: 90, 2: 55, 3: 75, 4: 25 })]],
-      false,
-    );
+    const components = buildCriteriaStats([
+      [evaluation({ 1: 90, 2: 55, 3: 75, 4: 25 })],
+    ]);
 
-    expect(components[0].weight).toBeCloseTo(0.4);
-    expect(components).toEqual([
+    expect(components).toMatchObject([
       {
         id: 10,
         name: 'Planos y Cálculo',
-        weight: components[0].weight,
+        weight: 0.4,
         average: 78.33,
         projectCount: 1,
       },
@@ -77,29 +75,23 @@ describe('buildCriteriaStats', () => {
     const twoJurors = [evaluation({ 3: 80 }), evaluation({ 3: 60 })];
     const oneJuror = [evaluation({ 3: 90 })];
 
-    const [prototype] = buildCriteriaStats([twoJurors, oneJuror], false);
+    const [prototype] = buildCriteriaStats([twoJurors, oneJuror]);
 
     // (70 + 90) / 2, not (80 + 60 + 90) / 3 = 76.67
     expect(prototype).toMatchObject({ average: 80, projectCount: 2 });
   });
 
   it('leaves out the projects without evaluations', () => {
-    const [prototype] = buildCriteriaStats(
-      [[evaluation({ 3: 60 })], []],
-      false,
-    );
+    const [prototype] = buildCriteriaStats([[evaluation({ 3: 60 })], []]);
 
     expect(prototype).toMatchObject({ average: 60, projectCount: 1 });
   });
 
   it('keeps the scale of the scores (2 to 5)', () => {
-    const components = buildCriteriaStats(
-      [
-        [evaluation({ 1: 5, 2: 2, 4: 3 }), evaluation({ 1: 4, 2: 4, 4: 4 })],
-        [evaluation({ 1: 3, 2: 3, 4: 5 })],
-      ],
-      false,
-    );
+    const components = buildCriteriaStats([
+      [evaluation({ 1: 5, 2: 2, 4: 3 }), evaluation({ 1: 4, 2: 4, 4: 4 })],
+      [evaluation({ 1: 3, 2: 3, 4: 5 })],
+    ]);
 
     // Project 1: juror A (5·2 + 2·1) / 3 = 4, juror B 4 → 4; project 2: 3 → (4 + 3) / 2
     expect(components).toEqual([
@@ -108,17 +100,16 @@ describe('buildCriteriaStats', () => {
     ]);
   });
 
-  it('returns each criterion with its effective weight only when requested', () => {
+  it('returns each criterion with its effective weight, rounded to 4 decimals', () => {
     const projects = [
       [evaluation({ 1: 90, 2: 55 }), evaluation({ 1: 70, 2: 65 })],
       [evaluation({ 1: 60, 2: 100 })],
     ];
 
-    expect(buildCriteriaStats(projects, false)[0].criteria).toBeUndefined();
-    const [component] = buildCriteriaStats(projects, true);
+    const [component] = buildCriteriaStats(projects);
     expect(component.criteria).toEqual([
-      { id: 1, name: 'Planos', weight: rubric[1].weight, average: 70 },
-      { id: 2, name: 'Cálculo', weight: rubric[2].weight, average: 80 },
+      { id: 1, name: 'Planos', weight: 0.2667, average: 70 },
+      { id: 2, name: 'Cálculo', weight: 0.1333, average: 80 },
     ]);
   });
 
@@ -136,10 +127,7 @@ describe('buildCriteriaStats', () => {
       ],
     };
 
-    const components = buildCriteriaStats(
-      [[evaluation({ 3: 70 }), legacy]],
-      false,
-    );
+    const components = buildCriteriaStats([[evaluation({ 3: 70 }), legacy]]);
 
     expect(components.map((c) => c.id)).toEqual([20, null]);
     expect(components[1]).toMatchObject({ name: '', weight: 0, average: 50 });

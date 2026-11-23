@@ -124,10 +124,6 @@ message GetProjectStatsResponse {
   double averageGrade = 2;
   int32 evaluationCount = 3;
   repeated int32 evaluatorIds = 5;
-  // Average score per rubric component, with its criteria; empty without evaluations
-  repeated ComponentStatsProto components = 6;
-  // Highest grade possible with the event's evaluation type; 0 without evaluations
-  double maxScore = 7;
 }
 
 message GetProjectResultRequest {
@@ -161,8 +157,6 @@ message GetEventCriteriaStatsRequest {
   int32 eventId = 1;
   // Projects to average; the ones without evaluations are left out
   repeated int32 projectIds = 2;
-  // Also return the criteria of each component
-  bool withCriteria = 3;
 }
 
 message CriterionStatsProto {
@@ -183,13 +177,12 @@ message ComponentStatsProto {
   double average = 4;
   // Projects with at least one evaluation of this component
   int32 projectCount = 5;
-  // Only when the criteria were requested
   repeated CriterionStatsProto criteria = 6;
 }
 
 message GetEventCriteriaStatsResponse {
-  // Highest grade possible with the event's evaluation type
-  double maxScore = 1;
+  // Highest grade of the event's grading scale; absent when the event has none
+  optional double maxScore = 1;
   repeated ComponentStatsProto components = 2;
 }
 

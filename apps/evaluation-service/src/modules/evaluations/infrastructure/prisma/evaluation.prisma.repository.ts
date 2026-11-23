@@ -314,12 +314,6 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
             _count: true,
         });
 
-        // Criteria belong to one event, so any scored criterion gives the event of the rubric used
-        const scoredCriterion = await this.prisma.db.evaluationDetail.findFirst({
-            where: { evaluation: { projectId } },
-            select: { criterion: { select: { eventId: true } } },
-        });
-
         // Get unique evaluator user IDs for this project
         const evaluators = await this.prisma.db.evaluation.findMany({
             where: { projectId },
@@ -333,7 +327,6 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
             averageGrade: roundGrade(gradeStats._avg.grade || 0),
             evaluationCount: gradeStats._count,
             evaluatorIds,
-            eventId: scoredCriterion?.criterion.eventId ?? null,
         };
     }
 

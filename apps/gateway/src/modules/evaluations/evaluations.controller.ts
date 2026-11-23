@@ -57,7 +57,7 @@ export class EvaluationsController {
         description:
             'Returns statistics for a project: average grade, evaluation count, and the average score of each rubric ' +
             'component and its criteria, weighted with the effective weights stored with each score. ' +
-            'maxScore is the highest grade of the event scale (0 while the project has no evaluations). ' +
+            'maxScore is the highest grade of the event scale; it is absent when the event has no scale. ' +
             'Requires read:grades: it shows grades before the event publishes its results.',
     })
     @ApiParam({
@@ -84,21 +84,25 @@ export class EvaluationsController {
         description:
             'Average score of each rubric component over the projects of the event, using the effective weights ' +
             'stored with each score: inside a project the jurors are averaged, and each evaluated project counts the ' +
-            'same. Projects without evaluations are left out (projectCount). With categoryId, only the projects of that ' +
-            'category count and each component also lists its criteria with their effective weight. ' +
-            'maxScore is the highest grade of the event scale. ' +
+            'same. Projects without evaluations are left out (projectCount). Each component lists its criteria with ' +
+            'their effective weight. With categoryId, only the projects of that category count. ' +
+            'maxScore is the highest grade of the event scale; it is absent when the event has no scale. ' +
             'Requires read:grades: it shows grades before the event publishes its results.',
     })
     @ApiParam({ name: 'eventId', description: 'Event ID', example: 1 })
     @ApiQuery({
         name: 'categoryId',
-        description: 'Category (course) of the projects; also returns the criteria of each component',
+        description: 'Category (course) of the projects',
         example: 2,
         required: false,
     })
     @ApiResponse({
         status: 200,
         description: '{ maxScore, components: [{ id, name, weight, average, projectCount, criteria: [{ id, name, weight, average }] }] }',
+    })
+    @ApiResponse({
+        status: 404,
+        description: 'Event not found',
     })
     async getEventCriteriaStats(
         @Param('eventId', ParseIntPipe) eventId: number,

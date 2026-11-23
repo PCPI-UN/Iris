@@ -32,8 +32,7 @@ export interface ComponentStats {
   average: number;
   /** Projects with at least one evaluation of this component */
   projectCount: number;
-  /** Only when the criteria are requested */
-  criteria?: CriterionStats[];
+  criteria: CriterionStats[];
 }
 
 interface Average {
@@ -55,6 +54,10 @@ const addTo = (average: Average, value: number): void => {
 };
 
 const mean = ({ total, count }: Average): number => total / count;
+
+/** Weights are fractions of the grade; 4 decimals keep 0.1 + 0.2 from showing as 0.30000000000000004. */
+const roundWeight = (weight: number): number =>
+  Math.round(weight * 10_000) / 10_000;
 
 const sum = (values: Iterable<number>): number =>
   [...values].reduce((acc, value) => acc + value, 0);
@@ -121,14 +124,13 @@ const byId = (a: { id: number | null }, b: { id: number | null }): number =>
  * weights stored with each score. Inside a project, each juror's score of a component is
  * Σ(score·weight) / Σ(weight) of its criteria, and the project's score is the average of
  * its jurors. Across projects, each evaluated project counts the same, whatever its number
- * of jurors. Projects without evaluations are left out. Only the final values are rounded.
+ * of jurors. Projects without evaluations are left out. Each component also lists its
+ * criteria, averaged the same way. Only the final values are rounded.
  *
  * @param projects - The evaluations of each project
- * @param withCriteria - Also return the average and weight of each criterion inside its component
  */
 export function buildCriteriaStats(
   projects: StatsEvaluation[][],
-  withCriteria: boolean,
 ): ComponentStats[] {
   const components = new Map<
     number | null,
@@ -156,7 +158,6 @@ export function buildCriteriaStats(
       components.set(group.id, component);
     }
 
-    if (!withCriteria) continue;
     for (const { detail, average } of criteriaOfProject(evaluations).values()) {
       const criteria = components.get(detail.componentId)!.criteria;
       const criterion = criteria.get(detail.criterionId) ?? {
@@ -174,19 +175,17 @@ export function buildCriteriaStats(
     .map(([id, component]) => ({
       id,
       name: component.name,
-      weight: mean(component.weight),
+      weight: roundWeight(mean(component.weight)),
       average: roundGrade(mean(component.average)),
       projectCount: component.average.count,
-      ...(withCriteria && {
-        criteria: [...component.criteria.entries()]
-          .map(([criterionId, criterion]) => ({
-            id: criterionId,
-            name: criterion.name,
-            weight: mean(criterion.weight),
-            average: roundGrade(mean(criterion.average)),
-          }))
-          .sort(byId),
-      }),
+      criteria: [...component.criteria.entries()]
+        .map(([criterionId, criterion]) => ({
+          id: criterionId,
+          name: criterion.name,
+          weight: roundWeight(mean(criterion.weight)),
+          average: roundGrade(mean(criterion.average)),
+        }))
+        .sort(byId),
     }))
     .sort(byId);
 }

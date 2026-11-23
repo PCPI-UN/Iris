@@ -9,6 +9,10 @@ import {
   protobufPackage as evaluationProtobufPackage,
 } from '@app/common/generated/evaluation';
 import {
+  EVENT_SERVICE_NAME,
+  protobufPackage as eventProtobufPackage,
+} from '@app/common/generated/event';
+import {
   PROJECTS_SERVICE_NAME,
   protobufPackage as projectProtobufPackage,
 } from '@app/common/generated/project';
@@ -78,6 +82,22 @@ import { EvaluationsService } from './evaluations.service';
               'libs/common/src/protos/project.proto',
             ),
             url: configService.get<string>('PROJECT_SERVICE_URL'),
+          },
+        }),
+        inject: [ConfigService],
+      },
+      {
+        name: EVENT_SERVICE_NAME,
+        imports: [ConfigModule],
+        useFactory: (configService: ConfigService) => ({
+          transport: Transport.GRPC,
+          options: {
+            package: eventProtobufPackage,
+            protoPath: join(
+              process.cwd(),
+              'libs/common/src/protos/event.proto',
+            ),
+            url: configService.get<string>('EVENT_SERVICE_URL'),
           },
         }),
         inject: [ConfigService],

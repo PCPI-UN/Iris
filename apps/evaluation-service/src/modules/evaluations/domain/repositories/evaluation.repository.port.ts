@@ -12,8 +12,6 @@ export interface ProjectStats {
     averageGrade: number;
     evaluationCount: number;
     evaluatorIds?: number[];
-    /** Event of the rubric the project was evaluated with; null when it has no evaluations */
-    eventId: number | null;
 }
 
 export interface EvaluationWithDetails {

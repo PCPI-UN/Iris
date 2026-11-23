@@ -13,12 +13,11 @@ import {
   ComponentStatsProto,
 } from '@app/common/generated/evaluation';
 import { EventCriteriaStats } from '../use-cases/get-event-criteria-stats.use-case';
-import { ProjectStatsWithComponents } from '../use-cases/get-project-stats.use-case';
 import { ComponentStats } from '@evaluations/domain/services/criteria-stats';
 import { ProjectResultWithScale } from '../use-cases/get-project-result.use-case';
 import { Evaluation } from '@evaluations/domain/entities/evaluation.entity';
 import { EvaluationDetail } from '@evaluations/domain/entities/evaluation-detail.entity';
-import { ProjectEvaluationStatus as DomainProjectEvaluationStatus, TopProject } from '@evaluations/domain/repositories/evaluation.repository.port';
+import { ProjectStats, ProjectEvaluationStatus as DomainProjectEvaluationStatus, TopProject } from '@evaluations/domain/repositories/evaluation.repository.port';
 
 export class EvaluationMapper {
   static toCreateEvaluationResponse(
@@ -128,13 +127,13 @@ export class EvaluationMapper {
     stats: EventCriteriaStats,
   ): GetEventCriteriaStatsResponse {
     return {
-      maxScore: stats.maxScore,
+      ...(stats.maxScore !== undefined && { maxScore: stats.maxScore }),
       components: stats.components.map(EvaluationMapper.toComponentStatsProto),
     };
   }
 
   static toGetProjectStatsResponse(
-    stats: ProjectStatsWithComponents,
+    stats: ProjectStats,
     projectId: number,
   ): GetProjectStatsResponse {
     return {
@@ -142,8 +141,6 @@ export class EvaluationMapper {
       averageGrade: stats.averageGrade,
       evaluationCount: stats.evaluationCount,
       evaluatorIds: stats.evaluatorIds || [],
-      components: stats.components.map(EvaluationMapper.toComponentStatsProto),
-      maxScore: stats.maxScore,
     };
   }
 
@@ -156,7 +153,7 @@ export class EvaluationMapper {
       weight: component.weight,
       average: component.average,
       projectCount: component.projectCount,
-      criteria: component.criteria ?? [],
+      criteria: component.criteria,
     };
   }
 

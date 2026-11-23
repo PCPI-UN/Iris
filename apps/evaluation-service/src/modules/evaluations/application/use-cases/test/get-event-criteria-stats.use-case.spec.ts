@@ -2,7 +2,6 @@ import { GetEventCriteriaStatsUseCase } from '../get-event-criteria-stats.use-ca
 import { EvaluationRepositoryPort } from '../../../domain/repositories/evaluation.repository.port';
 import { StatsEvaluation } from '../../../domain/services/criteria-stats';
 import {
-  buildResolver,
   customScale,
   InMemoryGradingScaleRepository,
 } from '../../../../grading-scales/testing/grading-scales.fixture';
@@ -21,7 +20,7 @@ describe('GetEventCriteriaStatsUseCase', () => {
     ],
   });
 
-  const build = (scaleId = 1) => {
+  const build = (scaleId: number | null = 1) => {
     const repo = {
       findEvaluationsForStats: jest
         .fn()
@@ -32,15 +31,15 @@ describe('GetEventCriteriaStatsUseCase', () => {
     };
     const scales = new InMemoryGradingScaleRepository();
     scales.scales.set(50, customScale(50, [10, 20, 30, 40]));
-    scales.eventScales.set(3, scaleId);
+    if (scaleId !== null) scales.eventScales.set(3, scaleId);
     const uc = new GetEventCriteriaStatsUseCase(
       repo as unknown as EvaluationRepositoryPort,
-      buildResolver(scales),
+      scales,
     );
     return { uc, repo };
   };
 
-  it('averages the components of the given projects', async () => {
+  it('averages the components and criteria of the given projects', async () => {
     const { uc, repo } = build();
 
     const result = await uc.execute({ eventId: 3, projectIds: [5, 6] });
@@ -53,22 +52,21 @@ describe('GetEventCriteriaStatsUseCase', () => {
         weight: 0.4,
         average: 80,
         projectCount: 2,
+        criteria: [{ id: 1, name: 'Problema', weight: 0.4, average: 80 }],
       },
     ]);
   });
 
-  it('returns the criteria only when requested', async () => {
-    const { uc } = build();
+  it('still returns the averages without maxScore when the event has no grading scale', async () => {
+    const { uc } = build(null);
 
-    const result = await uc.execute({
-      eventId: 3,
-      projectIds: [5, 6],
-      withCriteria: true,
+    const result = await uc.execute({ eventId: 3, projectIds: [5, 6] });
+
+    expect(result).not.toHaveProperty('maxScore');
+    expect(result.components[0]).toMatchObject({
+      average: 80,
+      projectCount: 2,
     });
-
-    expect(result.components[0].criteria).toEqual([
-      { id: 1, name: 'Problema', weight: 0.4, average: 80 },
-    ]);
   });
 
   it.each<[string, number, number]>([

@@ -15,10 +15,6 @@ describe('EvaluationPrismaRepository - project statistics', () => {
                     grades.length ? [{ projectId: 1, _avg: { grade: average }, _count: { id: grades.length } }] : [],
                 ),
             },
-            evaluationDetail: {
-                // Any scored criterion of the project; they all belong to event 3
-                findFirst: jest.fn().mockResolvedValue(grades.length ? { criterion: { eventId: 3 } } : null),
-            },
         };
 
         // Repositories query through `db` (the open transaction, or the default client)
@@ -26,14 +22,6 @@ describe('EvaluationPrismaRepository - project statistics', () => {
     };
 
     describe('getProjectStats', () => {
-        it('takes the event from the criteria scored', async () => {
-            const repository = buildRepository([90]);
-
-            const stats = await repository.getProjectStats(1);
-
-            expect(stats.eventId).toBe(3);
-        });
-
         it('rounds the average grade to 2 decimals so ranking and report use the same value', async () => {
             // (81.171428 + 85.33) / 2 = 83.250714
             const repository = buildRepository([81.171428, 85.33]);
@@ -51,7 +39,6 @@ describe('EvaluationPrismaRepository - project statistics', () => {
 
             expect(stats.averageGrade).toBe(0);
             expect(stats.evaluationCount).toBe(0);
-            expect(stats.eventId).toBeNull();
         });
     });
 

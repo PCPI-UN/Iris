@@ -23,7 +23,7 @@ describe('EvaluationsService.getTopProjectsByCourse', () => {
         };
         const client = (service: unknown) => ({ getService: () => service }) as unknown as ClientGrpc;
 
-        const service = new EvaluationsService(client(evaluationGrpc), client({}), client(projectsGrpc));
+        const service = new EvaluationsService(client(evaluationGrpc), client({}), client(projectsGrpc), client({}));
         service.onModuleInit();
         return { service, projectsGrpc };
     };

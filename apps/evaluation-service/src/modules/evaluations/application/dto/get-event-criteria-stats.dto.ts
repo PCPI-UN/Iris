@@ -1,10 +1,4 @@
-import {
-  IsArray,
-  IsBoolean,
-  IsInt,
-  IsOptional,
-  IsPositive,
-} from 'class-validator';
+import { IsArray, IsInt, IsOptional, IsPositive } from 'class-validator';
 
 export class GetEventCriteriaStatsDto {
   @IsInt()
@@ -17,8 +11,4 @@ export class GetEventCriteriaStatsDto {
   @IsInt({ each: true })
   @IsPositive({ each: true })
   projectIds?: number[];
-
-  @IsOptional()
-  @IsBoolean()
-  withCriteria?: boolean;
 }
