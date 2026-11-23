@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { RpcException } from '@nestjs/microservices';
 import { status } from '@grpc/grpc-js';
 import { CriterionRepositoryPort } from '@criterions/domain/repositories/criterion.repository.port';
@@ -34,9 +34,14 @@ export interface RubricReadiness {
  * Every category of the event is reported, also the ones without any criterion.
  * It also tells what can no longer change because of evaluations (same rules as when saving),
  * so clients can disable those fields instead of waiting for FAILED_PRECONDITION.
+ * The flags are informational: saving revalidates them. `componentsLocked` counts every evaluation of the
+ * event, while `locked` only counts evaluated projects that still exist (as when saving a criterion), so
+ * after deleting the only evaluated project the components stay locked and no category is.
  */
 @Injectable()
 export class GetRubricReadinessUseCase {
+  private readonly logger = new Logger(GetRubricReadinessUseCase.name);
+
   constructor(
     private readonly criterionRepository: CriterionRepositoryPort,
     private readonly eventService: EventServicePort,
@@ -61,7 +66,7 @@ export class GetRubricReadinessUseCase {
       this.criterionRepository.findActiveByEventWithCourses(eventId),
       courseId === undefined ? this.eventService.listCourseIdsByEvent(eventId) : Promise.resolve([courseId]),
       areComponentsLocked(this.criterionRepository, eventId),
-      this.categoryLockService.findEvaluatedCategoryIds(eventId),
+      this.findEvaluatedCategoryIds(eventId),
     ]);
 
     const criteriaByCourse = new Map<number, Criterion[]>(
@@ -97,5 +102,20 @@ export class GetRubricReadinessUseCase {
       categories,
       componentsLocked,
     };
+  }
+
+  /**
+   * Finding the evaluated categories asks project-service for every project of the event. If it fails, the
+   * rubric is still shown (without category locks) rather than breaking the screen; saving still rejects.
+   */
+  private async findEvaluatedCategoryIds(eventId: number): Promise<Set<number>> {
+    try {
+      return await this.categoryLockService.findEvaluatedCategoryIds(eventId);
+    } catch (error) {
+      this.logger.warn(
+        `Could not tell which categories of event ${eventId} have evaluations: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return new Set();
+    }
   }
 }

@@ -21,6 +21,7 @@ describe('GetRubricReadinessUseCase', () => {
         eventCourseIds: number[] = Array.from(new Set(criteria.flatMap(({ courseIds }) => courseIds))),
         evaluatedCategoryIds: number[] = [],
         eventHasEvaluations = evaluatedCategoryIds.length > 0,
+        categoryLookupError?: Error,
     ) => {
         const repository = {
             findComponentsByEvent: jest.fn().mockResolvedValue(eventComponents),
@@ -37,7 +38,9 @@ describe('GetRubricReadinessUseCase', () => {
             ),
         } as unknown as EventServicePort;
         const categoryLockService = {
-            findEvaluatedCategoryIds: jest.fn().mockResolvedValue(new Set(evaluatedCategoryIds)),
+            findEvaluatedCategoryIds: categoryLookupError
+                ? jest.fn().mockRejectedValue(categoryLookupError)
+                : jest.fn().mockResolvedValue(new Set(evaluatedCategoryIds)),
         } as unknown as CategoryLockService;
         return new GetRubricReadinessUseCase(repository, eventService, categoryLockService);
     };
@@ -147,6 +150,39 @@ describe('GetRubricReadinessUseCase', () => {
         const result = await useCase.execute({ eventId: 1 });
 
         expect(result.componentsLocked).toBe(false);
+        expect(result.categories[0].locked).toBe(false);
+    });
+
+    it('only reports the requested category when it is locked', async () => {
+        const useCase = buildUseCase(components, [{ criterion: criterion(1, 11), courseIds: [10, 20] }], [10, 20], [10]);
+
+        const result = await useCase.execute({ eventId: 1, courseId: 10 });
+
+        expect(result.categories).toEqual([expect.objectContaining({ courseId: 10, locked: true })]);
+    });
+
+    it('keeps the components locked when the event has evaluations but no evaluated project exists anymore', async () => {
+        const useCase = buildUseCase(components, [{ criterion: criterion(1, 11), courseIds: [10] }], [10], [], true);
+
+        const result = await useCase.execute({ eventId: 1 });
+
+        expect(result.componentsLocked).toBe(true);
+        expect(result.categories[0].locked).toBe(false);
+    });
+
+    it('still answers, without category locks, when the projects cannot be listed', async () => {
+        const useCase = buildUseCase(
+            components,
+            [{ criterion: criterion(1, 11), courseIds: [10] }],
+            [10],
+            [],
+            true,
+            new Error('project-service unavailable'),
+        );
+
+        const result = await useCase.execute({ eventId: 1 });
+
+        expect(result.componentsLocked).toBe(true);
         expect(result.categories[0].locked).toBe(false);
     });
 
