@@ -71,8 +71,8 @@ export class CriterionsController {
 
   @GrpcMethod(CRITERIONS_SERVICE_NAME, 'FindCriterionsByCourse')
   async findCriterionsByCourse(request: FindByCourseDto): Promise<FindCriterionsByCourseResponse> {
-    const { criterions, components } = await this.findByCourseUseCase.execute(request);
-    return CriterionMapper.toFindCriterionsByCourseResponse(criterions, components);
+    const { criterions, components, effectiveWeights } = await this.findByCourseUseCase.execute(request);
+    return CriterionMapper.toFindCriterionsByCourseResponse(criterions, components, effectiveWeights);
   }
 
   @GrpcMethod(CRITERIONS_SERVICE_NAME, 'ListCriterions')

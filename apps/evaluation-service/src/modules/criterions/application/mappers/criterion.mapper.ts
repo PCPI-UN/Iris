@@ -9,7 +9,6 @@ import {
 } from '@app/common/generated/evaluation';
 import { Criterion } from '@criterions/domain/entities/criterion.entity';
 import { Component } from '@criterions/domain/entities/component.entity';
-import { buildRubric } from '@criterions/domain/services/rubric';
 
 export class CriterionMapper {
   static toCreateCriterionResponse(
@@ -102,27 +101,15 @@ export class CriterionMapper {
 
   static toFindCriterionsByCourseResponse(
     criterions: Criterion[],
-    components: Component[]
+    components: Component[],
+    // Effective weight of each criterion in the grade; a criterion without one gets no `weight`
+    effectiveWeights: Map<number, number> = new Map(),
   ): FindCriterionsByCourseResponse {
     // Build a map of component ID to weight for quick lookup
     const componentWeights: Record<number, number> = {};
     components.forEach(component => {
       componentWeights[component.id] = component.weight;
     });
-
-    // Same rubric the grade is computed with (`evaluate-project.use-case.ts`), one per event
-    const effectiveWeights = new Map<number, number>();
-    for (const eventId of new Set(
-      criterions.map((criterion) => criterion.eventId),
-    )) {
-      const rubric = buildRubric(
-        components.filter((component) => component.eventId === eventId),
-        criterions.filter((criterion) => criterion.eventId === eventId),
-      );
-      rubric.effectiveWeights.forEach((weight, criterionId) =>
-        effectiveWeights.set(criterionId, weight),
-      );
-    }
 
     const groupedCriterions = criterions.reduce((acc, criterion) => {
       const componentId = criterion.componentId;
