@@ -228,8 +228,9 @@ export class InvitationsService implements OnModuleInit {
 
   /**
    * Invites several jurors to an event at once. The Juror role is looked up once for all of them.
-   * A juror who already has a pending invitation to the event is not invited again (it would not
-   * send a new email anyway). A failure is reported per juror and does not stop the others.
+   * A juror who already has a pending invitation to the event gets no new email; if that invitation
+   * lacks the Juror role, it is added to it. A failure is reported per juror and does not stop the
+   * others.
    */
   async inviteJurorsToEvent(
     eventId: number,
@@ -256,6 +257,23 @@ export class InvitationsService implements OnModuleInit {
             }),
           );
           if (pending.invitation) {
+            // A pending invitation with other roles (as organizer, say) gets the Juror role
+            // added by CreateInvitation, without a new email: otherwise accepting it would
+            // leave the juror without the role to evaluate the assigned projects
+            if (!(pending.invitation.roleIds ?? []).includes(jurorRole.id)) {
+              await firstValueFrom(
+                this.invitationService.createInvitation({
+                  email: juror.email,
+                  eventType,
+                  firstName: juror.firstName,
+                  lastName: juror.lastName,
+                  targetType,
+                  targetId: eventId,
+                  invitedByUserId,
+                  roleIds: [jurorRole.id],
+                }),
+              );
+            }
             result.reused.push(juror.email);
             return;
           }
