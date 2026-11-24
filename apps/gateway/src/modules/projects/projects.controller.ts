@@ -421,7 +421,9 @@ export class ProjectsController {
   @ApiOperation({
     summary: 'List projects assigned to a juror',
     description:
-      'Returns paginated projects assigned to a specific juror within an event.',
+      'Returns paginated projects assigned to a specific juror within an event. Each project carries its ' +
+      "`projectCode` when it has one, and the juror's own evaluation status: `evaluated` and `evaluation` " +
+      '(grade, comments and the level given to each criterion), null until the juror evaluates it.',
   })
   async listAssignedProjects(
     @Query() query: ListProjectsAssignedToJurorDto,
