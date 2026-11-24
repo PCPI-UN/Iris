@@ -222,6 +222,9 @@ message FindCriterionsByCourseRequest {
 message CriterionSummary {
   int32 id = 1;
   string name = 2;
+  // Effective weight in the grade (fraction of 1): component weight × relative weight ÷ Σ relative
+  // weights of the component in the category. Absent for a criterion without component
+  optional double weight = 3;
 }
 
 message CriterionCategoryProto {
