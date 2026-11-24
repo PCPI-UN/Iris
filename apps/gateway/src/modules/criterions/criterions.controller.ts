@@ -258,7 +258,10 @@ export class CriterionsController {
     summary: 'Get criterions by course',
     description:
       'Retrieves all criterions associated with a specific course. Only a session is required: ' +
-      'the rubric has no grades and jurors (platform role User) load it to evaluate.',
+      'the rubric has no grades and jurors (platform role User) load it to evaluate. Criterions are ' +
+      'grouped by component (`weight` = component weight); each criterion brings its effective ' +
+      '`weight` in the grade (component weight × relative weight ÷ sum of the relative weights of ' +
+      'its component in the category), absent when it has no component.',
   })
   @ApiParam({
     name: 'courseId',

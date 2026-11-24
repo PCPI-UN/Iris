@@ -101,7 +101,9 @@ export class CriterionMapper {
 
   static toFindCriterionsByCourseResponse(
     criterions: Criterion[],
-    components: Component[]
+    components: Component[],
+    // Effective weight of each criterion in the grade; a criterion without one gets no `weight`
+    effectiveWeights: Map<number, number> = new Map(),
   ): FindCriterionsByCourseResponse {
     // Build a map of component ID to weight for quick lookup
     const componentWeights: Record<number, number> = {};
@@ -121,9 +123,11 @@ export class CriterionMapper {
           criterions: [],
         };
       }
+      const weight = effectiveWeights.get(criterion.id);
       acc[groupKey].criterions.push({
         id: criterion.id,
         name: criterion.name,
+        ...(weight !== undefined && { weight }),
       });
       return acc;
     }, {} as Record<string, { componentId: number | null; criterions: CriterionSummary[] }>);
