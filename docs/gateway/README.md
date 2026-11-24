@@ -29,6 +29,7 @@ Single HTTP entry point of the platform. It authenticates the browser session, c
 | `tiebreaks` | Manual tiebreak order | `evaluation` |
 | `invitations` | Invitations, juror invitations, acceptance | `invitation`, `auth`, `event`, `project` |
 | `dashboard` | Admin summary figures; student dashboard (`GET /students/me/dashboard`) and results of the student's project (`GET /events/:eventId/my-project/results`), own data only | `event`, `project`, `evaluation` (through the other modules) |
+| `diplomas` | Award diploma of the caller's project as a PDF (`GET /events/:eventId/my-project/diploma`), see [Award diplomas](#award-diplomas) | `event`, `project` (through the other modules) |
 | `academic` | Read-only views of the academic roles (`/academic/*`): projects, their events, registrations and grades (JSON or Excel) of the caller's scope. `project-service` decides the scope from the caller's scope permissions; grades of unpublished events are only sent to callers with `read:grades`. `/registrations` and `/grades` answer 404 for an event that is not in `/academic/events` (deleted, or without projects of the caller). The course section of a project carries its term code (such as `202610`), taken from `event-service` | `project`, `event`, `evaluation` (through the other modules) |
 | `terms` | Academic terms (`GET /terms`, `POST /terms`): every event belongs to one, and the NRC typed when submitting a project is looked up in it when the event requires a course section (`requiresCourse`) | `event` (through the events module) |
 
@@ -67,6 +68,7 @@ For `owner` endpoints the guard only asks for a session; the check happens in th
 | `PATCH /projects/:id/code`, `POST /projects/:id/change-to-under-review` | Confirmed participants, while the project is in `REQUEST_CHANGES` | gateway use case / `project-service` |
 | `POST /invitations` | Depends on the target type | `invitation-service` `AuthorizeInvitation` ([rules](../invitation-service/README.md)); `auth-service` checks a platform grant again on acceptance |
 | `GET /events/:eventId/reports/evaluation`, `GET /events/:eventId/my-project/report` | `read:grades`, `read:academic_projects` within scope, or the caller's own project once results are published | `EvaluationReportService` (gateway) |
+| `GET /events/:eventId/my-project/diploma` | The caller's own project, once results are published and only if it won an award of the event | `DiplomasService` (gateway) |
 
 A project tutor reads the projects they tutor through `/academic/projects/:id`, not `GET /projects/:id`.
 
@@ -79,6 +81,15 @@ See [auth-service](../auth-service/) for how tokens are issued and refreshed.
 ## Public winners page
 
 `GET /events/public/winners?page=&limit=` is public (no session). It returns the winners and co-winners of every event whose results are published and whose ranking is public, grouped by event, category and award, newest event first, with pagination by event (`limit` at most 50). The visibility rule, the grade rounding and hiding live in event-service `ListPublishedWinners` (see [event-service](../event-service/README.md#public-winners-across-events)); `grade` is `null` unless the event ranking shows grades. The gateway adds each winner's project name from project-service `ListProjectsByIds`.
+
+## Award diplomas
+
+`GET /events/:eventId/my-project/diploma` returns the award diploma of the caller's project as a PDF (A4 landscape), generated on demand and never stored.
+
+- **Who**: only the caller's own project in the event (project-service `GetMyProjectByEvent`, 404 otherwise), once the admin publishes the results (403 before) and only if it won at least one award of the event (event-service `ListAwardsByProjects`, 404 otherwise). Co-winners each get their own diploma.
+- **Content**: the event design, exported from Canva as a PNG with the event title, the dean's signature and the date already printed, plus the project name in Montserrat Bold Italic. The name shrinks from 30 to 16 pt and wraps into at most two lines; a longer name is cut with an ellipsis. A project with several awards gets one diploma: the design does not name the award.
+- **Design per event**: `DIPLOMA_TEMPLATES` holds `eventId:template` pairs separated by commas, such as `12:engineering-innovation-expo,15:feria-proyectos-stem`. An event that is not listed answers 404; invalid entries are ignored with a warning at start.
+- **Assets**: `src/modules/diplomas/assets` (the PNG designs, the font and its OFL license). `nest-cli.json` copies them next to the bundle, and they are read from `dist/apps/gateway/modules/diplomas/assets` on the first download. A new design is a new PNG of 2000x1414 px with the blank space in the same place, plus its file name in the `DIPLOMA_TEMPLATES` list of `diploma-templates.ts`.
 
 ## File uploads
 

@@ -8,6 +8,7 @@ import { CriterionsModule } from './modules/criterions/criterions.module';
 import { TieBreaksModule } from './modules/tiebreaks/tiebreaks.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { DiplomasModule } from './modules/diplomas/diplomas.module';
 import { AcademicModule } from './modules/academic/academic.module';
 import { TermsModule } from './modules/terms/terms.module';
 import { ConfigModule } from '@nestjs/config';
@@ -37,6 +38,7 @@ import { HealthController } from './health.controller';
     GradingScalesModule,
     DashboardModule,
     ReportsModule,
+    DiplomasModule,
     AcademicModule,
     TermsModule,
   ],
