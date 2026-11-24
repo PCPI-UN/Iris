@@ -23,13 +23,17 @@ const USER_ID = 200;
 class InMemoryInvitationRoles {
   private readonly rows = new Map<string, InvitationRole>();
 
-  save = jest.fn(async (role: InvitationRole) => {
+  save = jest.fn((role: InvitationRole) => {
     this.rows.set(`${role.invitationId}:${role.roleId}`, role);
-    return role;
+    return Promise.resolve(role);
   });
 
-  findByInvitationId = jest.fn(async (invitationId: string) =>
-    [...this.rows.values()].filter((role) => role.invitationId === invitationId),
+  findByInvitationId = jest.fn((invitationId: string) =>
+    Promise.resolve(
+      [...this.rows.values()].filter(
+        (role) => role.invitationId === invitationId,
+      ),
+    ),
   );
 }
 
@@ -64,7 +68,7 @@ describe('CreateInvitation reusing a pending invitation with other roles', () =>
       findAcceptedByEmailAndTargetType: jest.fn().mockResolvedValue(null),
       findPendingByEmailAndTargetType: jest.fn().mockResolvedValue(pending),
       findByToken: jest.fn().mockResolvedValue(pending),
-      save: jest.fn(async (invitation: Invitation) => invitation),
+      save: jest.fn((invitation: Invitation) => Promise.resolve(invitation)),
     };
     eventService = {
       getEvent: jest.fn(),
