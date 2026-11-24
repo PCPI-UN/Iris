@@ -7,6 +7,8 @@ import { FindEvaluationsByEvaluatorUseCase } from '@evaluations/application/use-
 import { GetProjectStatsUseCase } from '@evaluations/application/use-cases/get-project-stats.use-case';
 import { GetProjectResultUseCase } from '@evaluations/application/use-cases/get-project-result.use-case';
 import { GetProjectResultDto } from '@evaluations/application/dto/get-project-result.dto';
+import { GetEventCriteriaStatsUseCase } from '@evaluations/application/use-cases/get-event-criteria-stats.use-case';
+import { GetEventCriteriaStatsDto } from '@evaluations/application/dto/get-event-criteria-stats.dto';
 import { CheckEvaluationStatusUseCase } from '@evaluations/application/use-cases/check-evaluation-status.use-case';
 import { GetTopProjectsByCourseUseCase } from '@evaluations/application/use-cases/get-top-projects-by-course.use-case';
 import { EvaluateProjectDto } from '@evaluations/application/dto/evaluate-project.dto';
@@ -22,6 +24,7 @@ import {
     FindEvaluationsByEvaluatorResponse,
     GetProjectStatsResponse,
     GetProjectResultResponse,
+    GetEventCriteriaStatsResponse,
     CheckEvaluationStatusResponse,
     GetTopProjectsByCourseRequest,
     GetTopProjectsByCourseResponse,
@@ -39,6 +42,7 @@ export class EvaluationsController {
         private readonly getTopProjectsByCourseUseCase: GetTopProjectsByCourseUseCase,
         private readonly getDashboardStatsUC: GetDashboardStatsUC,
         private readonly getProjectResultUseCase: GetProjectResultUseCase,
+        private readonly getEventCriteriaStatsUseCase: GetEventCriteriaStatsUseCase,
     ) { }
 
     @GrpcMethod(EVALUATION_SERVICE_NAME, 'EvaluateProject')
@@ -78,6 +82,12 @@ export class EvaluationsController {
     async getProjectResult(request: GetProjectResultDto): Promise<GetProjectResultResponse> {
         const result = await this.getProjectResultUseCase.execute(request);
         return EvaluationMapper.toGetProjectResultResponse(result);
+    }
+
+    @GrpcMethod(EVALUATION_SERVICE_NAME, 'GetEventCriteriaStats')
+    async getEventCriteriaStats(request: GetEventCriteriaStatsDto): Promise<GetEventCriteriaStatsResponse> {
+        const stats = await this.getEventCriteriaStatsUseCase.execute(request);
+        return EvaluationMapper.toGetEventCriteriaStatsResponse(stats);
     }
 
     @GrpcMethod(EVALUATION_SERVICE_NAME, 'CheckEvaluationStatus')

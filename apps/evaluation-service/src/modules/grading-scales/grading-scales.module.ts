@@ -29,6 +29,6 @@ import { GradingScalesController } from './interface/grpc/grading-scales.control
         GetEventGradingScaleUseCase,
         UnassignEventGradingScaleUseCase,
     ],
-    exports: [EventGradingScaleResolver],
+    exports: [EventGradingScaleResolver, GradingScaleRepositoryPort],
 })
 export class GradingScalesModule {}

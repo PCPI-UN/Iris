@@ -92,6 +92,20 @@ Rubric changes and evaluations of an event never interleave: both run in a trans
 
 It never returns juror ids nor how many jurors evaluated, and it does not check publication or who asks: the gateway does.
 
+## Statistics per component
+
+`GetEventCriteriaStats` returns the average score of each rubric component, and of each criterion inside it, over the projects the gateway sends: every project of an event, of one category, or a single project. It uses the effective weights stored with each score:
+
+1. In each evaluation, the score of a component is Σ(score × weight) ÷ Σ(weight) of its criteria.
+2. The score of the component in a project is the average of its jurors.
+3. Across projects, each evaluated project counts the same, whatever its number of jurors; projects without evaluations are left out (`projectCount`).
+
+Example: criteria scored 90 and 55 with weights 0.267 and 0.133 give their 0.4 component 78.33, not the plain average 72.5. Each component also returns its `weight`, the sum of its criteria's stored weights.
+
+It also returns `maxScore`, the highest level of the event's grading scale. The averages do not depend on the scale, so an event without one still gets them, only without `maxScore`.
+
+`GetProjectStats` stays light (average grade, evaluation count and jurors) because the ranking and project-service call it once per project.
+
 ## Dependencies
 
 - **Uses**: PostgreSQL, `project-service` (project, its jurors, and the category of each project of an event), `event-service` (event and its courses) and `auth-service` (role catalog, to find the `Juror` role id).

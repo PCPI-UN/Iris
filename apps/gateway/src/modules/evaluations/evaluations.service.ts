@@ -1,4 +1,9 @@
-import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  NotFoundException,
+  OnModuleInit,
+} from '@nestjs/common';
 import { roundGrade } from '@app/common/utils/grade-rounding';
 import { ClientGrpc } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
@@ -15,29 +20,45 @@ import {
   EvaluateProjectRequest,
   EvaluationProto,
   GetTopProjectsByCourseResponse,
+  GetEventCriteriaStatsResponse,
+  ComponentStatsProto,
 } from '@app/common/generated/evaluation';
+import {
+  EVENT_SERVICE_NAME,
+  EventServiceClient,
+} from '@app/common/generated/event';
 import {
   PROJECTS_SERVICE_NAME,
   ProjectsServiceClient,
   ListAssignedProjectsResponse,
   Project,
   ProjectState,
+  ProjectComplete,
 } from '@app/common/generated/project';
 import {
   assignRankingPositions,
   filterVisiblePositions,
 } from '../events/ranking/ranking-positions';
 
+/** Grade statistics of a project with the average of each rubric component. */
+export interface ProjectStatsWithComponents extends GetProjectStatsResponse {
+  components: ComponentStatsProto[];
+  /** Highest grade of the event's grading scale; absent when the event has none */
+  maxScore?: number;
+}
+
 @Injectable()
 export class EvaluationsService implements OnModuleInit {
   private evaluationService: EvaluationServiceClient;
   private criterionsService: CriterionsServiceClient;
   private projectsService: ProjectsServiceClient;
+  private eventsService: EventServiceClient;
 
   constructor(
     @Inject(EVALUATION_SERVICE_NAME) private evaluationClient: ClientGrpc,
     @Inject(CRITERIONS_SERVICE_NAME) private criterionsClient: ClientGrpc,
     @Inject(PROJECTS_SERVICE_NAME) private projectsClient: ClientGrpc,
+    @Inject(EVENT_SERVICE_NAME) private eventsClient: ClientGrpc,
   ) {}
 
   onModuleInit() {
@@ -53,6 +74,8 @@ export class EvaluationsService implements OnModuleInit {
       this.projectsClient.getService<ProjectsServiceClient>(
         PROJECTS_SERVICE_NAME,
       );
+    this.eventsService =
+      this.eventsClient.getService<EventServiceClient>(EVENT_SERVICE_NAME);
   }
 
   async getAssignedProjects(
@@ -140,9 +163,92 @@ export class EvaluationsService implements OnModuleInit {
     );
   }
 
-  async getProjectStats(projectId: number): Promise<GetProjectStatsResponse> {
+  /**
+   * Grade, evaluation count and jurors of a project, plus the average of each rubric
+   * component and its criteria and the highest grade of the event's scale. Fails with
+   * NOT_FOUND when the project does not exist.
+   */
+  async getProjectStats(projectId: number): Promise<ProjectStatsWithComponents> {
     const request: GetProjectStatsRequest = { projectId };
-    return await lastValueFrom(this.evaluationService.getProjectStats(request));
+    const [stats, { project }] = await Promise.all([
+      lastValueFrom(this.evaluationService.getProjectStats(request)),
+      lastValueFrom(this.projectsService.getProject({ id: projectId })),
+    ]);
+
+    // project-service answers NOT_FOUND for a missing project; proto3 still types it optional
+    if (!project) {
+      throw new NotFoundException('No se encontró el proyecto');
+    }
+    const criteriaStats = await this.fetchCriteriaStats(project.eventId, [
+      projectId,
+    ]);
+
+    return { ...stats, ...criteriaStats };
+  }
+
+  /**
+   * Average score of each rubric component and its criteria over the projects of an
+   * event, with the effective weights, and the highest grade of the event's scale.
+   * With a course, only its projects count. Projects of any state count; the ones
+   * without evaluations are left out by evaluation-service. Fails with NOT_FOUND when
+   * the event does not exist.
+   */
+  async getEventCriteriaStats(
+    eventId: number,
+    courseId?: number,
+  ): Promise<GetEventCriteriaStatsResponse> {
+    const [, projects] = await Promise.all([
+      lastValueFrom(this.eventsService.getEvent({ id: eventId })),
+      this.listAllProjectsByEvent(eventId, courseId),
+    ]);
+
+    return this.fetchCriteriaStats(
+      eventId,
+      projects.map((project) => project.id),
+    );
+  }
+
+  /** Called even without projects: maxScore comes from the event's scale. */
+  private async fetchCriteriaStats(
+    eventId: number,
+    projectIds: number[],
+  ): Promise<GetEventCriteriaStatsResponse> {
+    const response = await lastValueFrom(
+      this.evaluationService.getEventCriteriaStats({ eventId, projectIds }),
+    );
+
+    // proto3 omits empty lists
+    return {
+      ...(response.maxScore !== undefined && { maxScore: response.maxScore }),
+      components: (response.components ?? []).map((component) => ({
+        ...component,
+        criteria: component.criteria ?? [],
+      })),
+    };
+  }
+
+  /** Every project of the event (optionally of one course), page by page. */
+  private async listAllProjectsByEvent(
+    eventId: number,
+    courseId?: number,
+  ): Promise<ProjectComplete[]> {
+    const projects: ProjectComplete[] = [];
+    let currentPage = 1;
+    let totalPages = 1;
+    do {
+      const response = await lastValueFrom(
+        this.projectsService.listProjectsByEvent({
+          eventId,
+          courseId,
+          currentPage,
+          itemsPerPage: 100,
+        }),
+      );
+      projects.push(...(response.items ?? []));
+      totalPages = response.totalPages || 1;
+      currentPage += 1;
+    } while (currentPage <= totalPages);
+    return projects;
   }
 
   async getDashboardStats() {

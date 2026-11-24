@@ -5,10 +5,7 @@ import { PrismaService } from '../../../../../common/prisma/prisma.service';
  * Statistics consumed by the ranking and the reports (CU-86e3vmxar / IRIS-V3-EVAL-02).
  */
 describe('EvaluationPrismaRepository - project statistics', () => {
-    const buildRepository = (
-        grades: number[],
-        details: Array<{ criterionId: number; category: string | null; weight: number; score: number }> = [],
-    ) => {
+    const buildRepository = (grades: number[]) => {
         const average = grades.length ? grades.reduce((a, b) => a + b, 0) / grades.length : null;
         const prisma = {
             evaluation: {
@@ -18,16 +15,6 @@ describe('EvaluationPrismaRepository - project statistics', () => {
                     grades.length ? [{ projectId: 1, _avg: { grade: average }, _count: { id: grades.length } }] : [],
                 ),
             },
-            evaluationDetail: {
-                findMany: jest.fn().mockResolvedValue(
-                    details.map((d) => ({
-                        score: d.score,
-                        // Effective weight stored with the evaluation detail
-                        weight: d.weight,
-                        criterion: { id: d.criterionId, category: d.category },
-                    })),
-                ),
-            },
         };
 
         // Repositories query through `db` (the open transaction, or the default client)
@@ -35,33 +22,6 @@ describe('EvaluationPrismaRepository - project statistics', () => {
     };
 
     describe('getProjectStats', () => {
-        it('computes the category weight as the sum of the stored criterion weights, even when they differ', async () => {
-            // Comunicación Oral in the approved report: 0.1 + 0.09 + 0.09 = 0.28
-            const repository = buildRepository([90], [
-                { criterionId: 13, category: 'Comunicación Oral', weight: 0.1, score: 90 },
-                { criterionId: 14, category: 'Comunicación Oral', weight: 0.09, score: 90 },
-                { criterionId: 15, category: 'Comunicación Oral', weight: 0.09, score: 90 },
-            ]);
-
-            const stats = await repository.getProjectStats(1);
-
-            expect(stats.categoryStats[0].weight).toBeCloseTo(0.28, 10);
-        });
-
-        it('counts each criterion weight once although several jurors scored it', async () => {
-            const repository = buildRepository([90, 75], [
-                { criterionId: 1, category: 'Comunicación Escrita', weight: 0.06, score: 90 },
-                { criterionId: 2, category: 'Comunicación Escrita', weight: 0.06, score: 75 },
-                { criterionId: 1, category: 'Comunicación Escrita', weight: 0.06, score: 75 },
-                { criterionId: 2, category: 'Comunicación Escrita', weight: 0.06, score: 75 },
-            ]);
-
-            const stats = await repository.getProjectStats(1);
-
-            expect(stats.categoryStats[0].weight).toBeCloseTo(0.12, 10);
-            expect(stats.categoryStats[0].averageScore).toBe(78.75);
-        });
-
         it('rounds the average grade to 2 decimals so ranking and report use the same value', async () => {
             // (81.171428 + 85.33) / 2 = 83.250714
             const repository = buildRepository([81.171428, 85.33]);
@@ -79,7 +39,6 @@ describe('EvaluationPrismaRepository - project statistics', () => {
 
             expect(stats.averageGrade).toBe(0);
             expect(stats.evaluationCount).toBe(0);
-            expect(stats.categoryStats).toEqual([]);
         });
     });
 
@@ -92,6 +51,43 @@ describe('EvaluationPrismaRepository - project statistics', () => {
 
             expect(top.averageGrade).toBe(83.25);
             expect(top.averageGrade).toBe(stats.averageGrade);
+        });
+    });
+
+    describe('findEvaluationsForStats', () => {
+        it('groups the evaluations by project, with the criterion and component of each score', async () => {
+            const detail = (score: number, component: { id: number; name: string } | null) => ({
+                score,
+                weight: 0.5,
+                criterion: { id: 1, name: 'Problema', component },
+            });
+            const findMany = jest.fn().mockResolvedValue([
+                { projectId: 1, scores: [detail(80, { id: 10, name: 'Fundamentación' })] },
+                { projectId: 2, scores: [detail(70, null)] },
+                { projectId: 1, scores: [detail(60, { id: 10, name: 'Fundamentación' })] },
+            ]);
+            const repository = new EvaluationPrismaRepository({
+                db: { evaluation: { findMany } },
+            } as unknown as PrismaService);
+
+            const projects = await repository.findEvaluationsForStats([1, 2]);
+
+            expect(findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ where: { projectId: { in: [1, 2] } } }),
+            );
+            expect(projects.map((evaluations) => evaluations.map((e) => e.details[0].score))).toEqual([
+                [80, 60],
+                [70],
+            ]);
+            expect(projects[0][0].details[0]).toEqual({
+                criterionId: 1,
+                criterionName: 'Problema',
+                componentId: 10,
+                componentName: 'Fundamentación',
+                score: 80,
+                weight: 0.5,
+            });
+            expect(projects[1][0].details[0]).toMatchObject({ componentId: null, componentName: null });
         });
     });
 });

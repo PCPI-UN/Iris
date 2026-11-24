@@ -4,7 +4,6 @@ import {
     EvaluationRepositoryPort,
     PaginatedEvaluations,
     ProjectStats,
-    CategoryStats,
     EvaluationWithDetails,
     TopProject
 } from '@evaluations/domain/repositories/evaluation.repository.port';
@@ -12,6 +11,7 @@ import { Evaluation } from '@evaluations/domain/entities/evaluation.entity';
 import { EvaluationDetail } from '@evaluations/domain/entities/evaluation-detail.entity';
 import { roundGrade } from '../../../../common/utils/grade.utils';
 import { ResultEvaluation } from '../../domain/services/project-result';
+import { StatsEvaluation } from '../../domain/services/criteria-stats';
 
 @Injectable()
 export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
@@ -267,6 +267,45 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
         }));
     }
 
+    async findEvaluationsForStats(projectIds: number[]): Promise<StatsEvaluation[][]> {
+        const evaluations = await this.prisma.db.evaluation.findMany({
+            where: { projectId: { in: projectIds } },
+            select: {
+                projectId: true,
+                scores: {
+                    select: {
+                        score: true,
+                        weight: true,
+                        criterion: {
+                            select: {
+                                id: true,
+                                name: true,
+                                component: { select: { id: true, name: true } },
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        const byProject = new Map<number, StatsEvaluation[]>();
+        for (const evaluation of evaluations) {
+            const projectEvaluations = byProject.get(evaluation.projectId) ?? [];
+            projectEvaluations.push({
+                details: evaluation.scores.map((detail) => ({
+                    criterionId: detail.criterion.id,
+                    criterionName: detail.criterion.name,
+                    componentId: detail.criterion.component?.id ?? null,
+                    componentName: detail.criterion.component?.name ?? null,
+                    score: detail.score,
+                    weight: detail.weight,
+                })),
+            });
+            byProject.set(evaluation.projectId, projectEvaluations);
+        }
+        return [...byProject.values()];
+    }
+
     async getProjectStats(projectId: number): Promise<ProjectStats> {
         // Get average grade and count
         const gradeStats = await this.prisma.db.evaluation.aggregate({
@@ -274,59 +313,6 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
             _avg: { grade: true },
             _count: true,
         });
-
-        // Get all evaluation details with criterion info (including category and weight)
-        const evaluationDetails = await this.prisma.db.evaluationDetail.findMany({
-            where: {
-                evaluation: {
-                    projectId,
-                },
-            },
-            include: {
-                criterion: {
-                    select: {
-                        id: true,
-                        category: true,
-                    },
-                },
-            },
-        });
-
-        // Group scores by category, tracking the weight each unique criterion had when it was evaluated.
-        // One rubric per event, so every evaluation of the project used the same effective weight.
-        const categoryScoresMap = new Map<string, { scores: number[]; criterionWeights: Map<number, number> }>();
-
-        for (const detail of evaluationDetails) {
-            const category = detail.criterion.category || 'Uncategorized';
-            
-            if (!categoryScoresMap.has(category)) {
-                categoryScoresMap.set(category, {
-                    scores: [],
-                    criterionWeights: new Map(),
-                });
-            }
-
-            const categoryData = categoryScoresMap.get(category)!;
-            categoryData.scores.push(detail.score);
-            categoryData.criterionWeights.set(detail.criterion.id, detail.weight);
-        }
-
-        // The category weight is the sum of the weights of its unique criteria
-        // (criteria may have different weights, e.g. 0.1 + 0.09 + 0.09)
-        const categoryStats: CategoryStats[] = [];
-
-        for (const [category, data] of categoryScoresMap.entries()) {
-            const averageScore = data.scores.reduce((sum, score) => sum + score, 0) / data.scores.length;
-            
-            const categoryWeight = Array.from(data.criterionWeights.values())
-                .reduce((sum, weight) => sum + weight, 0);
-
-            categoryStats.push({
-                category,
-                averageScore: roundGrade(averageScore),
-                weight: categoryWeight,
-            });
-        }
 
         // Get unique evaluator user IDs for this project
         const evaluators = await this.prisma.db.evaluation.findMany({
@@ -340,7 +326,6 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
             // Rounded here so ranking, top projects and reports compare and show the same value
             averageGrade: roundGrade(gradeStats._avg.grade || 0),
             evaluationCount: gradeStats._count,
-            categoryStats,
             evaluatorIds,
         };
     }

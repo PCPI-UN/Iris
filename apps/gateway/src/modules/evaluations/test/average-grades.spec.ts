@@ -19,6 +19,7 @@ describe('EvaluationsService.getAverageGrades', () => {
       client(evaluationGrpc),
       client({}),
       client({}),
+      client({}),
     );
     service.onModuleInit();
     return { service, evaluationGrpc };
