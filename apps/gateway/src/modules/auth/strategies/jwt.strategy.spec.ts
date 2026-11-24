@@ -1,4 +1,4 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from '../auth.service';
 import { JwtStrategy } from './jwt.strategy';
@@ -14,6 +14,7 @@ describe('JwtStrategy.validate', () => {
   let strategy: JwtStrategy;
 
   beforeEach(() => {
+    jest.restoreAllMocks();
     jest.clearAllMocks();
     authService.getUserPermissions.mockResolvedValue({
       roles: [{ id: 2, name: 'EventManager' }],
@@ -36,6 +37,29 @@ describe('JwtStrategy.validate', () => {
 
     expect(user.id).toBe(12);
     expect(user.platformPermissions).toEqual(['manage:events']);
+  });
+
+  it('logs only the user id, never their personal data or permissions', async () => {
+    authService.getUser.mockResolvedValue({
+      id: 12,
+      firstName: 'Ana',
+      email: 'a@uni.edu',
+      phone: '3001234567',
+      active: true,
+    });
+    const debug = jest
+      .spyOn(Logger.prototype, 'debug')
+      .mockImplementation(() => undefined);
+
+    await strategy.validate({ sub: 12 });
+
+    const logged = debug.mock.calls.map((call) => String(call[0])).join('\n');
+    expect(logged).toContain('12');
+    expect(logged).not.toContain('a@uni.edu');
+    expect(logged).not.toContain('3001234567');
+    expect(logged).not.toContain('Ana');
+    expect(logged).not.toContain('manage:events');
+    expect(logged).not.toContain('EventManager');
   });
 
   it('rejects the session of a deactivated account that still holds a valid token', async () => {
