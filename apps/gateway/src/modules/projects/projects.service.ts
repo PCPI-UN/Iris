@@ -1262,6 +1262,7 @@ export class ProjectsService implements OnModuleInit {
         participants: project.participants,
         documents: project.documents,
         pendingParticipants: project.pendingParticipants,
+        projectCode: project.projectCode,
         evaluated: status?.evaluated || false,
         evaluation: status?.evaluation || null,
       };
