@@ -173,4 +173,13 @@ describe('DiplomasService', () => {
       NotFoundException,
     );
   });
+
+  it('tells whether an event has a diploma design (CU-1dfnv12dk1b)', () => {
+    const { service } = build();
+
+    expect(service.hasDiploma(10)).toBe(true);
+    expect(service.hasDiploma(11)).toBe(true);
+    expect(service.hasDiploma(12)).toBe(false);
+    expect(build({ templates: undefined }).service.hasDiploma(10)).toBe(false);
+  });
 });

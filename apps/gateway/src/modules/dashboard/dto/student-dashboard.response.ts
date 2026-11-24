@@ -178,11 +178,12 @@ export class StudentDashboardTrajectoryItem {
   isCurrent: boolean;
 
   @ApiProperty({
-    type: [Object],
-    example: [],
-    description: 'Always empty for now: there is no certificate model yet',
+    example: true,
+    description:
+      'true when the award diploma of the project can be downloaded with GET /events/:eventId/my-project/diploma: ' +
+      'the results are published, the project won at least one award of the event and the event has a diploma design',
   })
-  certificates: never[];
+  diplomaAvailable: boolean;
 }
 
 export class StudentDashboardSemester {

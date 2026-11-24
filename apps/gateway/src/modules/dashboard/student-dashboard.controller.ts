@@ -32,7 +32,8 @@ export class StudentDashboardController {
     summary: 'Get my student dashboard',
     description:
       'Profile, accumulated KPIs (fairs, approved projects, awards), the project of the event that has not ended and the history of approved participations of the authenticated student. ' +
-      'Awards and scores are only sent once the admin publishes the event results. Certificates are not included yet.',
+      'Awards and scores are only sent once the admin publishes the event results. ' +
+      'Each trajectory event says with diplomaAvailable whether its award diploma can be downloaded (GET /events/:eventId/my-project/diploma).',
   })
   @ApiResponse({ status: 200, type: StudentDashboardResponse })
   @ApiResponse({

@@ -50,6 +50,14 @@ export class DiplomasService {
     this.templates = templates;
   }
 
+  /**
+   * Whether the event has a diploma design in `DIPLOMA_TEMPLATES`. The student dashboard
+   * uses it to flag the events whose diploma can be downloaded (CU-1dfnv12dk1b).
+   */
+  hasDiploma(eventId: number): boolean {
+    return this.templates.has(eventId);
+  }
+
   async getMyDiploma(userId: number, eventId: number): Promise<DiplomaFile> {
     const [{ project }, event] = await Promise.all([
       // NOT_FOUND (404) when the user has no project in the event

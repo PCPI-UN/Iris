@@ -2,6 +2,7 @@ import { StudentDashboardService } from './student-dashboard.service';
 import { ProjectsService } from '../projects/projects.service';
 import { EvaluationsService } from '../evaluations/evaluations.service';
 import { AppUser } from '../auth/types/app-user.type';
+import { DiplomasService } from '../diplomas/diplomas.service';
 
 describe('StudentDashboardService', () => {
   const user: AppUser = {
@@ -89,6 +90,7 @@ describe('StudentDashboardService', () => {
       stats?: object;
       academic?: object;
       grades?: { projectId: number; averageGrade: number }[];
+      diplomaEvents?: number[];
     } = {},
   ) => {
     const projects = {
@@ -111,13 +113,20 @@ describe('StudentDashboardService', () => {
           : Promise.reject(new Error('unavailable')),
       ),
     };
+    const diplomas = {
+      hasDiploma: jest.fn((eventId: number) =>
+        (overrides.diplomaEvents ?? [2, 3]).includes(eventId),
+      ),
+    };
     return {
       service: new StudentDashboardService(
         projects as unknown as ProjectsService,
         evaluations as unknown as EvaluationsService,
+        diplomas as unknown as DiplomasService,
       ),
       projects,
       evaluations,
+      diplomas,
     };
   };
 
@@ -209,7 +218,7 @@ describe('StudentDashboardService', () => {
         finalScore: null,
         award: null,
         isCurrent: true,
-        certificates: [],
+        diplomaAvailable: false,
       },
       {
         id: 20,
@@ -221,7 +230,7 @@ describe('StudentDashboardService', () => {
         finalScore: null,
         award: 'Primer puesto, Mención de honor',
         isCurrent: false,
-        certificates: [],
+        diplomaAvailable: false,
       },
     ]);
     expect(dashboard.bySemester).toEqual([
@@ -296,5 +305,43 @@ describe('StudentDashboardService', () => {
 
     expect(dashboard.currentProject).toBeNull();
     expect(dashboard.evaluation).toBeNull();
+  });
+
+  describe('diplomaAvailable (CU-1dfnv12dk1b)', () => {
+    // Project 20 won two awards in event 2; project 34 won none in event 3
+    const published = {
+      participations: [
+        { ...stats.participations[0], resultsPublished: true },
+        { ...stats.participations[1], resultsPublished: true },
+      ],
+    };
+
+    it('is true only for an event with published results, an award and a design', async () => {
+      const { service, diplomas } = build({ stats: published });
+
+      const { trajectory } = await service.getDashboard(user);
+
+      expect(trajectory.map((t) => [t.eventId, t.diplomaAvailable])).toEqual([
+        [3, false],
+        [2, true],
+      ]);
+      expect(diplomas.hasDiploma).toHaveBeenCalledWith(2);
+    });
+
+    it('is false while the results are not published', async () => {
+      const { service } = build();
+
+      const { trajectory } = await service.getDashboard(user);
+
+      expect(trajectory.every((t) => t.diplomaAvailable === false)).toBe(true);
+    });
+
+    it('is false when the event has no diploma design', async () => {
+      const { service } = build({ stats: published, diplomaEvents: [3] });
+
+      const { trajectory } = await service.getDashboard(user);
+
+      expect(trajectory.every((t) => t.diplomaAvailable === false)).toBe(true);
+    });
   });
 });
