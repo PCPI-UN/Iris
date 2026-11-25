@@ -60,3 +60,25 @@ export function filterVisiblePositions<T extends RankableRow>(
   }
   return rows.filter((row) => row.position <= positions);
 }
+
+/**
+ * Position of one project among the given averages, with the same rule as the ranking,
+ * and whether another project shares it. null when the project is not among them (it
+ * has no evaluations, or is not approved).
+ */
+export function positionOf(
+  rows: { projectId: number; averageGrade: number }[],
+  projectId: number,
+): { position: number; tied: boolean } | null {
+  const ranked = assignRankingPositions(
+    rows.map((row) => ({ ...row, position: 0 })),
+  );
+  const own = ranked.find((row) => row.projectId === projectId);
+  if (!own) return null;
+  return {
+    position: own.position,
+    tied: ranked.some(
+      (row) => row.position === own.position && row.projectId !== projectId,
+    ),
+  };
+}

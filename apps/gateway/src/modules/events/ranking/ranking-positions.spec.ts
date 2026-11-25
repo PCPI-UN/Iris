@@ -1,6 +1,7 @@
 import {
   assignRankingPositions,
   filterVisiblePositions,
+  positionOf,
 } from './ranking-positions';
 import { roundGrade } from '@app/common/utils/grade-rounding';
 
@@ -107,6 +108,30 @@ describe('ranking positions (co-winners)', () => {
 
     it('shows every row when the cut is not positive', () => {
       expect(filterVisiblePositions(ranked(), 0)).toHaveLength(5);
+    });
+  });
+
+  describe('positionOf', () => {
+    const averages = [
+      { projectId: 1, averageGrade: 90 },
+      // 2 and 3 tie once rounded to 2 decimals
+      { projectId: 2, averageGrade: 85.004 },
+      { projectId: 3, averageGrade: 85 },
+      { projectId: 4, averageGrade: 70 },
+    ];
+
+    it('gives tied projects the same position and marks them as tied', () => {
+      expect(positionOf(averages, 2)).toEqual({ position: 2, tied: true });
+      expect(positionOf(averages, 3)).toEqual({ position: 2, tied: true });
+    });
+
+    it('keeps dense positions after a tie and is not tied alone', () => {
+      expect(positionOf(averages, 1)).toEqual({ position: 1, tied: false });
+      expect(positionOf(averages, 4)).toEqual({ position: 3, tied: false });
+    });
+
+    it('is null for a project without average', () => {
+      expect(positionOf(averages, 9)).toBeNull();
     });
   });
 });
