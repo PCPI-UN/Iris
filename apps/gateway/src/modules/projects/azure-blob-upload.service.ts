@@ -12,6 +12,7 @@ import {
   StorageSharedKeyCredential,
   generateBlobSASQueryParameters,
 } from '@azure/storage-blob';
+import { randomUUID } from 'crypto';
 import * as path from 'path';
 
 /** Matches values that carry a scheme, e.g. https://… (blob names never do) */
@@ -29,24 +30,42 @@ const OPEN_SAS_TTL_SEC = 3600;
 
 /**
  * Multer reads multipart file names as latin1, while browsers send them as
- * UTF-8: "Pendón.pdf" arrives as "PendoÌ\x81n.pdf".
+ * UTF-8: "Pendón.pdf" arrives as "PendoÌ\x81n.pdf". A name that already holds
+ * characters above latin1, or that is not valid UTF-8 once re-read, came in
+ * decoded (e.g. through filename*=UTF-8'') and stays as it is.
  */
-const decodeOriginalName = (name: string): string =>
-  Buffer.from(name, 'latin1').toString('utf8');
+const decodeOriginalName = (name: string): string => {
+  if ([...name].some((char) => char.charCodeAt(0) > 0xff)) {
+    return name;
+  }
+  const decoded = Buffer.from(name, 'latin1').toString('utf8');
+  return decoded.includes('\uFFFD') ? name : decoded;
+};
+
+const toAscii = (value: string): string =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/×/g, 'x');
 
 /**
  * Azure rejects blob names with control characters, so the blob name keeps
- * only ASCII letters, digits, dots, dashes and underscores:
- * "Pendón Tune 80×180 cm @300dpi (1).pdf" -> "Pendon_Tune_80x180_cm_300dpi_1.pdf".
+ * only ASCII letters, digits, dots, dashes and underscores, and always keeps
+ * the extension: "Pendón Tune 80×180 cm @300dpi (1).pdf" ->
+ * "Pendon_Tune_80x180_cm_300dpi_1.pdf", "海报.pdf" -> "file.pdf".
  */
-const toSafeBlobName = (name: string): string =>
-  name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/×/g, 'x')
-    .replace(/[^A-Za-z0-9._-]+/g, '_')
-    .replace(/_*\._*/g, '.')
-    .replace(/^[_.]+|_+$/g, '') || 'file';
+const toSafeBlobName = (name: string): string => {
+  const extension = path.extname(name);
+  const base =
+    toAscii(path.basename(name, extension))
+      .replace(/[^A-Za-z0-9._-]+/g, '_')
+      .replace(/^[_.]+|[_.]+$/g, '') || 'file';
+  const safeExtension = toAscii(extension.slice(1)).replace(
+    /[^A-Za-z0-9]+/g,
+    '',
+  );
+  return safeExtension ? `${base}.${safeExtension}` : base;
+};
 
 const STORAGE_UNAVAILABLE =
   'El almacenamiento de documentos no está configurado';
@@ -186,7 +205,9 @@ export class AzureBlobUploadService {
 
     const originalName = decodeOriginalName(file.originalname);
     try {
-      const blobName = `${Date.now()}-${toSafeBlobName(path.basename(originalName))}`;
+      // The random part keeps apart files of one request whose names clean up
+      // to the same text ("Póster.pdf" and "Poster.pdf").
+      const blobName = `${Date.now()}-${randomUUID().slice(0, 8)}-${toSafeBlobName(path.basename(originalName))}`;
       const blockBlobClient: BlockBlobClient =
         this.uploadContainer.getBlockBlobClient(blobName);
 

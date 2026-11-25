@@ -258,7 +258,7 @@ describe('AzureBlobUploadService document URLs', () => {
         asMulter('Pendón Tune 80×180 cm @300dpi (1).pdf'),
       );
       expect(result.blobName).toMatch(
-        /^\d+-Pendon_Tune_80x180_cm_300dpi_1\.pdf$/,
+        /^\d+-[0-9a-f]{8}-Pendon_Tune_80x180_cm_300dpi_1\.pdf$/,
       );
       expect(getBlockBlobClient).toHaveBeenCalledWith(result.blobName);
       expect(result.filename).toBe('Pendón Tune 80×180 cm @300dpi (1).pdf');
@@ -266,13 +266,32 @@ describe('AzureBlobUploadService document URLs', () => {
 
     it('keeps a name that is already safe', async () => {
       const { result } = await upload('poster_final-v2.png');
-      expect(result.blobName).toMatch(/^\d+-poster_final-v2\.png$/);
+      expect(result.blobName).toMatch(/^\d+-[0-9a-f]{8}-poster_final-v2\.png$/);
       expect(result.filename).toBe('poster_final-v2.png');
     });
 
     it('falls back to a generic name when nothing safe is left', async () => {
       const { result } = await upload(asMulter('¿¡@@!?'));
-      expect(result.blobName).toMatch(/^\d+-file$/);
+      expect(result.blobName).toMatch(/^\d+-[0-9a-f]{8}-file$/);
+    });
+
+    it('leaves a name that already arrived as UTF-8 readable', async () => {
+      const { result } = await upload('Pendón 海报.pdf');
+      expect(result.filename).toBe('Pendón 海报.pdf');
+      expect(result.blobName).toMatch(/^\d+-[0-9a-f]{8}-Pendon\.pdf$/);
+    });
+
+    it('keeps the extension when the base name has no ASCII letters', async () => {
+      const { result } = await upload(asMulter('海报.pdf'));
+      expect(result.blobName).toMatch(/^\d+-[0-9a-f]{8}-file\.pdf$/);
+    });
+
+    it('gives different blob names to files whose names clean up the same', async () => {
+      const [a, b] = await Promise.all([
+        upload(asMulter('Póster.pdf')),
+        upload('Poster.pdf'),
+      ]);
+      expect(a.result.blobName).not.toBe(b.result.blobName);
     });
   });
 });
