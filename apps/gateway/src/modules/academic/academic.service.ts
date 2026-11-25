@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { status } from '@grpc/grpc-js';
 import {
   AcademicCourse,
   AcademicScope,
@@ -13,13 +14,23 @@ import {
 } from '@app/common/utils/term-code.util';
 import { withoutOneofMarkers } from '@app/common/utils/grpc-oneof.util';
 import { pendingStatus } from '@app/common/utils/pending-status.util';
+import {
+  groupByComponent,
+  splitFeedback,
+} from '@app/common/utils/project-result.util';
+import { GetProjectResultResponse } from '@app/common/generated/evaluation';
 import { ProjectsService } from '../projects/projects.service';
 import { EventService } from '../events/events.service';
 import { EvaluationsService } from '../evaluations/evaluations.service';
 import { AppUser } from '../auth/types/app-user.type';
+import { positionOf } from '../events/ranking/ranking-positions';
 import {
   AcademicCourseSummary,
   AcademicEvent,
+  AcademicProjectDetail,
+  AcademicProjectEvaluation,
+  AcademicProjectRanking,
+  AcademicProjectResult,
   GradeRow,
   GradesReport,
   GradeStatus,
@@ -56,10 +67,14 @@ const REVIEW_STATES: ProjectReviewState[] = [
  *
  * Grades: a caller with `read:grades` (Admin, FacultyAdmin, Dean) sees them at any
  * time; anyone else only once the admin publishes the event results. The rule is
- * applied here, before the JSON or the Excel is built, so no format can show more.
+ * applied here, before the JSON or the Excel is built, so no format can show more. The
+ * project detail follows it for the result and the ranking position; how many jurors
+ * evaluated is shown to every caller of the scope.
  */
 @Injectable()
 export class AcademicService {
+  private readonly logger = new Logger(AcademicService.name);
+
   constructor(
     private readonly projectsService: ProjectsService,
     private readonly eventsService: EventService,
@@ -93,18 +108,97 @@ export class AcademicService {
     });
   }
 
+  /**
+   * One project of the caller's scope with its evaluation: juror counters always; the
+   * result (grade, criteria by component, comments) and the ranking position only when
+   * the caller may see the grade (same rule as getGrades).
+   */
   async getProject(
     user: AppUser,
     projectId: number,
     profile: AcademicProfile,
-  ): Promise<ProjectComplete> {
+  ): Promise<AcademicProjectDetail> {
     const project = await this.projectsService.getProjectInScope(
       user.id,
       projectId,
       profileScope(user, profile),
     );
-    const [withTerm] = withTermCodes([project], await this.termCodes());
-    return withoutOneofMarkers(withTerm);
+    const [codes, event, averages] = await Promise.all([
+      this.termCodes(),
+      this.eventsService.getEventById(project.eventId),
+      this.evaluationsService.getAverageGrades([projectId]),
+    ]);
+    const [withTerm] = withTermCodes([project], codes);
+
+    const completedEvaluations = averages[0]?.evaluationCount ?? 0;
+    const assignedJurors = project.assignedJurorCount ?? 0;
+    const view = gradeView(
+      completedEvaluations,
+      !!event?.resultsPublished,
+      canReadUnpublishedGrades(user),
+    );
+
+    const [result, ranking] = view.visible
+      ? await Promise.all([
+          this.evaluationsService.getProjectResult(projectId),
+          this.ranking(project),
+        ])
+      : [undefined, null];
+
+    const evaluation: AcademicProjectEvaluation = {
+      gradeStatus: view.gradeStatus,
+      assignedJurors,
+      completedEvaluations,
+      pendingEvaluations: Math.max(assignedJurors - completedEvaluations, 0),
+      resultHidden: view.hidden,
+      result: result ? toProjectResult(result) : null,
+      ranking,
+    };
+    return withoutOneofMarkers({ ...withTerm, evaluation });
+  }
+
+  /**
+   * Position of an approved project in its category, the same as the student results:
+   * dense positions over the rounded averages of the approved projects of the category,
+   * only for events with a ranking configuration. Any failure leaves the position out
+   * instead of failing the whole detail.
+   */
+  private async ranking(
+    project: ProjectComplete,
+  ): Promise<AcademicProjectRanking | null> {
+    if (reviewState(project.state) !== 'APPROVED') return null;
+    const { id, eventId, courseId: categoryId } = project;
+    try {
+      const { rankingEvent } =
+        await this.eventsService.getRankingEventByEventId(eventId);
+      if (!rankingEvent) return null;
+
+      const approved = await this.eventsService.listApprovedProjects(
+        eventId,
+        categoryId,
+      );
+      const averages = await this.evaluationsService.getAverageGrades(
+        approved.map((p) => p.id),
+      );
+      const own = positionOf(averages, id);
+      if (!own) return null;
+
+      const { category } = await this.eventsService.getCategory(categoryId);
+      return {
+        ...own,
+        categoryId,
+        categoryName: category?.name?.trim() || 'Sin categoria',
+      };
+    } catch (error: unknown) {
+      // An event without ranking configuration has no positions
+      if ((error as { code?: number } | null)?.code === status.NOT_FOUND) {
+        return null;
+      }
+      this.logger.warn(
+        `Ranking of project ${id} in event ${eventId} unavailable: ${(error as Error)?.message}`,
+      );
+      return null;
+    }
   }
 
   /** Events where the projects of the caller's scope take part, newest first; deleted ones are left out */
@@ -205,9 +299,11 @@ export class AcademicService {
       const average = averageById.get(project.id);
       const completedEvaluations = average?.evaluationCount ?? 0;
       const assignedJurors = project.assignedJurorCount ?? 0;
-      const gradeStatus = toGradeStatus(completedEvaluations, resultsPublished);
-      const visible =
-        gradeStatus !== 'PENDING' && (resultsPublished || seesUnpublished);
+      const { gradeStatus, visible, hidden } = gradeView(
+        completedEvaluations,
+        resultsPublished,
+        seesUnpublished,
+      );
 
       return {
         projectId: project.id,
@@ -220,7 +316,7 @@ export class AcademicService {
         completedEvaluations,
         pendingEvaluations: Math.max(assignedJurors - completedEvaluations, 0),
         finalScore: visible ? (average?.averageGrade ?? null) : null,
-        gradeHidden: gradeStatus !== 'PENDING' && !visible,
+        gradeHidden: hidden,
       };
     });
 
@@ -276,6 +372,35 @@ export function toGradeStatus(
 ): GradeStatus {
   if (completedEvaluations === 0) return 'PENDING';
   return resultsPublished ? 'OFFICIAL' : 'PRELIMINARY';
+}
+
+/**
+ * Grade rule of the academic views: a grade exists once a juror evaluated; it is shown
+ * once the results are published, or before to a caller that reads unpublished grades.
+ * hidden: it exists but the caller may not see it yet.
+ */
+export function gradeView(
+  completedEvaluations: number,
+  resultsPublished: boolean,
+  seesUnpublished: boolean,
+): { gradeStatus: GradeStatus; visible: boolean; hidden: boolean } {
+  const gradeStatus = toGradeStatus(completedEvaluations, resultsPublished);
+  const exists = gradeStatus !== 'PENDING';
+  const visible = exists && (resultsPublished || seesUnpublished);
+  return { gradeStatus, visible, hidden: exists && !visible };
+}
+
+/** Result of evaluation-service as the detail shows it; null when nobody evaluated */
+export function toProjectResult(
+  result: GetProjectResultResponse,
+): AcademicProjectResult | null {
+  if (!result.evaluated) return null;
+  return {
+    finalScore: result.finalScore,
+    maxScore: result.maxScore,
+    components: groupByComponent(result),
+    comments: splitFeedback(result.consolidatedFeedback),
+  };
 }
 
 /** The proto enums arrive as their names (gRPC loader enums: String) or as numbers */

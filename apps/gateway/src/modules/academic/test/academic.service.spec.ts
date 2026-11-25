@@ -4,6 +4,7 @@ import { AcademicProfile } from '../academic-profiles';
 import {
   AcademicService,
   canReadUnpublishedGrades,
+  gradeView,
   toGradeStatus,
   toRegistrationProject,
   studentNames,
@@ -117,6 +118,176 @@ describe('AcademicService', () => {
 
       await expect(service.getGrades(PROFESSOR, 4, AS_PROFESSOR)).rejects.toBeInstanceOf(NotFoundException);
       expect(projectsService.listAllProjectsInScope).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getProject', () => {
+    const evaluated = {
+      evaluated: true,
+      finalScore: 4.25,
+      maxScore: 5,
+      criteria: [
+        { criterionId: 1, criterion: 'Claridad', component: 'Exposición', weight: 0.4, score: 4 },
+        { criterionId: 2, criterion: 'Diseño', component: 'Solución', weight: 0.6, score: 4.5 },
+      ],
+      consolidatedFeedback: 'Buen trabajo.\n\nFaltan pruebas.',
+    };
+
+    const published = (resultsPublished: boolean) =>
+      eventsService.getEventById.mockResolvedValue({ id: 4, name: 'Feria 2026', resultsPublished, active: true });
+
+    beforeEach(() => {
+      projectsService.getProjectInScope.mockResolvedValue(project(1, { eventId: 4, courseId: 6 }));
+      evaluationsService.getProjectResult = jest.fn().mockResolvedValue(evaluated);
+      // Approved projects of category 6: 1 and 7 tie at 4.25, 8 is behind
+      eventsService.getRankingEventByEventId = jest.fn().mockResolvedValue({ rankingEvent: { eventId: 4, positions: 3 } });
+      eventsService.listApprovedProjects = jest.fn().mockResolvedValue([{ id: 1 }, { id: 7 }, { id: 8 }]);
+      eventsService.getCategory = jest.fn().mockResolvedValue({ category: { id: 6, name: ' Sistemas ' } });
+      evaluationsService.getAverageGrades.mockImplementation(async (ids: number[]) =>
+        ids.length === 1
+          ? [{ projectId: 1, averageGrade: 4.25, evaluationCount: 2 }]
+          : [
+              { projectId: 1, averageGrade: 4.25, evaluationCount: 2 },
+              { projectId: 7, averageGrade: 4.25, evaluationCount: 3 },
+              { projectId: 8, averageGrade: 3.9, evaluationCount: 3 },
+            ],
+      );
+    });
+
+    const visibleEvaluation = {
+      gradeStatus: 'PRELIMINARY',
+      assignedJurors: 3,
+      completedEvaluations: 2,
+      pendingEvaluations: 1,
+      resultHidden: false,
+      result: {
+        finalScore: 4.25,
+        maxScore: 5,
+        components: [
+          { component: 'Exposición', weight: 0.4, criteria: [{ criterionId: 1, criterion: 'Claridad', weight: 0.4, score: 4 }] },
+          { component: 'Solución', weight: 0.6, criteria: [{ criterionId: 2, criterion: 'Diseño', weight: 0.6, score: 4.5 }] },
+        ],
+        comments: ['Buen trabajo.', 'Faltan pruebas.'],
+      },
+      // Tied with project 7: same position
+      ranking: { position: 1, tied: true, categoryId: 6, categoryName: 'Sistemas' },
+    };
+
+    it('unpublished, without read:grades: only the juror counters, result and position hidden', async () => {
+      published(false);
+
+      const detail = await service.getProject(PROFESSOR, 1, AS_PROFESSOR);
+
+      expect(projectsService.getProjectInScope).toHaveBeenCalledWith(5, 1, COURSE);
+      expect(detail.evaluation).toEqual({
+        gradeStatus: 'PRELIMINARY',
+        assignedJurors: 3,
+        completedEvaluations: 2,
+        pendingEvaluations: 1,
+        resultHidden: true,
+        result: null,
+        ranking: null,
+      });
+      expect(evaluationsService.getProjectResult).not.toHaveBeenCalled();
+      expect(eventsService.listApprovedProjects).not.toHaveBeenCalled();
+      expect(JSON.stringify(detail)).not.toContain('4.25');
+    });
+
+    it('unpublished, with read:grades: the result and the position', async () => {
+      published(false);
+
+      const detail = await service.getProject(DEAN, 1, AS_DEAN);
+
+      expect(detail.evaluation).toEqual(visibleEvaluation);
+      expect(evaluationsService.getProjectResult).toHaveBeenCalledWith(1);
+      expect(eventsService.listApprovedProjects).toHaveBeenCalledWith(4, 6);
+    });
+
+    it.each([
+      ['without read:grades', PROFESSOR, AS_PROFESSOR],
+      ['with read:grades', DEAN, AS_DEAN],
+    ])('published, %s: the official result and the position', async (_name, caller, profile) => {
+      published(true);
+
+      const detail = await service.getProject(caller, 1, profile);
+
+      expect(detail.evaluation).toEqual({ ...visibleEvaluation, gradeStatus: 'OFFICIAL' });
+    });
+
+    it('keeps the project fields and the term code next to the evaluation', async () => {
+      const detail: any = await service.getProject(DEAN, 1, AS_DEAN);
+
+      expect(detail).toMatchObject({ id: 1, name: 'P1', academicCourse: { term: '202610' } });
+    });
+
+    it('without evaluations: PENDING, nothing hidden, no result even for read:grades', async () => {
+      published(true);
+      evaluationsService.getAverageGrades.mockResolvedValue([]);
+
+      const detail = await service.getProject(DEAN, 1, AS_DEAN);
+
+      expect(detail.evaluation).toEqual({
+        gradeStatus: 'PENDING',
+        assignedJurors: 3,
+        completedEvaluations: 0,
+        pendingEvaluations: 3,
+        resultHidden: false,
+        result: null,
+        ranking: null,
+      });
+      expect(evaluationsService.getProjectResult).not.toHaveBeenCalled();
+    });
+
+    it('a project outside the scope is still a 404', async () => {
+      projectsService.getProjectInScope.mockRejectedValue(new NotFoundException());
+
+      await expect(service.getProject(DEAN, 1, AS_DEAN)).rejects.toBeInstanceOf(NotFoundException);
+      expect(evaluationsService.getAverageGrades).not.toHaveBeenCalled();
+    });
+
+    it('no position for a project that is not approved', async () => {
+      projectsService.getProjectInScope.mockResolvedValue(project(1, { eventId: 4, courseId: 6, state: 'REQUEST_CHANGES' }));
+
+      const detail = await service.getProject(DEAN, 1, AS_DEAN);
+
+      expect(detail.evaluation.result).not.toBeNull();
+      expect(detail.evaluation.ranking).toBeNull();
+      expect(eventsService.getRankingEventByEventId).not.toHaveBeenCalled();
+    });
+
+    it('no position when the event has no ranking configuration (NOT_FOUND)', async () => {
+      eventsService.getRankingEventByEventId.mockRejectedValue(Object.assign(new Error('no ranking'), { code: 5 }));
+
+      const detail = await service.getProject(DEAN, 1, AS_DEAN);
+
+      expect(detail.evaluation.ranking).toBeNull();
+      expect(detail.evaluation.result).not.toBeNull();
+    });
+
+    it('a ranking failure leaves the position out instead of failing the detail', async () => {
+      eventsService.listApprovedProjects.mockRejectedValue(Object.assign(new Error('unavailable'), { code: 14 }));
+
+      const detail = await service.getProject(DEAN, 1, AS_DEAN);
+
+      expect(detail.evaluation.ranking).toBeNull();
+      expect(detail.evaluation.result).not.toBeNull();
+    });
+
+    it('an untied position is not marked as tied', async () => {
+      evaluationsService.getAverageGrades.mockImplementation(async (ids: number[]) =>
+        ids.length === 1
+          ? [{ projectId: 1, averageGrade: 3.9, evaluationCount: 2 }]
+          : [
+              { projectId: 1, averageGrade: 3.9, evaluationCount: 2 },
+              { projectId: 7, averageGrade: 4.25, evaluationCount: 3 },
+              { projectId: 8, averageGrade: 4.25, evaluationCount: 3 },
+            ],
+      );
+
+      const detail = await service.getProject(DEAN, 1, AS_DEAN);
+
+      // 7 and 8 share the first position, so the next one is 2
+      expect(detail.evaluation.ranking).toMatchObject({ position: 2, tied: false });
     });
   });
 
@@ -271,6 +442,18 @@ describe('toRegistrationProject', () => {
 });
 
 describe('grade rules', () => {
+  it.each([
+    // evaluations, published, reads unpublished -> status, visible, hidden
+    [0, false, false, 'PENDING', false, false],
+    [0, true, true, 'PENDING', false, false],
+    [2, false, false, 'PRELIMINARY', false, true],
+    [2, false, true, 'PRELIMINARY', true, false],
+    [2, true, false, 'OFFICIAL', true, false],
+    [2, true, true, 'OFFICIAL', true, false],
+  ])('gradeView %i evaluations, published %s, reads unpublished %s', (count, isPublished, sees, gradeStatus, visible, hidden) => {
+    expect(gradeView(count as number, isPublished as boolean, sees as boolean)).toEqual({ gradeStatus, visible, hidden });
+  });
+
   it.each([
     [0, false, 'PENDING'],
     [0, true, 'PENDING'],

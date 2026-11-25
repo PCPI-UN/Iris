@@ -27,7 +27,7 @@ import {
   ListAcademicProjectsDto,
 } from './dto/academic-query.dto';
 import { buildGradesBuffer, gradesFileName } from './academic-grades.workbook';
-import { GradesReport } from './academic.types';
+import { AcademicProjectDetail, GradesReport } from './academic.types';
 import { AcademicProfile } from './academic-profiles';
 
 /**
@@ -89,8 +89,18 @@ export class AcademicController {
 
   @Get('projects/:id')
   @RequirePermission('read:academic_projects')
-  @ApiOperation({ summary: 'One project of my academic scope' })
-  @ApiResponse({ status: 200, description: 'The project' })
+  @ApiOperation({
+    summary: 'One project of my academic scope, with its evaluation',
+    description:
+      'The project (as in the list) plus `evaluation`: gradeStatus PENDING, PRELIMINARY or ' +
+      'OFFICIAL, assigned jurors and how many evaluated (always sent), and, when the caller ' +
+      'may see the grade, the result (final grade, maxScore, criteria by component with ' +
+      'their effective weights as fractions, the jurors comments without author) and the ' +
+      'position in the ranking of its category (tied projects share it; null if the project ' +
+      'is not approved or the event has no ranking). Without read:grades the result and ' +
+      'the position are only sent once the results are published (resultHidden: true until then).',
+  })
+  @ApiResponse({ status: 200, description: 'The project and its evaluation' })
   @ApiResponse({
     status: 403,
     description:
@@ -104,7 +114,7 @@ export class AcademicController {
     @GetUser() user: AppUser,
     @Param('id', ParseIntPipe) projectId: number,
     @Query() query: AcademicProfileQueryDto,
-  ) {
+  ): Promise<AcademicProjectDetail> {
     return this.academicService.getProject(user, projectId, query.profile);
   }
 
