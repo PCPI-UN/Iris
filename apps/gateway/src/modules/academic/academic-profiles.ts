@@ -65,3 +65,13 @@ export function profileScope(
   }
   return ACADEMIC_PROFILES[profile].scope;
 }
+
+/**
+ * Profiles that download award diplomas of their scope (matrix of views: the director
+ * those of their department, the dean all; professors and tutors do not). Students get
+ * their own from /events/:eventId/my-project/diploma.
+ */
+export const DIPLOMA_PROFILES: readonly AcademicProfile[] = [
+  AcademicProfile.DIRECTOR,
+  AcademicProfile.DEAN,
+];

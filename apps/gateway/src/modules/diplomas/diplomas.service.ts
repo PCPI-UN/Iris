@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventProto } from '@app/common/generated/event';
 import { EventService } from '../events/events.service';
 import { ProjectsService } from '../projects/projects.service';
 import { fileNamePart } from '../../common/excel/xlsx-file';
@@ -19,8 +20,9 @@ export interface DiplomaFile {
 /**
  * Award diplomas (CU-86e3wzr68), generated on demand and never stored.
  *
- * - Only for the caller's own project in the event (project-service answers 404 when they
- *   have none): the user comes from the session.
+ * - A student gets the diploma of their own project in the event (project-service answers
+ *   404 when they have none): the user comes from the session. The academic profiles
+ *   DIRECTOR and DEAN get the one of any project of their scope (AcademicService).
  * - Only once the admin publishes the event results, and only when the project won at
  *   least one award of the event. Co-winners each get their own diploma.
  * - One diploma per project: the design carries the event title, signature and date, and
@@ -64,6 +66,58 @@ export class DiplomasService {
       this.projectsService.getMyProjectByEvent(userId, eventId),
       this.eventsService.getEventById(eventId),
     ]);
+    return this.diplomaOf(
+      project!,
+      eventId,
+      event,
+      'Tu proyecto no tiene premios en este evento, así que no tiene diploma',
+    );
+  }
+
+  /**
+   * Diploma of a project the caller may already read; the academic endpoint checks the
+   * scope of the profile before calling it.
+   */
+  async getProjectDiploma(project: {
+    id: number;
+    name: string;
+    eventId: number;
+  }): Promise<DiplomaFile> {
+    const event = await this.eventsService.getEventById(project.eventId);
+    return this.diplomaOf(
+      project,
+      project.eventId,
+      event,
+      'El proyecto no tiene premios en este evento, así que no tiene diploma',
+    );
+  }
+
+  /**
+   * Whether getProjectDiploma gives this project its diploma, without rendering it: a
+   * design for the event, published results and a published award of the event.
+   */
+  async isAvailable(project: {
+    id: number;
+    eventId: number;
+  }): Promise<boolean> {
+    if (!this.hasDiploma(project.eventId)) return false;
+    const [event, { awards = [] }] = await Promise.all([
+      this.eventsService.getEventById(project.eventId),
+      this.eventsService.listAwardsByProjects([project.id]),
+    ]);
+    return (
+      !!event?.resultsPublished &&
+      awards.some((a) => a.eventId === project.eventId && a.resultsPublished)
+    );
+  }
+
+  /** Published results, a published award of the event and a design, then the PDF */
+  private async diplomaOf(
+    project: { id: number; name: string },
+    eventId: number,
+    event: EventProto | undefined,
+    noAwardMessage: string,
+  ): Promise<DiplomaFile> {
     if (!event) {
       throw new NotFoundException(`No se encontró el evento con ID ${eventId}`);
     }
@@ -74,13 +128,11 @@ export class DiplomasService {
     }
 
     const { awards = [] } = await this.eventsService.listAwardsByProjects([
-      project!.id,
+      project.id,
     ]);
     const won = awards.some((a) => a.eventId === eventId && a.resultsPublished);
     if (!won) {
-      throw new NotFoundException(
-        'Tu proyecto no tiene premios en este evento, así que no tiene diploma',
-      );
+      throw new NotFoundException(noAwardMessage);
     }
 
     const template = this.templates.get(eventId);
@@ -92,11 +144,11 @@ export class DiplomasService {
 
     const buffer = await this.renderer.render({
       template,
-      projectName: project!.name,
+      projectName: project.name,
     });
     return {
       buffer,
-      fileName: `diploma_${fileNamePart(project!.name)}.pdf`,
+      fileName: `diploma_${fileNamePart(project.name)}.pdf`,
     };
   }
 }
