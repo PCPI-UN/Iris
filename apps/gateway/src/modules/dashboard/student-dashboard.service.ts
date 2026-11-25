@@ -6,6 +6,7 @@ import {
 import { ProjectsService } from '../projects/projects.service';
 import { EvaluationsService } from '../evaluations/evaluations.service';
 import { AppUser } from '../auth/types/app-user.type';
+import { DiplomasService } from '../diplomas/diplomas.service';
 import {
   StudentDashboardCurrentProject,
   StudentDashboardResponse,
@@ -19,7 +20,10 @@ import {
  *
  * - Scores (`evaluation.finalScore`, `trajectory[].finalScore`) are only sent for events
  *   with published results; until then they are null.
- * - Certificates (`trajectory[].certificates`): always empty, there is no certificate model.
+ * - `trajectory[].diplomaAvailable` (CU-1dfnv12dk1b): the same rule as the download in
+ *   `GET /events/:eventId/my-project/diploma`: published results, at least one award of
+ *   the event (project-service only sends the awards of the project's own event once
+ *   published) and a design for the event (`DiplomasService.hasDiploma`).
  */
 @Injectable()
 export class StudentDashboardService {
@@ -28,6 +32,7 @@ export class StudentDashboardService {
   constructor(
     private readonly projectsService: ProjectsService,
     private readonly evaluationsService: EvaluationsService,
+    private readonly diplomasService: DiplomasService,
   ) {}
 
   async getDashboard(user: AppUser): Promise<StudentDashboardResponse> {
@@ -69,7 +74,11 @@ export class StudentDashboardService {
           }
         : null,
       trajectory: participations.map((p) =>
-        toTrajectoryItem(p, scores.get(p.projectId) ?? null),
+        toTrajectoryItem(
+          p,
+          scores.get(p.projectId) ?? null,
+          this.diplomaAvailable(p),
+        ),
       ),
       bySemester: (stats.bySemester ?? []).map((s) => ({
         semester: s.semester,
@@ -78,6 +87,15 @@ export class StudentDashboardService {
         awards: s.awards,
       })),
     };
+  }
+
+  /** Whether `GET /events/:eventId/my-project/diploma` gives this project its diploma */
+  private diplomaAvailable(p: StudentParticipation): boolean {
+    return (
+      p.resultsPublished === true &&
+      (p.awards ?? []).length > 0 &&
+      this.diplomasService.hasDiploma(p.eventId)
+    );
   }
 
   /**
@@ -130,6 +148,7 @@ function toCurrentProject(
 function toTrajectoryItem(
   p: StudentParticipation,
   finalScore: number | null,
+  diplomaAvailable: boolean,
 ): StudentDashboardTrajectoryItem {
   const awards = (p.awards ?? []).map((a) => a.title).filter(Boolean);
   return {
@@ -142,6 +161,6 @@ function toTrajectoryItem(
     finalScore,
     award: awards.length ? awards.join(', ') : null,
     isCurrent: !p.finished,
-    certificates: [],
+    diplomaAvailable,
   };
 }
