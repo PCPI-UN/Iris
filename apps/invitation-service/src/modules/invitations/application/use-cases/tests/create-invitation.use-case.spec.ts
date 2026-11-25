@@ -328,6 +328,7 @@ describe('CreateInvitationUseCase', () => {
         invitationRoles: [{ invitationId: 'pending', roleId: 4 }],
       });
       expect(invitationRepository.save).not.toHaveBeenCalled();
+      expect(invitationRoleRepository.save).not.toHaveBeenCalled();
       expect(
         notificationService.sendJurorInvitationEmail,
       ).not.toHaveBeenCalled();

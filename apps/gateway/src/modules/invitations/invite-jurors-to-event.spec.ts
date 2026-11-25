@@ -53,9 +53,48 @@ describe('InvitationsService.inviteJurorsToEvent', () => {
     });
   });
 
+  it('adds the Juror role to a pending invitation that has other roles', async () => {
+    findPendingByEmail.mockImplementation(({ email }: { email: string }) =>
+      of(
+        email === 'luis@x.co'
+          ? { invitation: { id: 'old', roleIds: [3] } }
+          : {},
+      ),
+    );
+
+    const result = await service.inviteJurorsToEvent(
+      5,
+      'Competition',
+      jurors,
+      99,
+    );
+
+    // CreateInvitation adds the role to the pending invitation without a new email
+    expect(createInvitation).toHaveBeenCalledTimes(2);
+    expect(createInvitation).toHaveBeenCalledWith({
+      email: 'luis@x.co',
+      eventType: 'Competition',
+      firstName: 'Luis',
+      lastName: undefined,
+      targetType: 'EVENT',
+      targetId: 5,
+      invitedByUserId: 99,
+      roleIds: [4],
+    });
+    expect(result).toEqual({
+      sent: ['ana@x.co'],
+      reused: ['luis@x.co'],
+      failed: [],
+    });
+  });
+
   it('does not invite again a juror with a pending invitation to the event', async () => {
     findPendingByEmail.mockImplementation(({ email }: { email: string }) =>
-      of(email === 'luis@x.co' ? { invitation: { id: 'old' } } : {}),
+      of(
+        email === 'luis@x.co'
+          ? { invitation: { id: 'old', roleIds: [4] } }
+          : {},
+      ),
     );
 
     const result = await service.inviteJurorsToEvent(

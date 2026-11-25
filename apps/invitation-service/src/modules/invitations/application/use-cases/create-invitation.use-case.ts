@@ -72,11 +72,28 @@ export class CreateInvitationUseCase {
     );
 
     if (existingInvitation) {
-      // Return existing invitation with its roles
+      // Reuse it, adding the requested roles it lacks: accepting assigns only the invitation's
+      // roles, so a pending invitation as organizer reused for a juror would leave the person
+      // without the Juror role. Roles it already has are kept; no new email is sent
       const existingRoles = await this.invitationRoleRepository.findByInvitationId(
         existingInvitation.id,
       );
-      return { invitation: existingInvitation, invitationRoles: existingRoles };
+      const existingRoleIds = new Set(existingRoles.map((role) => role.roleId));
+      const missingRoleIds = [...new Set(roleIds ?? [])].filter(
+        (roleId) => !existingRoleIds.has(roleId),
+      );
+      const addedRoles: InvitationRole[] = [];
+      for (const roleId of missingRoleIds) {
+        addedRoles.push(
+          await this.invitationRoleRepository.save(
+            new InvitationRole(existingInvitation.id, roleId),
+          ),
+        );
+      }
+      return {
+        invitation: existingInvitation,
+        invitationRoles: [...existingRoles, ...addedRoles],
+      };
     }
 
     // Step 3: Validate target exists and fetch data (to avoid duplicate calls later)
