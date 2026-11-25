@@ -27,6 +27,27 @@ const READ_SAS_TTL_SEC = 3600;
  */
 const OPEN_SAS_TTL_SEC = 3600;
 
+/**
+ * Multer reads multipart file names as latin1, while browsers send them as
+ * UTF-8: "Pendón.pdf" arrives as "PendoÌ\x81n.pdf".
+ */
+const decodeOriginalName = (name: string): string =>
+  Buffer.from(name, 'latin1').toString('utf8');
+
+/**
+ * Azure rejects blob names with control characters, so the blob name keeps
+ * only ASCII letters, digits, dots, dashes and underscores:
+ * "Pendón Tune 80×180 cm @300dpi (1).pdf" -> "Pendon_Tune_80x180_cm_300dpi_1.pdf".
+ */
+const toSafeBlobName = (name: string): string =>
+  name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/×/g, 'x')
+    .replace(/[^A-Za-z0-9._-]+/g, '_')
+    .replace(/_*\._*/g, '.')
+    .replace(/^[_.]+|_+$/g, '') || 'file';
+
 const STORAGE_UNAVAILABLE =
   'El almacenamiento de documentos no está configurado';
 
@@ -163,8 +184,9 @@ export class AzureBlobUploadService {
       throw new ServiceUnavailableException(STORAGE_UNAVAILABLE);
     }
 
+    const originalName = decodeOriginalName(file.originalname);
     try {
-      const blobName = `${Date.now()}-${path.basename(file.originalname)}`;
+      const blobName = `${Date.now()}-${toSafeBlobName(path.basename(originalName))}`;
       const blockBlobClient: BlockBlobClient =
         this.uploadContainer.getBlockBlobClient(blobName);
 
@@ -173,18 +195,18 @@ export class AzureBlobUploadService {
       });
 
       this.logger.log(
-        `File uploaded successfully: ${file.originalname} -> ${blobName}`,
+        `File uploaded successfully: ${originalName} -> ${blobName}`,
       );
 
       return {
         blobName,
-        filename: file.originalname,
+        filename: originalName,
         mimetype: file.mimetype,
         size: file.size,
       };
     } catch (error) {
       this.logger.error(
-        `Failed to upload file ${file.originalname}: ${error.message}`,
+        `Failed to upload file ${originalName}: ${error.message}`,
         error.stack,
       );
       throw new Error(

@@ -227,4 +227,52 @@ describe('AzureBlobUploadService document URLs', () => {
       expect(logError).not.toHaveBeenCalled();
     });
   });
+
+  describe('uploadFile', () => {
+    const upload = async (originalname: string) => {
+      const service = buildService();
+      const getBlockBlobClient = jest.fn(() => ({
+        uploadData: jest.fn().mockResolvedValue(undefined),
+      }));
+      Object.assign(service, { uploadContainer: { getBlockBlobClient } });
+      const result = await service.uploadFile({
+        originalname,
+        buffer: Buffer.from('x'),
+        mimetype: 'application/pdf',
+        size: 1,
+      } as Express.Multer.File);
+      return { result, getBlockBlobClient };
+    };
+    // Multer hands over UTF-8 names decoded as latin1.
+    const asMulter = (name: string) =>
+      Buffer.from(name, 'utf8').toString('latin1');
+
+    beforeEach(() => {
+      jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    });
+
+    afterEach(() => jest.restoreAllMocks());
+
+    it('turns a name with accents and symbols into an ASCII blob name and keeps the readable name', async () => {
+      const { result, getBlockBlobClient } = await upload(
+        asMulter('Pendón Tune 80×180 cm @300dpi (1).pdf'),
+      );
+      expect(result.blobName).toMatch(
+        /^\d+-Pendon_Tune_80x180_cm_300dpi_1\.pdf$/,
+      );
+      expect(getBlockBlobClient).toHaveBeenCalledWith(result.blobName);
+      expect(result.filename).toBe('Pendón Tune 80×180 cm @300dpi (1).pdf');
+    });
+
+    it('keeps a name that is already safe', async () => {
+      const { result } = await upload('poster_final-v2.png');
+      expect(result.blobName).toMatch(/^\d+-poster_final-v2\.png$/);
+      expect(result.filename).toBe('poster_final-v2.png');
+    });
+
+    it('falls back to a generic name when nothing safe is left', async () => {
+      const { result } = await upload(asMulter('¿¡@@!?'));
+      expect(result.blobName).toMatch(/^\d+-file$/);
+    });
+  });
 });
