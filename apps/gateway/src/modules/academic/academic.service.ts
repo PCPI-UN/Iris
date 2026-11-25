@@ -22,6 +22,7 @@ import { GetProjectResultResponse } from '@app/common/generated/evaluation';
 import { ProjectsService } from '../projects/projects.service';
 import { EventService } from '../events/events.service';
 import { EvaluationsService } from '../evaluations/evaluations.service';
+import { AuthService } from '../auth/auth.service';
 import { AppUser } from '../auth/types/app-user.type';
 import { positionOf } from '../events/ranking/ranking-positions';
 import {
@@ -29,6 +30,7 @@ import {
   AcademicEvent,
   AcademicProjectDetail,
   AcademicProjectEvaluation,
+  AcademicProjectJuror,
   AcademicProjectRanking,
   AcademicProjectResult,
   GradeRow,
@@ -69,7 +71,7 @@ const REVIEW_STATES: ProjectReviewState[] = [
  * time; anyone else only once the admin publishes the event results. The rule is
  * applied here, before the JSON or the Excel is built, so no format can show more. The
  * project detail follows it for the result and the ranking position; how many jurors
- * evaluated is shown to every caller of the scope.
+ * evaluated, and which of them, is shown to every caller of the scope.
  */
 @Injectable()
 export class AcademicService {
@@ -79,6 +81,7 @@ export class AcademicService {
     private readonly projectsService: ProjectsService,
     private readonly eventsService: EventService,
     private readonly evaluationsService: EvaluationsService,
+    private readonly authService: AuthService,
   ) {}
 
   /** Academic profiles of the caller; empty without an academic role (students, Admin, FacultyAdmin) */
@@ -129,18 +132,19 @@ export class AcademicService {
   }
 
   /**
-   * Evaluation of the project for the detail. If event-service or evaluation-service
-   * fail it is left out (null) instead of failing the whole detail: the project data
-   * does not depend on it.
+   * Evaluation of the project for the detail. If event-service, evaluation-service or
+   * the juror list fail it is left out (null) instead of failing the whole detail: the
+   * project data does not depend on it.
    */
   private async evaluation(
     user: AppUser,
     project: ProjectComplete,
   ): Promise<AcademicProjectEvaluation | null> {
     try {
-      const [event, averages] = await Promise.all([
+      const [event, averages, jurors] = await Promise.all([
         this.eventsService.getEventById(project.eventId),
         this.evaluationsService.getAverageGrades([project.id]),
+        this.jurors(project),
       ]);
 
       const completedEvaluations = averages[0]?.evaluationCount ?? 0;
@@ -163,6 +167,7 @@ export class AcademicService {
         assignedJurors,
         completedEvaluations,
         pendingEvaluations: Math.max(assignedJurors - completedEvaluations, 0),
+        jurors,
         resultHidden: view.hidden,
         result: result ? toProjectResult(result) : null,
         ranking,
@@ -170,6 +175,48 @@ export class AcademicService {
     } catch (error: unknown) {
       this.logger.warn(
         `Evaluation of project ${project.id} unavailable: ${(error as Error)?.message}`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Jurors assigned to the project and whether each one has evaluated it, the pending
+   * ones first. A juror that auth-service does not return keeps a null name instead of
+   * failing the list.
+   */
+  private async jurors(
+    project: ProjectComplete,
+  ): Promise<AcademicProjectJuror[]> {
+    const keys =
+      (await this.projectsService.listJurorsByProjectId(project.id)) ?? [];
+    const jurors = await Promise.all(
+      keys.map(async ({ memberUserId: userId }) => {
+        const [name, evaluated] = await Promise.all([
+          this.userName(userId),
+          this.evaluationsService.hasEvaluated(
+            userId,
+            project.eventId,
+            project.id,
+          ),
+        ]);
+        return { userId, name, evaluated };
+      }),
+    );
+    return jurors.sort(
+      (a, b) =>
+        Number(a.evaluated) - Number(b.evaluated) ||
+        (a.name ?? '').localeCompare(b.name ?? '', 'es'),
+    );
+  }
+
+  private async userName(userId: number): Promise<string | null> {
+    try {
+      const user = await this.authService.getUser(userId);
+      return `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || null;
+    } catch (error: unknown) {
+      this.logger.warn(
+        `User ${userId} unavailable: ${(error as Error)?.message}`,
       );
       return null;
     }

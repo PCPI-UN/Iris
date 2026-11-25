@@ -126,15 +126,26 @@ export interface AcademicProjectRanking {
   awardTitle: string | null;
 }
 
+/** A juror assigned to the project and whether they have evaluated it; never their grade */
+export interface AcademicProjectJuror {
+  userId: number;
+  /** null when auth-service does not return the user */
+  name: string | null;
+  evaluated: boolean;
+}
+
 /**
- * Evaluation of a project for the academic detail. The juror counters are always sent;
- * the result and the position follow the grade rule of /academic/grades.
+ * Evaluation of a project for the academic detail. The juror counters and the jurors
+ * are always sent; the result and the position follow the grade rule of
+ * /academic/grades.
  */
 export interface AcademicProjectEvaluation {
   gradeStatus: GradeStatus;
   assignedJurors: number;
   completedEvaluations: number;
   pendingEvaluations: number;
+  /** Assigned jurors, the pending ones first, then by name */
+  jurors: AcademicProjectJuror[];
   /** true when a result exists but stays hidden until the results are published */
   resultHidden: boolean;
   /** null while PENDING or hidden */

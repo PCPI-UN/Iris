@@ -51,10 +51,17 @@ const project = (id: number, extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 
+const JURORS = [
+  { userId: 22, name: 'Carla Ruiz', evaluated: false },
+  { userId: 23, name: 'Ana Pérez', evaluated: true },
+  { userId: 21, name: 'Luis Gómez', evaluated: true },
+];
+
 describe('AcademicService', () => {
   let projectsService: any;
   let eventsService: any;
   let evaluationsService: any;
+  let authService: any;
   let service: AcademicService;
 
   beforeEach(() => {
@@ -62,6 +69,13 @@ describe('AcademicService', () => {
       listProjectsInScope: jest.fn().mockResolvedValue({ items: [] }),
       getProjectInScope: jest.fn().mockResolvedValue(project(1)),
       listEventIdsInScope: jest.fn().mockResolvedValue([4, 8, 9]),
+      listJurorsByProjectId: jest
+        .fn()
+        .mockResolvedValue([
+          { memberUserId: 21 },
+          { memberUserId: 22 },
+          { memberUserId: 23 },
+        ]),
       // 1: two of three jurors evaluated; 2: nobody evaluated yet
       listAllProjectsInScope: jest
         .fn()
@@ -110,11 +124,26 @@ describe('AcademicService', () => {
         .mockResolvedValue([
           { projectId: 1, averageGrade: 4.25, evaluationCount: 2 },
         ]),
+      // 21 and 23 evaluated, 22 did not
+      hasEvaluated: jest.fn(async (userId: number) => userId !== 22),
+    };
+    const names: Record<number, [string, string]> = {
+      21: ['Luis', 'Gómez'],
+      22: ['Carla', 'Ruiz'],
+      23: ['Ana', 'Pérez'],
+    };
+    authService = {
+      getUser: jest.fn(async (id: number) => ({
+        id,
+        firstName: names[id][0],
+        lastName: names[id][1],
+      })),
     };
     service = new AcademicService(
       projectsService,
       eventsService,
       evaluationsService,
+      authService,
     );
   });
 
@@ -277,6 +306,7 @@ describe('AcademicService', () => {
       assignedJurors: 3,
       completedEvaluations: 2,
       pendingEvaluations: 1,
+      jurors: JURORS,
       resultHidden: false,
       result: {
         finalScore: 4.25,
@@ -324,6 +354,7 @@ describe('AcademicService', () => {
         assignedJurors: 3,
         completedEvaluations: 2,
         pendingEvaluations: 1,
+        jurors: JURORS,
         resultHidden: true,
         result: null,
         ranking: null,
@@ -381,6 +412,7 @@ describe('AcademicService', () => {
         assignedJurors: 3,
         completedEvaluations: 0,
         pendingEvaluations: 3,
+        jurors: JURORS,
         resultHidden: false,
         result: null,
         ranking: null,
@@ -396,6 +428,48 @@ describe('AcademicService', () => {
       const detail = await service.getProject(DEAN, 1, AS_DEAN);
 
       expect(detail).toMatchObject({ id: 1, name: 'P1', evaluation: null });
+    });
+
+    it('lists the jurors, pending first, asking each one for this project and event', async () => {
+      const detail = await service.getProject(PROFESSOR, 1, AS_PROFESSOR);
+
+      expect(detail.evaluation?.jurors).toEqual(JURORS);
+      expect(projectsService.listJurorsByProjectId).toHaveBeenCalledWith(1);
+      expect(evaluationsService.hasEvaluated).toHaveBeenCalledWith(22, 4, 1);
+    });
+
+    it('a juror auth-service does not return keeps a null name', async () => {
+      authService.getUser.mockImplementation(async (id: number) => {
+        if (id === 23) throw new Error('not found');
+        return { id, firstName: 'Luis', lastName: 'Gómez' };
+      });
+
+      const detail = await service.getProject(PROFESSOR, 1, AS_PROFESSOR);
+
+      expect(detail.evaluation?.jurors).toContainEqual({
+        userId: 23,
+        name: null,
+        evaluated: true,
+      });
+    });
+
+    it('a project without jurors has an empty list', async () => {
+      projectsService.listJurorsByProjectId.mockResolvedValue(undefined);
+
+      const detail = await service.getProject(PROFESSOR, 1, AS_PROFESSOR);
+
+      expect(detail.evaluation?.jurors).toEqual([]);
+    });
+
+    it('a juror list failure also leaves the evaluation out', async () => {
+      evaluationsService.hasEvaluated.mockRejectedValue(
+        Object.assign(new Error('unavailable'), { code: 14 }),
+      );
+
+      const detail = await service.getProject(PROFESSOR, 1, AS_PROFESSOR);
+
+      expect(detail.evaluation).toBeNull();
+      expect(detail.id).toBe(1);
     });
 
     it('a GetProjectResult failure also leaves the evaluation out', async () => {
