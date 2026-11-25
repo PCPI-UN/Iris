@@ -3,7 +3,7 @@ import { status } from '@grpc/grpc-js';
 import { EventService } from '../events/events.service';
 import { ProjectsService } from '../projects/projects.service';
 import { EvaluationsService } from '../evaluations/evaluations.service';
-import { assignRankingPositions } from '../events/ranking/ranking-positions';
+import { positionOf } from '../events/ranking/ranking-positions';
 import {
   StudentResultRanking,
   StudentResultsResponse,
@@ -100,11 +100,7 @@ export class StudentResultsService {
       const grades = await this.evaluationsService.getAverageGrades(
         projects.map((p) => p.id),
       );
-      const ranked = assignRankingPositions(
-        grades.map((g) => ({ ...g, position: 0 })),
-      );
-
-      const own = ranked.find((row) => row.projectId === projectId);
+      const own = positionOf(grades, projectId);
       if (!own) return null;
 
       const [{ category }, { awards = [] }] = await Promise.all([
@@ -115,12 +111,11 @@ export class StudentResultsService {
         .filter((a) => a.eventId === eventId && a.resultsPublished)
         .map((a) => a.title)
         .filter(Boolean);
-      const winners = ranked.filter((row) => row.position === 1).length;
 
       return {
         position: own.position,
         isWinner: own.position === 1,
-        isCoWinner: own.position === 1 && winners > 1,
+        isCoWinner: own.position === 1 && own.tied,
         categoryName: category?.name?.trim() || 'Sin categoria',
         awardTitle: titles.length ? titles.join(', ') : null,
       };
