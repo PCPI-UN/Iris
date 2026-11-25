@@ -83,6 +83,7 @@ export class ReportsController {
       user,
       eventId,
       query.categoryId,
+      query.profile,
     );
     return this.respond(report, query.format);
   }

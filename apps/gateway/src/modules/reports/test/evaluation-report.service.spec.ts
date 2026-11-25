@@ -4,6 +4,8 @@ import {
   groupByComponent,
   splitFeedback,
 } from '../evaluation-report.service';
+import { AcademicProfile } from '../../academic/academic-profiles';
+import { AcademicScope } from '@app/common/generated/project';
 
 /**
  * CU-86e3vmz0b (report data), CU-86e3vmz0h (co-winners in the report) and
@@ -277,6 +279,53 @@ describe('EvaluationReportService', () => {
       expect(
         report.projects.map((p) => [p.projectId, p.position, p.jurorCount]),
       ).toEqual([[3, 1, 4]]);
+    });
+
+    it('limits the report to the scope of the profile it is asked from', async () => {
+      const { service, projectsService } = build({ event: published });
+
+      const report = await service.buildForUser(
+        user(['read:academic_projects'], ['Professor', 'Tutor']),
+        10,
+        7,
+        AcademicProfile.TUTOR,
+      );
+
+      expect(projectsService.listAllProjectsInScope).toHaveBeenCalledWith({
+        userId: 50,
+        eventId: 10,
+        scope: AcademicScope.ACADEMIC_SCOPE_TUTORED,
+      });
+      expect(report.projects.map((p) => p.projectId)).toEqual([3]);
+    });
+
+    it('keeps read:grades before publication but within the profile scope', async () => {
+      const { service, projectsService } = build({
+        event: { id: 10, name: 'Feria', resultsPublished: false },
+      });
+
+      const report = await service.buildForUser(
+        user(['read:grades', 'read:academic_projects'], ['Dean']),
+        10,
+        7,
+        AcademicProfile.DEAN,
+      );
+
+      expect(projectsService.listAllProjectsInScope).toHaveBeenCalledWith({
+        userId: 50,
+        eventId: 10,
+        scope: AcademicScope.ACADEMIC_SCOPE_ALL,
+      });
+      expect(report.projects.map((p) => p.projectId)).toEqual([3]);
+    });
+
+    it('refuses a profile the user does not have, even to Admin', async () => {
+      const { service, projectsService } = build({ event: published });
+
+      await expect(
+        service.buildForUser(user([], ['Admin']), 10, 7, AcademicProfile.DEAN),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(projectsService.listAllProjectsInScope).not.toHaveBeenCalled();
     });
 
     it('refuses an academic role before the results are published', async () => {
