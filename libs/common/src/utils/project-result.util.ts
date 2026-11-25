@@ -3,7 +3,7 @@ import { GetProjectResultResponse } from '@app/common/generated/evaluation';
 /**
  * Pieces of the result of a project (GetProjectResult of evaluation-service) as the
  * gateway shows them: the evaluation report and the academic project detail. Shared here
- * so gateway services do not import each other for it (see grpc-oneof.util).
+ * so gateway services do not import each other for it.
  */
 
 /** Separator evaluation-service uses to join the jurors' comments in one text */
