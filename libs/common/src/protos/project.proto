@@ -157,8 +157,8 @@ message ProjectComplete {
   repeated PendingProjectParticipant pendingParticipants = 13;
   optional string projectCode = 14;
   repeated ProjectTutor tutors = 15;
-  // Only filled by the academic read endpoints; not set for the fill course sections: -1
-  // (created before course sections existed) and 0 (event that does not require one)
+  // Filled by GetProjectComplete and the academic read endpoints; not set for the fill course
+  // sections: -1 (created before course sections existed) and 0 (event that does not require one)
   optional AcademicCourse academicCourse = 16;
   // Jurors assigned to evaluate the project; only filled by the academic read endpoints
   optional int32 assignedJurorCount = 17;

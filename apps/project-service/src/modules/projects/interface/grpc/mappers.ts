@@ -73,7 +73,6 @@ export const protoToTypedDocument = (n?: number): TypedDocument => {
   }
 };
 
-
 const statusToProto = (s: any): number => {
   switch (s) {
     case 'PENDING': return 1;
@@ -173,14 +172,6 @@ export const toProtoTutor = (t: ProjectTutorView) => ({
   email: t.email,
 });
 
-export const toProtoProjectComplete = (p: any) => ({
-  ...toProtoProject(p),
-  participants: (p.participants ?? []).map(toProtoParticipant),
-  documents: (p.documents ?? []).map(toProtoDocument),
-  pendingParticipants: (p.pendingParticipants ?? []).map(toProtoPendingParticipant),
-  tutors: (p.tutors ?? []).map(toProtoTutor),
-});
-
 export const toProtoAcademicCourse = (c: AcademicCourseView) => ({
   id: c.id,
   nrc: c.nrc,
@@ -191,10 +182,18 @@ export const toProtoAcademicCourse = (c: AcademicCourseView) => ({
   departmentName: c.departmentName,
 });
 
-/** Project of the academic read endpoints: the complete project plus its course section. */
+export const toProtoProjectComplete = (p: any) => ({
+  ...toProtoProject(p),
+  participants: (p.participants ?? []).map(toProtoParticipant),
+  documents: (p.documents ?? []).map(toProtoDocument),
+  pendingParticipants: (p.pendingParticipants ?? []).map(toProtoPendingParticipant),
+  tutors: (p.tutors ?? []).map(toProtoTutor),
+  academicCourse: p.academicCourse ? toProtoAcademicCourse(p.academicCourse) : undefined,
+});
+
+/** Project of the academic read endpoints: the complete project plus its assigned jurors. */
 export const toProtoProjectInScope = (p: any) => ({
   ...toProtoProjectComplete(p),
-  academicCourse: p.academicCourse ? toProtoAcademicCourse(p.academicCourse) : undefined,
   assignedJurorCount: p.assignedJurorCount ?? 0,
 });
 

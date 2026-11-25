@@ -52,6 +52,7 @@ import { ListProjectsForReviewUC } from '../../application/use-cases/list-projec
 import { ListProjectsByFilterDTO } from '../../application/dto/list-projects.dto';
 import { ListProjectsInScopeUC } from '../../application/use-cases/list-projects-in-scope.uc';
 import { GetProjectInScopeUC } from '../../application/use-cases/get-project-in-scope.uc';
+import { GetProjectAcademicCourseUC } from '../../application/use-cases/get-project-academic-course.uc';
 import { ListEventIdsInScopeUC } from '../../application/use-cases/list-event-ids-in-scope.uc';
 import { UpdateProjectDocumentUC } from '../../application/use-cases/update-document.uc';
 import { RequestChangesProjectUC } from '../../application/use-cases/request-changes-project.uc';
@@ -147,6 +148,7 @@ export class ProjectsController {
     private readonly getStudentParticipationStatsUC: GetStudentParticipationStatsUC,
     private readonly listProjectsInScopeUC: ListProjectsInScopeUC,
     private readonly getProjectInScopeUC: GetProjectInScopeUC,
+    private readonly getProjectAcademicCourseUC: GetProjectAcademicCourseUC,
     private readonly listEventIdsInScopeUC: ListEventIdsInScopeUC,
     private readonly listProjectChangeLogUC: ListProjectChangeLogUC,
     private readonly adminChangeProjectStateUC: AdminChangeProjectStateUC,
@@ -617,11 +619,12 @@ export class ProjectsController {
   async getProjectCompleteRpc(req: { id: number }) {
     const project = await this.getProject.execute({ id: req.id });
 
-    const [participants, documents, pending, tutors] = await Promise.all([
+    const [participants, documents, pending, tutors, academicCourse] = await Promise.all([
       this.listParticipantsUC.execute({ projectId: project.id }),
       this.listDocs.execute({ projectId: project.id }),
       this.listPendingParticipantsUC.execute({ projectId: project.id }),
       this.tutorsOf(project.id),
+      this.getProjectAcademicCourseUC.execute(project.id),
     ]);
 
     const projectComplete = {
@@ -630,6 +633,7 @@ export class ProjectsController {
       documents,
       pendingParticipants: pending,
       tutors,
+      academicCourse,
     };
 
     return {
