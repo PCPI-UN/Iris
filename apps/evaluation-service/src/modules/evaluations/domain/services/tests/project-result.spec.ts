@@ -1,4 +1,8 @@
-import { ResultEvaluation, buildProjectResult } from '../project-result';
+import {
+  ResultEvaluation,
+  buildJurorEvaluations,
+  buildProjectResult,
+} from '../project-result';
 
 describe('buildProjectResult', () => {
   const evaluation = (
@@ -90,5 +94,62 @@ describe('buildProjectResult', () => {
       'evaluated',
       'finalScore',
     ]);
+  });
+
+  describe('buildJurorEvaluations', () => {
+    it('gives each juror its rounded grade, own scores and comment, in the order received', () => {
+      const result = buildJurorEvaluations([
+        evaluation(80.456, '  Buena solución.  ', { 3: 55, 1: 90 }),
+        evaluation(70, null, { 1: 75 }),
+      ]);
+
+      expect(result).toEqual([
+        {
+          grade: 80.46,
+          criteria: [
+            {
+              criterionId: 3,
+              criterion: 'Criterion 3',
+              component: 'Comunicación',
+              weight: 0.25,
+              score: 55,
+            },
+            {
+              criterionId: 1,
+              criterion: 'Criterion 1',
+              component: 'Desarrollo',
+              weight: 0.25,
+              score: 90,
+            },
+          ],
+          comments: 'Buena solución.',
+        },
+        {
+          grade: 70,
+          criteria: [
+            {
+              criterionId: 1,
+              criterion: 'Criterion 1',
+              component: 'Desarrollo',
+              weight: 0.25,
+              score: 75,
+            },
+          ],
+          comments: '',
+        },
+      ]);
+    });
+
+    it('never says who evaluated', () => {
+      const [juror] = buildJurorEvaluations([
+        evaluation(80, 'Bien', { 1: 90 }),
+      ]);
+
+      expect(Object.keys(juror).sort()).toEqual([
+        'comments',
+        'criteria',
+        'grade',
+      ]);
+    });
   });
 });

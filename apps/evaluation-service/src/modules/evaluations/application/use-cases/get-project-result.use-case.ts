@@ -4,7 +4,9 @@ import { status } from '@grpc/grpc-js';
 import { EvaluationRepositoryPort } from '../../domain/repositories/evaluation.repository.port';
 import { ProjectServicePort } from '../../infrastructure/ports/project.service.port';
 import {
+  JurorEvaluation,
   ProjectResult,
+  buildJurorEvaluations,
   buildProjectResult,
 } from '../../domain/services/project-result';
 import { GetProjectResultDto } from '../dto/get-project-result.dto';
@@ -12,12 +14,15 @@ import { EventGradingScaleResolver } from '../../../grading-scales/application/e
 
 export interface ProjectResultWithScale extends ProjectResult {
   maxScore: number;
+  /** Only when the request asks for them (withEvaluations); empty otherwise */
+  evaluations: JurorEvaluation[];
 }
 
 /**
  * Consolidated result of a project for its participants (see buildProjectResult).
  * `maxScore` is the points of the highest level of the event's grading scale, which is also
- * the highest grade, since the effective weights add up to 1.
+ * the highest grade, since the effective weights add up to 1. With `withEvaluations` it
+ * also gives each juror's evaluation without the juror, for the academic roles.
  *
  * It does not check whether the results are published nor who asks: the gateway does.
  */
@@ -45,6 +50,12 @@ export class GetProjectResultUseCase {
 
     const maxScore = Math.max(...scale.levels.map((level) => level.points));
 
-    return { ...buildProjectResult(evaluations), maxScore };
+    return {
+      ...buildProjectResult(evaluations),
+      maxScore,
+      evaluations: dto.withEvaluations
+        ? buildJurorEvaluations(evaluations)
+        : [],
+    };
   }
 }

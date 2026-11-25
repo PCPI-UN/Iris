@@ -90,7 +90,7 @@ Rubric changes and evaluations of an event never interleave: both run in a trans
 - `criteria`: average stored score per criterion, with its component and the effective weight stored with the evaluations.
 - `consolidatedFeedback`: the jurors' comments in one text, empty ones skipped.
 
-It never returns juror ids nor how many jurors evaluated, and it does not check publication or who asks: the gateway does.
+It never returns juror ids nor how many jurors evaluated, and it does not check publication or who asks: the gateway does. The only exception is `withEvaluations: true` in the request, which adds `evaluations`: each juror's evaluation (grade, own score per criterion, comment), oldest first and still without the juror. The gateway asks for it only in the academic project detail, never for participants.
 
 ## Statistics per component
 
