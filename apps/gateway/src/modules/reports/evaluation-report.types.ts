@@ -1,3 +1,8 @@
+import {
+  ResultComponent,
+  ResultCriterion,
+} from '@app/common/utils/project-result.util';
+
 /**
  * Data of the evaluation report of one category of an event (CU-86e3vmz0b,
  * IRIS-V3-REP-01). The Excel follows the format approved on 28 Oct
@@ -5,21 +10,11 @@
  * detail row per criterion.
  */
 
-export interface EvaluationReportCriterion {
-  criterionId: number;
-  criterion: string;
-  /** Effective weight the criterion had in the grade (fraction, 0-1) */
-  weight: number;
-  /** Average of the jurors' scores for the criterion */
-  score: number;
-}
+/** A criterion of a project with its effective weight and average score */
+export type EvaluationReportCriterion = ResultCriterion;
 
-export interface EvaluationReportComponent {
-  component: string;
-  /** Sum of the effective weights of its criteria (fraction, 0-1) */
-  weight: number;
-  criteria: EvaluationReportCriterion[];
-}
+/** The criteria of one component, with the share of the grade it had */
+export type EvaluationReportComponent = ResultComponent;
 
 export interface EvaluationReportProject {
   /** Row number in the report (the "Código" column), following the order of the rows */
