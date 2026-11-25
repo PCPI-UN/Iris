@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
   IsInt,
@@ -9,15 +10,25 @@ import {
   Min,
 } from 'class-validator';
 
+// Query params arrive as strings: 'true' / 'false' become booleans; anything
+// else is left as is so @IsBoolean rejects it.
+function toBooleanQuery({ value }: { value: unknown }): unknown {
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return value;
+}
+
 export class PaginationQueryDTO {
   @ApiProperty({ required: false, default: 1 })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   page?: number = 1;
 
   @ApiProperty({ required: false, default: 10 })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(100)
@@ -70,12 +81,14 @@ export class UpdateCategoryDTO {
 export class ListCategoriesDTO extends PaginationQueryDTO {
   @ApiProperty({ required: false })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   eventId?: number;
 
   @ApiProperty({ required: false })
   @IsOptional()
+  @Transform(toBooleanQuery)
   @IsBoolean()
   onlyActive?: boolean;
 
@@ -141,6 +154,7 @@ export class UpdateCategoryAwardDTO {
 export class ListCategoryAwardsDTO extends PaginationQueryDTO {
   @ApiProperty({ required: false })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   categoryId?: number;
@@ -183,6 +197,7 @@ export class UpdateAwardWinnerDTO {
 export class ListAwardWinnersDTO extends PaginationQueryDTO {
   @ApiProperty({ required: false })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   awardId?: number;
@@ -244,6 +259,7 @@ export class UpdateEventInscriptionDetailDTO {
 export class ListEventInscriptionDetailsDTO extends PaginationQueryDTO {
   @ApiProperty({ required: false })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   eventId?: number;
@@ -315,6 +331,7 @@ export class UpdateEventRecapDTO {
 export class ListEventRecapsDTO extends PaginationQueryDTO {
   @ApiProperty({ required: false })
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   eventId?: number;
