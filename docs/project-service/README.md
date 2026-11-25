@@ -105,10 +105,11 @@ sequenceDiagram
 | `read_course:academic_projects` | The ones of the course sections (`academic_courses`) the user teaches | `Professor` |
 | `read_department:academic_projects` | The ones of the course sections of the department the user directs | `DepartmentDirector` |
 
-- Without `scope` in the request, a user with several of them reads the union. With `scope` (`AcademicScope`: `ALL`, `TUTORED`, `COURSE`, `DEPARTMENT`), the user reads only that one, and nothing (empty list, `NOT_FOUND`) if no permission of theirs grants it: a `Professor` who also tutors asks for `TUTORED` and reads only the projects they tutor. The gateway always sends it, from the academic profile of the request. No role id is fixed in the code: giving or removing a scope to a role is a row in `auth-service` `_role_permissions`.
+- Without `scope` in the request, a user with several of them reads the union. With `scope` (`AcademicScope`: `ALL`, `TUTORED`, `COURSE`, `DEPARTMENT`), the user reads only that one, and nothing (empty list, `NOT_FOUND`) if no permission of theirs grants it: a `Professor` who also tutors asks for `TUTORED` and reads only the projects they tutor. The `/academic/*` endpoints always send it, from the academic profile of the request; the evaluation report sends it only when the request names a profile, and otherwise reads the union. No role id is fixed in the code: giving or removing a scope to a role is a row in `auth-service` `_role_permissions`.
 - `Admin` holds `read_all` explicitly: the Admin bypass of the gateway guard does not reach this service.
 - A project outside the scope answers `NOT_FOUND`, like a missing one.
 - The projects in a fill course section (see [schema.md](./schema.md)), -1 (created before course sections existed) or 0 (event that does not require one), are only seen by their tutors and `read_all`, and are returned without `academicCourse`.
+- `GetProjectComplete` (the project read of the admin panel, `GET /projects/:id`) also returns `academicCourse`, with the same rule for the fill course sections; it does not apply any read scope.
 
 ### Course section of a new project
 
