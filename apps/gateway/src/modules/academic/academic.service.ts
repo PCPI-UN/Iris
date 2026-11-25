@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { status } from '@grpc/grpc-js';
 import {
   AcademicCourse,
@@ -23,6 +28,7 @@ import { ProjectsService } from '../projects/projects.service';
 import { EventService } from '../events/events.service';
 import { EvaluationsService } from '../evaluations/evaluations.service';
 import { AuthService } from '../auth/auth.service';
+import { DiplomaFile, DiplomasService } from '../diplomas/diplomas.service';
 import { AppUser } from '../auth/types/app-user.type';
 import { positionOf } from '../events/ranking/ranking-positions';
 import {
@@ -45,6 +51,7 @@ import { ListAcademicProjectsDto } from './dto/academic-query.dto';
 import {
   AcademicProfile,
   academicProfilesOf,
+  DIPLOMA_PROFILES,
   profileScope,
 } from './academic-profiles';
 
@@ -82,6 +89,7 @@ export class AcademicService {
     private readonly eventsService: EventService,
     private readonly evaluationsService: EvaluationsService,
     private readonly authService: AuthService,
+    private readonly diplomasService: DiplomasService,
   ) {}
 
   /** Academic profiles of the caller; empty without an academic role (students, Admin, FacultyAdmin) */
@@ -129,6 +137,30 @@ export class AcademicService {
     const [withTerm] = withTermCodes([project], await this.termCodes());
     const evaluation = await this.evaluation(user, project);
     return withoutOneofMarkers({ ...withTerm, evaluation });
+  }
+
+  /**
+   * Award diploma of one project of the caller's scope, only for DIPLOMA_PROFILES (403 for
+   * the others, even with the project in their scope). Same rules as the student one:
+   * published results, a published award and a design for the event.
+   */
+  async getDiploma(
+    user: AppUser,
+    projectId: number,
+    profile: AcademicProfile,
+  ): Promise<DiplomaFile> {
+    const scope = profileScope(user, profile);
+    if (!DIPLOMA_PROFILES.includes(profile)) {
+      throw new ForbiddenException(
+        `El perfil académico ${profile} no descarga diplomas`,
+      );
+    }
+    const project = await this.projectsService.getProjectInScope(
+      user.id,
+      projectId,
+      scope,
+    );
+    return this.diplomasService.getProjectDiploma(project);
   }
 
   /**
