@@ -294,9 +294,18 @@ export class EvaluationsService implements OnModuleInit {
     return projects.some((p) => p.projectId === projectId && p.evaluated);
   }
 
-  /** Consolidated result of a project (no juror data); publication is checked by the caller */
-  async getProjectResult(projectId: number): Promise<GetProjectResultResponse> {
-    return lastValueFrom(this.evaluationService.getProjectResult({ projectId }));
+  /**
+   * Consolidated result of a project; publication is checked by the caller. Juror data is
+   * only added with `withEvaluations` (each juror's evaluation, without the juror), which
+   * is for the academic roles, never for participants.
+   */
+  async getProjectResult(
+    projectId: number,
+    withEvaluations = false,
+  ): Promise<GetProjectResultResponse> {
+    return lastValueFrom(
+      this.evaluationService.getProjectResult({ projectId, withEvaluations }),
+    );
   }
 
   async evaluateProject(

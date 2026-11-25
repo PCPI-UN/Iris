@@ -112,6 +112,18 @@ export interface AcademicProjectResult {
   components: ResultComponent[];
   /** Each juror's comment, without saying who wrote it; empty when there are none */
   comments: string[];
+  /** Each juror's evaluation without the juror, oldest first (the front calls them Jurado A, B...) */
+  evaluations: AcademicJurorEvaluation[];
+}
+
+/** One juror's evaluation in the academic detail; no juror id nor name */
+export interface AcademicJurorEvaluation {
+  /** The juror's grade, rounded as the ranking does */
+  grade: number;
+  /** The juror's own score per criterion, grouped by component */
+  components: ResultComponent[];
+  /** null when the juror left no comment */
+  comment: string | null;
 }
 
 /** Position of the project in the ranking of its category, with the ranking rule */

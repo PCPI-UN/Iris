@@ -258,6 +258,48 @@ describe('AcademicService', () => {
         },
       ],
       consolidatedFeedback: 'Buen trabajo.\n\nFaltan pruebas.',
+      evaluations: [
+        {
+          grade: 4.5,
+          criteria: [
+            {
+              criterionId: 1,
+              criterion: 'Claridad',
+              component: 'Exposición',
+              weight: 0.4,
+              score: 4,
+            },
+            {
+              criterionId: 2,
+              criterion: 'Diseño',
+              component: 'Solución',
+              weight: 0.6,
+              score: 5,
+            },
+          ],
+          comments: 'Buen trabajo.',
+        },
+        {
+          grade: 4,
+          criteria: [
+            {
+              criterionId: 1,
+              criterion: 'Claridad',
+              component: 'Exposición',
+              weight: 0.4,
+              score: 4,
+            },
+            {
+              criterionId: 2,
+              criterion: 'Diseño',
+              component: 'Solución',
+              weight: 0.6,
+              score: 4,
+            },
+          ],
+          comments: '',
+        },
+      ],
     };
 
     const published = (resultsPublished: boolean) =>
@@ -328,6 +370,69 @@ describe('AcademicService', () => {
           },
         ],
         comments: ['Buen trabajo.', 'Faltan pruebas.'],
+        // Each juror without the juror, the oldest first; no comment is null
+        evaluations: [
+          {
+            grade: 4.5,
+            components: [
+              {
+                component: 'Exposición',
+                weight: 0.4,
+                criteria: [
+                  {
+                    criterionId: 1,
+                    criterion: 'Claridad',
+                    weight: 0.4,
+                    score: 4,
+                  },
+                ],
+              },
+              {
+                component: 'Solución',
+                weight: 0.6,
+                criteria: [
+                  {
+                    criterionId: 2,
+                    criterion: 'Diseño',
+                    weight: 0.6,
+                    score: 5,
+                  },
+                ],
+              },
+            ],
+            comment: 'Buen trabajo.',
+          },
+          {
+            grade: 4,
+            components: [
+              {
+                component: 'Exposición',
+                weight: 0.4,
+                criteria: [
+                  {
+                    criterionId: 1,
+                    criterion: 'Claridad',
+                    weight: 0.4,
+                    score: 4,
+                  },
+                ],
+              },
+              {
+                component: 'Solución',
+                weight: 0.6,
+                criteria: [
+                  {
+                    criterionId: 2,
+                    criterion: 'Diseño',
+                    weight: 0.6,
+                    score: 4,
+                  },
+                ],
+              },
+            ],
+            comment: null,
+          },
+        ],
       },
       // Tied with project 7: same position
       ranking: {
@@ -370,7 +475,8 @@ describe('AcademicService', () => {
       const detail = await service.getProject(DEAN, 1, AS_DEAN);
 
       expect(detail.evaluation).toEqual(visibleEvaluation);
-      expect(evaluationsService.getProjectResult).toHaveBeenCalledWith(1);
+      // The detail asks for each juror's evaluation
+      expect(evaluationsService.getProjectResult).toHaveBeenCalledWith(1, true);
       expect(eventsService.listApprovedProjects).toHaveBeenCalledWith(4, 6);
     });
 

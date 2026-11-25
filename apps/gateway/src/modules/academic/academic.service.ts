@@ -113,7 +113,8 @@ export class AcademicService {
 
   /**
    * One project of the caller's scope with its evaluation: juror counters always; the
-   * result (grade, criteria by component, comments) and the ranking position only when
+   * result (grade, criteria by component, comments, each juror's evaluation without the
+   * juror) and the ranking position only when
    * the caller may see the grade (same rule as getGrades).
    */
   async getProject(
@@ -157,7 +158,7 @@ export class AcademicService {
 
       const [result, ranking] = view.visible
         ? await Promise.all([
-            this.evaluationsService.getProjectResult(project.id),
+            this.evaluationsService.getProjectResult(project.id, true),
             this.ranking(project),
           ])
         : [undefined, null];
@@ -474,6 +475,11 @@ export function toProjectResult(
     maxScore: result.maxScore,
     components: groupByComponent(result),
     comments: splitFeedback(result.consolidatedFeedback),
+    evaluations: (result.evaluations ?? []).map((evaluation) => ({
+      grade: evaluation.grade,
+      components: groupByComponent(evaluation),
+      comment: evaluation.comments?.trim() || null,
+    })),
   };
 }
 
