@@ -32,6 +32,16 @@ const stateToProto = (s: ProjectState): number => {
 };
 
 // Y viceversa (proto -> dominio) si recibes en CreateProject
+export const protoToState = (n?: number): ProjectState => {
+  switch (n) {
+    case 1: return 'UNDER_REVIEW';
+    case 2: return 'APPROVED';
+    case 3: return 'REJECTED';
+    case 4: return 'REQUEST_CHANGES'
+    default: return 'UNDER_REVIEW';
+  }
+};
+
 /**
  * AcademicScope of the academic read requests. Unset or UNSPECIFIED is undefined: the union of
  * the user's scopes. The enum arrives as its number or, with the String enums loader, its name.
@@ -43,16 +53,6 @@ export const protoToReadScope = (value?: number | string): RequestedReadScope | 
     case 3: case 'ACADEMIC_SCOPE_COURSE': return 'course';
     case 4: case 'ACADEMIC_SCOPE_DEPARTMENT': return 'department';
     default: return undefined;
-  }
-};
-
-export const protoToState = (n?: number): ProjectState => {
-  switch (n) {
-    case 1: return 'UNDER_REVIEW';
-    case 2: return 'APPROVED';
-    case 3: return 'REJECTED';
-    case 4: return 'REQUEST_CHANGES'
-    default: return 'UNDER_REVIEW';
   }
 };
 
