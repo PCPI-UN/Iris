@@ -65,7 +65,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         platformRoles: permissionsResponse.roles || [],
         platformPermissions: permissionsResponse.permissions || [],
       };
-      this.logger.debug(`User validated: ${JSON.stringify(appUser)}`);
+      this.logger.debug(`User validated with ID: ${appUser.id}`);
       return appUser;
     } catch (e) {
       throw new UnauthorizedException('No se pudo validar el usuario');

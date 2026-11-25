@@ -1372,7 +1372,7 @@ export class ProjectsService implements OnModuleInit {
     }
 
     this.logger.log(
-      `[addFilesToExistingProject] Project from gRPC: ${JSON.stringify(project)}`,
+      `[addFilesToExistingProject] Project from gRPC: ${projectId}`,
     );
 
     // 7.2. Obtener el evento asociado para revisar evaluaciones y fechas
@@ -1395,7 +1395,7 @@ export class ProjectsService implements OnModuleInit {
     }
 
     this.logger.log(
-      `[addFilesToExistingProject] Event from gRPC: ${JSON.stringify(event)}`,
+      `[addFilesToExistingProject] Event from gRPC loaded for project ${projectId}`,
     );
 
     // 7.3. Leer evaluationsOpened y endDate (defensivo: camelCase y snake_case)
@@ -1404,9 +1404,7 @@ export class ProjectsService implements OnModuleInit {
 
     if (evaluationsOpened === undefined) {
       this.logger.warn(
-        `[addFilesToExistingProject] evaluationsOpened is undefined in event: ${JSON.stringify(
-          event,
-        )}`,
+        `[addFilesToExistingProject] evaluationsOpened is undefined in the event of project ${projectId}`,
       );
       throw new BadRequestException(
         'No se pueden agregar archivos: el estado de evaluaciones del evento no está bien configurado',
