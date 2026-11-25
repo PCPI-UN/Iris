@@ -23,12 +23,15 @@ import {
   AcademicEventQueryDto,
   AcademicGradesFormat,
   AcademicProfileQueryDto,
+  AcademicStatsGroupBy,
   GetAcademicGradesDto,
+  GetAcademicStatsDto,
   ListAcademicProjectsDto,
 } from './dto/academic-query.dto';
 import { buildGradesBuffer, gradesFileName } from './academic-grades.workbook';
 import { AcademicProjectDetail, GradesReport } from './academic.types';
 import { AcademicProfile } from './academic-profiles';
+import { AcademicStats } from './academic-stats';
 
 /**
  * Read-only endpoints of the academic roles (CU-86e3vmz0m). /profiles lists the academic
@@ -195,5 +198,37 @@ export class AcademicController {
     );
     if (query.format !== AcademicGradesFormat.EXCEL) return report;
     return xlsxFile(await buildGradesBuffer(report), gradesFileName(report));
+  }
+
+  @Get('stats')
+  @RequirePermission('read:academic_projects')
+  @ApiOperation({
+    summary: 'Grade statistics of my academic scope in an event',
+    description:
+      'Over the approved projects of the caller scope with at least one evaluation: the ' +
+      'average of each rubric component and criterion (effective weights as fractions) and ' +
+      'how many final grades fall in each of 5 equal ranges from 0 to maxScore (null ' +
+      'without a grading scale). groupBy=department adds the same block per department of ' +
+      'the course sections; projects without one go under a null department. Without ' +
+      'read:grades the numbers are only sent once the results are published ' +
+      '(statsHidden: true until then).',
+  })
+  @ApiResponse({ status: 200, description: 'The statistics' })
+  @ApiResponse({
+    status: 403,
+    description:
+      'The user lacks read:academic_projects or the role of the profile',
+  })
+  @ApiResponse({ status: 404, description: 'The event does not exist' })
+  getStats(
+    @GetUser() user: AppUser,
+    @Query() query: GetAcademicStatsDto,
+  ): Promise<AcademicStats> {
+    return this.academicService.getStats(
+      user,
+      query.eventId,
+      query.profile,
+      query.groupBy === AcademicStatsGroupBy.DEPARTMENT,
+    );
   }
 }

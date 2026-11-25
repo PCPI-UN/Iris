@@ -43,6 +43,13 @@ import {
 } from './academic.types';
 import { ListAcademicProjectsDto } from './dto/academic-query.dto';
 import {
+  AcademicStats,
+  FinalScores,
+  StatsBlock,
+  byDepartment,
+  scoreDistribution,
+} from './academic-stats';
+import {
   AcademicProfile,
   academicProfilesOf,
   profileScope,
@@ -64,7 +71,7 @@ const REVIEW_STATES: ProjectReviewState[] = [
  * profile (course sections, tutored, department or all), not the union of every scope of
  * the user: a professor who also tutors sees, as TUTOR, only the projects they tutor. A
  * project outside the scope is a 404, the same as a missing one; so is an event of
- * /registrations or /grades that is deleted or has no project of the scope (it is not in
+ * /registrations, /grades or /stats that is deleted or has no project of the scope (it is not in
  * /academic/events).
  *
  * Grades: a caller with `read:grades` (Admin, FacultyAdmin, Dean) sees them at any
@@ -401,6 +408,92 @@ export class AcademicService {
       gradeVisibility: seesUnpublished ? 'ALL' : 'PUBLISHED_ONLY',
       generatedAt: new Date(),
       projects: rows.sort(byCourseThenName),
+    };
+  }
+
+  /**
+   * Criteria averages and score distribution of the approved projects of the caller's
+   * scope in the event, over the evaluated ones; with groupByDepartment, also one block
+   * per department of their course sections. Same rule as getGrades: before the results
+   * are published, only a caller that reads unpublished grades gets the numbers.
+   */
+  async getStats(
+    user: AppUser,
+    eventId: number,
+    profile: AcademicProfile,
+    groupByDepartment = false,
+  ): Promise<AcademicStats> {
+    const scope = profileScope(user, profile);
+    const event = await this.requireEventInScope(user.id, scope, eventId);
+    const resultsPublished = !!event.resultsPublished;
+    const header = { eventId, eventName: event.name, resultsPublished };
+
+    if (!resultsPublished && !canReadUnpublishedGrades(user)) {
+      return {
+        ...header,
+        statsHidden: true,
+        maxScore: null,
+        overall: null,
+        ...(groupByDepartment && { departments: [] }),
+      };
+    }
+
+    const projects = await this.projectsService.listAllProjectsInScope({
+      userId: user.id,
+      eventId,
+      state: ProjectState.APPROVED,
+      scope,
+    });
+    const averages = await this.evaluationsService.getAverageGrades(
+      projects.map((p) => p.id),
+    );
+    const scores: FinalScores = new Map(
+      averages
+        .filter((a) => a.evaluationCount > 0)
+        .map((a) => [a.projectId, a.averageGrade]),
+    );
+
+    const criteria = (ofProjects: ProjectComplete[]) =>
+      this.evaluationsService.fetchCriteriaStats(
+        eventId,
+        ofProjects.map((p) => p.id).filter((id) => scores.has(id)),
+      );
+    const overallCriteria = await criteria(projects);
+    const maxScore = overallCriteria.maxScore ?? null;
+
+    const block = (
+      ofProjects: ProjectComplete[],
+      components: StatsBlock['components'],
+    ): StatsBlock => {
+      const evaluated = ofProjects
+        .map((p) => scores.get(p.id))
+        .filter((score): score is number => score !== undefined);
+      return {
+        projectCount: ofProjects.length,
+        evaluatedCount: evaluated.length,
+        components,
+        distribution: scoreDistribution(evaluated, maxScore),
+      };
+    };
+
+    const departments = groupByDepartment
+      ? await Promise.all(
+          byDepartment(projects).map(async (group) => ({
+            ...group.department,
+            ...block(
+              group.projects,
+              (await criteria(group.projects)).components,
+            ),
+          })),
+        )
+      : undefined;
+
+    return {
+      ...header,
+      statsHidden: false,
+      maxScore,
+      overall: block(projects, overallCriteria.components),
+      ...(departments && { departments }),
     };
   }
 

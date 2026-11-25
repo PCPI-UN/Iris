@@ -208,8 +208,11 @@ export class EvaluationsService implements OnModuleInit {
     );
   }
 
-  /** Called even without projects: maxScore comes from the event's scale. */
-  private async fetchCriteriaStats(
+  /**
+   * Criteria averages over the given projects of the event, which the caller has already
+   * chosen and checked. Called even without projects: maxScore comes from the event's scale.
+   */
+  async fetchCriteriaStats(
     eventId: number,
     projectIds: number[],
   ): Promise<GetEventCriteriaStatsResponse> {
