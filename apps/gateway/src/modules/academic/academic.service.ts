@@ -123,38 +123,56 @@ export class AcademicService {
       projectId,
       profileScope(user, profile),
     );
-    const [codes, event, averages] = await Promise.all([
-      this.termCodes(),
-      this.eventsService.getEventById(project.eventId),
-      this.evaluationsService.getAverageGrades([projectId]),
-    ]);
-    const [withTerm] = withTermCodes([project], codes);
-
-    const completedEvaluations = averages[0]?.evaluationCount ?? 0;
-    const assignedJurors = project.assignedJurorCount ?? 0;
-    const view = gradeView(
-      completedEvaluations,
-      !!event?.resultsPublished,
-      canReadUnpublishedGrades(user),
-    );
-
-    const [result, ranking] = view.visible
-      ? await Promise.all([
-          this.evaluationsService.getProjectResult(projectId),
-          this.ranking(project),
-        ])
-      : [undefined, null];
-
-    const evaluation: AcademicProjectEvaluation = {
-      gradeStatus: view.gradeStatus,
-      assignedJurors,
-      completedEvaluations,
-      pendingEvaluations: Math.max(assignedJurors - completedEvaluations, 0),
-      resultHidden: view.hidden,
-      result: result ? toProjectResult(result) : null,
-      ranking,
-    };
+    const [withTerm] = withTermCodes([project], await this.termCodes());
+    const evaluation = await this.evaluation(user, project);
     return withoutOneofMarkers({ ...withTerm, evaluation });
+  }
+
+  /**
+   * Evaluation of the project for the detail. If event-service or evaluation-service
+   * fail it is left out (null) instead of failing the whole detail: the project data
+   * does not depend on it.
+   */
+  private async evaluation(
+    user: AppUser,
+    project: ProjectComplete,
+  ): Promise<AcademicProjectEvaluation | null> {
+    try {
+      const [event, averages] = await Promise.all([
+        this.eventsService.getEventById(project.eventId),
+        this.evaluationsService.getAverageGrades([project.id]),
+      ]);
+
+      const completedEvaluations = averages[0]?.evaluationCount ?? 0;
+      const assignedJurors = project.assignedJurorCount ?? 0;
+      const view = gradeView(
+        completedEvaluations,
+        !!event?.resultsPublished,
+        canReadUnpublishedGrades(user),
+      );
+
+      const [result, ranking] = view.visible
+        ? await Promise.all([
+            this.evaluationsService.getProjectResult(project.id),
+            this.ranking(project),
+          ])
+        : [undefined, null];
+
+      return {
+        gradeStatus: view.gradeStatus,
+        assignedJurors,
+        completedEvaluations,
+        pendingEvaluations: Math.max(assignedJurors - completedEvaluations, 0),
+        resultHidden: view.hidden,
+        result: result ? toProjectResult(result) : null,
+        ranking,
+      };
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Evaluation of project ${project.id} unavailable: ${(error as Error)?.message}`,
+      );
+      return null;
+    }
   }
 
   /**

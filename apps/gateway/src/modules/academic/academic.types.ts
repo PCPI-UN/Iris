@@ -146,5 +146,6 @@ export interface AcademicProjectEvaluation {
 
 /** A project of the caller's scope, with its evaluation */
 export type AcademicProjectDetail = ProjectComplete & {
-  evaluation: AcademicProjectEvaluation;
+  /** null when event-service or evaluation-service could not give it; the project is still sent */
+  evaluation: AcademicProjectEvaluation | null;
 };

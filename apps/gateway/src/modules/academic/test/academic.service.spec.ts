@@ -383,6 +383,27 @@ describe('AcademicService', () => {
       expect(evaluationsService.getProjectResult).not.toHaveBeenCalled();
     });
 
+    it('an evaluation-service failure sends the project with evaluation null', async () => {
+      evaluationsService.getAverageGrades.mockRejectedValue(
+        Object.assign(new Error('deadline exceeded'), { code: 4 }),
+      );
+
+      const detail = await service.getProject(DEAN, 1, AS_DEAN);
+
+      expect(detail).toMatchObject({ id: 1, name: 'P1', evaluation: null });
+    });
+
+    it('a GetProjectResult failure also leaves the evaluation out', async () => {
+      evaluationsService.getProjectResult.mockRejectedValue(
+        Object.assign(new Error('unavailable'), { code: 14 }),
+      );
+
+      const detail = await service.getProject(DEAN, 1, AS_DEAN);
+
+      expect(detail.evaluation).toBeNull();
+      expect(detail.id).toBe(1);
+    });
+
     it('a project outside the scope is still a 404', async () => {
       projectsService.getProjectInScope.mockRejectedValue(
         new NotFoundException(),
@@ -401,8 +422,8 @@ describe('AcademicService', () => {
 
       const detail = await service.getProject(DEAN, 1, AS_DEAN);
 
-      expect(detail.evaluation.result).not.toBeNull();
-      expect(detail.evaluation.ranking).toBeNull();
+      expect(detail.evaluation?.result).not.toBeNull();
+      expect(detail.evaluation?.ranking).toBeNull();
       expect(eventsService.getRankingEventByEventId).not.toHaveBeenCalled();
     });
 
@@ -413,8 +434,8 @@ describe('AcademicService', () => {
 
       const detail = await service.getProject(DEAN, 1, AS_DEAN);
 
-      expect(detail.evaluation.ranking).toBeNull();
-      expect(detail.evaluation.result).not.toBeNull();
+      expect(detail.evaluation?.ranking).toBeNull();
+      expect(detail.evaluation?.result).not.toBeNull();
     });
 
     it('a ranking failure leaves the position out instead of failing the detail', async () => {
@@ -424,8 +445,8 @@ describe('AcademicService', () => {
 
       const detail = await service.getProject(DEAN, 1, AS_DEAN);
 
-      expect(detail.evaluation.ranking).toBeNull();
-      expect(detail.evaluation.result).not.toBeNull();
+      expect(detail.evaluation?.ranking).toBeNull();
+      expect(detail.evaluation?.result).not.toBeNull();
     });
 
     it('an untied position is not marked as tied', async () => {
@@ -443,7 +464,7 @@ describe('AcademicService', () => {
       const detail = await service.getProject(DEAN, 1, AS_DEAN);
 
       // 7 and 8 share the first position, so the next one is 2
-      expect(detail.evaluation.ranking).toMatchObject({
+      expect(detail.evaluation?.ranking).toMatchObject({
         position: 2,
         tied: false,
       });

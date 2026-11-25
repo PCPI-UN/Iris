@@ -98,7 +98,8 @@ export class AcademicController {
       'their effective weights as fractions, the jurors comments without author) and the ' +
       'position in the ranking of its category (tied projects share it; null if the project ' +
       'is not approved or the event has no ranking). Without read:grades the result and ' +
-      'the position are only sent once the results are published (resultHidden: true until then).',
+      'the position are only sent once the results are published (resultHidden: true until then). ' +
+      '`evaluation` is null when the evaluation could not be read; the project is still sent.',
   })
   @ApiResponse({ status: 200, description: 'The project and its evaluation' })
   @ApiResponse({
