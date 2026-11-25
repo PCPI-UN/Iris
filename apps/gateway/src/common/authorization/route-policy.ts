@@ -35,6 +35,10 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   // health.controller.ts
   'GET /health': { access: 'public' },
   // modules/academic/academic.controller.ts (read-only; project-service limits the scope)
+  'GET /academic/profiles': {
+    access: 'session',
+    why: "the caller's own academic profiles, from their roles; empty without academic roles",
+  },
   'GET /academic/events': { permission: ['read:academic_projects'] },
   'GET /academic/grades': { permission: ['read:academic_projects'] },
   'GET /academic/projects': { permission: ['read:academic_projects'] },

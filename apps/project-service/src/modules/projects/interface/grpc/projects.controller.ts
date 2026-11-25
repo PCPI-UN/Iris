@@ -24,6 +24,7 @@ import {
   toGetJurorImportTemplateResponse,
   toProtoStudentParticipationStats,
   toProtoProjectInScope,
+  protoToReadScope,
   toProtoProjectChangeLogEntry,
 } from './mappers';
 import { UpdateProjectUC } from '../../application/use-cases/update-project.uc';
@@ -51,8 +52,8 @@ import { ListProjectsForReviewUC } from '../../application/use-cases/list-projec
 import { ListProjectsByFilterDTO } from '../../application/dto/list-projects.dto';
 import { ListProjectsInScopeUC } from '../../application/use-cases/list-projects-in-scope.uc';
 import { GetProjectInScopeUC } from '../../application/use-cases/get-project-in-scope.uc';
+import { GetProjectAcademicCourseUC } from '../../application/use-cases/get-project-academic-course.uc';
 import { ListEventIdsInScopeUC } from '../../application/use-cases/list-event-ids-in-scope.uc';
-import { GetProjectInScopeDTO, ListEventIdsInScopeDTO } from '../../application/dto/projects-in-scope.dto';
 import { UpdateProjectDocumentUC } from '../../application/use-cases/update-document.uc';
 import { RequestChangesProjectUC } from '../../application/use-cases/request-changes-project.uc';
 import { GetMyProjectByEventUC } from '../../application/use-cases/get-my-project-by-event.uc';
@@ -147,6 +148,7 @@ export class ProjectsController {
     private readonly getStudentParticipationStatsUC: GetStudentParticipationStatsUC,
     private readonly listProjectsInScopeUC: ListProjectsInScopeUC,
     private readonly getProjectInScopeUC: GetProjectInScopeUC,
+    private readonly getProjectAcademicCourseUC: GetProjectAcademicCourseUC,
     private readonly listEventIdsInScopeUC: ListEventIdsInScopeUC,
     private readonly listProjectChangeLogUC: ListProjectChangeLogUC,
     private readonly adminChangeProjectStateUC: AdminChangeProjectStateUC,
@@ -617,11 +619,12 @@ export class ProjectsController {
   async getProjectCompleteRpc(req: { id: number }) {
     const project = await this.getProject.execute({ id: req.id });
 
-    const [participants, documents, pending, tutors] = await Promise.all([
+    const [participants, documents, pending, tutors, academicCourse] = await Promise.all([
       this.listParticipantsUC.execute({ projectId: project.id }),
       this.listDocs.execute({ projectId: project.id }),
       this.listPendingParticipantsUC.execute({ projectId: project.id }),
       this.tutorsOf(project.id),
+      this.getProjectAcademicCourseUC.execute(project.id),
     ]);
 
     const projectComplete = {
@@ -630,6 +633,7 @@ export class ProjectsController {
       documents,
       pendingParticipants: pending,
       tutors,
+      academicCourse,
     };
 
     return {
@@ -749,6 +753,7 @@ export class ProjectsController {
     q?: string;
     currentPage?: number;
     itemsPerPage?: number;
+    scope?: number | string;
   }) {
     const res = await this.listProjectsInScopeUC.execute({
       userId: req.userId,
@@ -758,6 +763,7 @@ export class ProjectsController {
       q: req.q,
       currentPage: req.currentPage,
       itemsPerPage: req.itemsPerPage,
+      scope: protoToReadScope(req.scope),
     });
     const tutorsByProject = await this.listProjectTutorsUC.execute(res.items.map((p) => p.id));
     return {
@@ -773,15 +779,21 @@ export class ProjectsController {
   }
 
   @GrpcMethod('ProjectsService', 'GetProjectInScope')
-  async getProjectInScopeRpc(req: GetProjectInScopeDTO) {
-    const project = await this.getProjectInScopeUC.execute(req);
+  async getProjectInScopeRpc(req: { userId: number; projectId: number; scope?: number | string }) {
+    const project = await this.getProjectInScopeUC.execute({
+      userId: req.userId,
+      projectId: req.projectId,
+      scope: protoToReadScope(req.scope),
+    });
     const tutorsByProject = await this.listProjectTutorsUC.execute([project.id]);
     return toProtoProjectInScope({ ...project, tutors: tutorsByProject.get(project.id) ?? [] });
   }
 
   @GrpcMethod('ProjectsService', 'ListEventIdsInScope')
-  async listEventIdsInScopeRpc(req: ListEventIdsInScopeDTO) {
-    return { eventIds: await this.listEventIdsInScopeUC.execute(req) };
+  async listEventIdsInScopeRpc(req: { userId: number; scope?: number | string }) {
+    return {
+      eventIds: await this.listEventIdsInScopeUC.execute({ userId: req.userId, scope: protoToReadScope(req.scope) }),
+    };
   }
 
   @GrpcMethod('ProjectsService', 'ListProjectChangeLog')

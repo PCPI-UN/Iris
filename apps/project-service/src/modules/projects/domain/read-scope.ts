@@ -28,12 +28,41 @@ export type ProjectReadScope =
       ofDepartment: boolean;
     };
 
-/** Scope given by the user's platform permissions; null when none of them grants projects. */
+/** One scope a caller may ask for, instead of the union of every scope of the user */
+export type RequestedReadScope = 'all' | 'tutored' | 'course' | 'department';
+
+/** Permission that grants each requested scope */
+export const REQUESTED_SCOPE_PERMISSION: Record<RequestedReadScope, string> = {
+  all: READ_ALL_ACADEMIC_PROJECTS,
+  tutored: READ_TUTORED_ACADEMIC_PROJECTS,
+  course: READ_COURSE_ACADEMIC_PROJECTS,
+  department: READ_DEPARTMENT_ACADEMIC_PROJECTS,
+};
+
+/**
+ * Scope given by the user's platform permissions; null when none of them grants projects.
+ *
+ * Without `requested` it is the union of every scope the permissions grant. With it, only
+ * that scope, and null when the user lacks its permission: a Professor who also tutors asks
+ * for `tutored` and reads only the projects they tutor, not the ones of their course sections.
+ */
 export function resolveReadScope(
   userId: number,
   permissions: string[],
+  requested?: RequestedReadScope,
 ): ProjectReadScope | null {
   const has = (permission: string) => permissions.includes(permission);
+  if (requested) {
+    if (!has(REQUESTED_SCOPE_PERMISSION[requested])) return null;
+    if (requested === 'all') return { all: true };
+    return {
+      all: false,
+      userId,
+      tutored: requested === 'tutored',
+      ofCourses: requested === 'course',
+      ofDepartment: requested === 'department',
+    };
+  }
   if (has(READ_ALL_ACADEMIC_PROJECTS)) return { all: true };
 
   const scope = {

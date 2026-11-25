@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, IsPositive } from 'class-validator';
+import { AcademicProfile } from '../../academic/academic-profiles';
 
 export enum EvaluationReportFormat {
   JSON = 'json',
@@ -33,4 +34,16 @@ export class GetEvaluationReportDto extends GetMyProjectReportDto {
   @IsInt()
   @IsPositive()
   categoryId!: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Academic profile the report is asked from (one of GET /academic/profiles): only the ' +
+      'projects of that profile scope, as on its screen. Without it, the union of every ' +
+      'scope of the caller. 403 when the caller lacks its role',
+    enum: AcademicProfile,
+    example: AcademicProfile.PROFESSOR,
+  })
+  @IsOptional()
+  @IsEnum(AcademicProfile)
+  profile?: AcademicProfile;
 }

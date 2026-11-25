@@ -47,6 +47,8 @@ export interface ProjectRepository {
   listAcademicCoursesByTerm(termId: number): Promise<AcademicCourseView[]>;
 
   findById(id: number): Promise<Project | null>;
+  /** Course section of the project; null when it does not exist or its section is a fill row (-1, 0). */
+  findAcademicCourseOfProject(projectId: number): Promise<AcademicCourseView | null>;
   findManyByIds(ids: number[]): Promise<Project[]>;
   findProject(eventId: number, courseId: number, name: string): Promise<Project | null>;
 

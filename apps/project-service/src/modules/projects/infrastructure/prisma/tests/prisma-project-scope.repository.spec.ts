@@ -1,4 +1,5 @@
 import { PrismaProjectRepository, scopeWhere } from '../prisma-project.repository';
+import { resolveReadScope } from '../../../domain/read-scope';
 
 const scope = (relations: Partial<{ tutored: boolean; ofCourses: boolean; ofDepartment: boolean }>) => ({
   all: false as const, userId: 5, tutored: false, ofCourses: false, ofDepartment: false, ...relations,
@@ -20,6 +21,14 @@ describe('scopeWhere', () => {
     ['every relation, OR-ed', { tutored: true, ofCourses: true, ofDepartment: true }, [TUTORED, TAUGHT, DIRECTED]],
   ])('%s', (_name, relations, or) => {
     expect(scopeWhere(scope(relations))).toEqual({ OR: or });
+  });
+
+  it('Ana, Professor and Tutor: the requested scope filters by that relation only', () => {
+    const ana = ['read_course:academic_projects', 'read_tutored:academic_projects'];
+
+    expect(scopeWhere(resolveReadScope(5, ana, 'tutored')!)).toEqual({ OR: [TUTORED] });
+    expect(scopeWhere(resolveReadScope(5, ana, 'course')!)).toEqual({ OR: [TAUGHT] });
+    expect(scopeWhere(resolveReadScope(5, ana)!)).toEqual({ OR: [TUTORED, TAUGHT] });
   });
 
   it('a scope with no relation matches nothing', () => {

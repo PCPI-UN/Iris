@@ -12,7 +12,7 @@ export class ListEventIdsInScopeUC {
   ) {}
 
   async execute(input: ListEventIdsInScopeDTO): Promise<number[]> {
-    const scope = await this.resolveScope.execute(input.userId);
+    const scope = await this.resolveScope.execute(input.userId, input.scope);
     return scope ? this.repo.listEventIdsInScope(scope) : [];
   }
 }

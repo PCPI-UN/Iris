@@ -10,8 +10,22 @@ import {
   Min,
 } from 'class-validator';
 import { ProjectStateFilter } from '../../projects/dto/list-projects-by-event.dto';
+import { AcademicProfile } from '../academic-profiles';
 
-export class ListAcademicProjectsDto {
+/** Every /academic read except /profiles is done as one of the caller's profiles */
+export class AcademicProfileQueryDto {
+  @ApiProperty({
+    description:
+      'Academic profile of the caller (one of GET /academic/profiles); the projects are ' +
+      'limited to the scope of that profile only. 403 when the caller lacks its role',
+    enum: AcademicProfile,
+    example: AcademicProfile.PROFESSOR,
+  })
+  @IsEnum(AcademicProfile)
+  profile!: AcademicProfile;
+}
+
+export class ListAcademicProjectsDto extends AcademicProfileQueryDto {
   @ApiPropertyOptional({ description: 'Only the projects of this event', example: 4 })
   @IsOptional()
   @Type(() => Number)
@@ -52,7 +66,7 @@ export class ListAcademicProjectsDto {
   itemsPerPage?: number;
 }
 
-export class AcademicEventQueryDto {
+export class AcademicEventQueryDto extends AcademicProfileQueryDto {
   @ApiProperty({ description: 'Event whose projects are listed', example: 4 })
   @Type(() => Number)
   @IsInt()

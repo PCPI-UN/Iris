@@ -18,6 +18,20 @@ describe('ResolveProjectReadScopeUC', () => {
     expect(scope).toEqual(TUTOR_SCOPE);
   });
 
+  it('with a requested scope applies only that one: Ana, Professor and Tutor, asks for tutored', async () => {
+    const auth = {
+      getUserPermissions: jest
+        .fn()
+        .mockResolvedValue(['read:academic_projects', 'read_course:academic_projects', 'read_tutored:academic_projects']),
+    };
+    const resolve = new ResolveProjectReadScopeUC(auth as any);
+
+    await expect(resolve.execute(5, 'tutored')).resolves.toEqual(TUTOR_SCOPE);
+    await expect(resolve.execute(5, 'course')).resolves.toEqual({ ...TUTOR_SCOPE, tutored: false, ofCourses: true });
+    // Without a requested scope, the union stays as before
+    await expect(resolve.execute(5)).resolves.toEqual({ ...TUTOR_SCOPE, ofCourses: true });
+  });
+
   it('returns null when no permission of the user grants projects', async () => {
     const auth = { getUserPermissions: jest.fn().mockResolvedValue(['read:academic_projects']) };
 
@@ -56,6 +70,13 @@ describe('academic read use-cases', () => {
       });
     });
 
+    it('passes the requested scope to the resolver; without one, the union', async () => {
+      await build().execute({ userId: 5, scope: 'tutored' });
+      await build().execute({ userId: 5 });
+
+      expect(resolveScope.execute.mock.calls).toEqual([[5, 'tutored'], [5, undefined]]);
+    });
+
     it('defaults to page 1 of 10 and caps the page size at 100', async () => {
       await build().execute({ userId: 5 });
       expect(repo.listInScope.mock.calls[0][1]).toMatchObject({ currentPage: 1, itemsPerPage: 10, q: undefined });
@@ -82,6 +103,11 @@ describe('academic read use-cases', () => {
       expect(repo.findInScope).toHaveBeenCalledWith(TUTOR_SCOPE, 3);
     });
 
+    it('passes the requested scope to the resolver', async () => {
+      await build().execute({ userId: 5, projectId: 3, scope: 'course' });
+      expect(resolveScope.execute).toHaveBeenCalledWith(5, 'course');
+    });
+
     it('a project outside the scope is NOT_FOUND, like a missing one', async () => {
       repo.findInScope.mockResolvedValue(null);
 
@@ -102,6 +128,11 @@ describe('academic read use-cases', () => {
     it('lists the events of the scope', async () => {
       await expect(build().execute({ userId: 5 })).resolves.toEqual([4, 8]);
       expect(repo.listEventIdsInScope).toHaveBeenCalledWith(TUTOR_SCOPE);
+    });
+
+    it('passes the requested scope to the resolver', async () => {
+      await build().execute({ userId: 5, scope: 'department' });
+      expect(resolveScope.execute).toHaveBeenCalledWith(5, 'department');
     });
 
     it('lists nothing when the user has no scope', async () => {

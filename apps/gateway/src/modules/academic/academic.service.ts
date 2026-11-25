@@ -1,11 +1,16 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   AcademicCourse,
+  AcademicScope,
   ListProjectsResponse,
   ProjectComplete,
   ProjectState,
 } from '@app/common/generated/project';
-import { TermProto } from '@app/common/generated/event';
+import {
+  AcademicCourseWithTerm,
+  termCode,
+  withTermCodes,
+} from '@app/common/utils/term-code.util';
 import { withoutOneofMarkers } from '@app/common/utils/grpc-oneof.util';
 import { pendingStatus } from '@app/common/utils/pending-status.util';
 import { ProjectsService } from '../projects/projects.service';
@@ -24,6 +29,11 @@ import {
   RegistrationsReport,
 } from './academic.types';
 import { ListAcademicProjectsDto } from './dto/academic-query.dto';
+import {
+  AcademicProfile,
+  academicProfilesOf,
+  profileScope,
+} from './academic-profiles';
 
 const REVIEW_STATES: ProjectReviewState[] = [
   'UNDER_REVIEW',
@@ -35,12 +45,14 @@ const REVIEW_STATES: ProjectReviewState[] = [
 /**
  * Read-only endpoints of the academic roles (CU-86e3vmz0m).
  *
- * Which projects a caller sees is decided by project-service from their scope
- * permissions: read_all (Admin, FacultyAdmin, Dean) sees every project; read_tutored
- * (Tutor), read_course (Professor) and read_department (DepartmentDirector) only the
- * ones they tutor, teach (course section) or direct (department). A project outside the
- * scope is a 404, the same as a missing one; so is an event of /registrations or /grades
- * that is deleted or has no project of the caller's scope (it is not in /academic/events).
+ * Every read is done as one academic profile of the caller (`profile`, see
+ * ACADEMIC_PROFILES): PROFESSOR, TUTOR, DIRECTOR or DEAN, each from its platform role. A
+ * profile the caller lacks is a 403. project-service applies only the scope of that
+ * profile (course sections, tutored, department or all), not the union of every scope of
+ * the user: a professor who also tutors sees, as TUTOR, only the projects they tutor. A
+ * project outside the scope is a 404, the same as a missing one; so is an event of
+ * /registrations or /grades that is deleted or has no project of the scope (it is not in
+ * /academic/events).
  *
  * Grades: a caller with `read:grades` (Admin, FacultyAdmin, Dean) sees them at any
  * time; anyone else only once the admin publishes the event results. The rule is
@@ -54,12 +66,19 @@ export class AcademicService {
     private readonly evaluationsService: EvaluationsService,
   ) {}
 
+  /** Academic profiles of the caller; empty without an academic role (students, Admin, FacultyAdmin) */
+  listProfiles(user: AppUser): AcademicProfile[] {
+    return academicProfilesOf(user);
+  }
+
   async listProjects(
-    userId: number,
+    user: AppUser,
     query: ListAcademicProjectsDto,
   ): Promise<ListProjectsResponse> {
+    const scope = profileScope(user, query.profile);
     const page = await this.projectsService.listProjectsInScope({
-      userId,
+      userId: user.id,
+      scope,
       eventId: query.eventId,
       state: query.state ? ProjectState[query.state] : undefined,
       academicCourseId: query.academicCourseId,
@@ -75,20 +94,28 @@ export class AcademicService {
   }
 
   async getProject(
-    userId: number,
+    user: AppUser,
     projectId: number,
+    profile: AcademicProfile,
   ): Promise<ProjectComplete> {
     const project = await this.projectsService.getProjectInScope(
-      userId,
+      user.id,
       projectId,
+      profileScope(user, profile),
     );
     const [withTerm] = withTermCodes([project], await this.termCodes());
     return withoutOneofMarkers(withTerm);
   }
 
   /** Events where the projects of the caller's scope take part, newest first; deleted ones are left out */
-  async listEvents(userId: number): Promise<AcademicEvent[]> {
-    const ids = await this.projectsService.listEventIdsInScope(userId);
+  async listEvents(
+    user: AppUser,
+    profile: AcademicProfile,
+  ): Promise<AcademicEvent[]> {
+    const ids = await this.projectsService.listEventIdsInScope(
+      user.id,
+      profileScope(user, profile),
+    );
     // ListEventsByIds returns them newest first, soft deleted ones (active = false) included
     const events = await this.eventsService.listEventsByIds(ids);
     return events
@@ -108,12 +135,18 @@ export class AcademicService {
 
   /** Projects of the caller's scope in the event, with their review state and students */
   async getRegistrations(
-    userId: number,
+    user: AppUser,
     eventId: number,
+    profile: AcademicProfile,
   ): Promise<RegistrationsReport> {
-    const event = await this.requireEventInScope(userId, eventId);
+    const scope = profileScope(user, profile);
+    const event = await this.requireEventInScope(user.id, scope, eventId);
     const projects = withTermCodes(
-      await this.projectsService.listAllProjectsInScope({ userId, eventId }),
+      await this.projectsService.listAllProjectsInScope({
+        userId: user.id,
+        eventId,
+        scope,
+      }),
       await this.termCodes(),
     );
 
@@ -144,13 +177,19 @@ export class AcademicService {
    * shows its status and how many of its jurors have evaluated; the grade only when the
    * caller may see it.
    */
-  async getGrades(user: AppUser, eventId: number): Promise<GradesReport> {
-    const event = await this.requireEventInScope(user.id, eventId);
+  async getGrades(
+    user: AppUser,
+    eventId: number,
+    profile: AcademicProfile,
+  ): Promise<GradesReport> {
+    const scope = profileScope(user, profile);
+    const event = await this.requireEventInScope(user.id, scope, eventId);
     const projects = withTermCodes(
       await this.projectsService.listAllProjectsInScope({
         userId: user.id,
         eventId,
         state: ProjectState.APPROVED,
+        scope,
       }),
       await this.termCodes(),
     );
@@ -202,47 +241,25 @@ export class AcademicService {
   }
 
   /**
-   * The event, if it is one of /academic/events: not deleted and with at least one project
-   * of the caller's scope. Otherwise a 404, the same as a missing event, as
+   * The event, if it is one of /academic/events of the profile: not deleted and with at
+   * least one project of its scope. Otherwise a 404, the same as a missing event, as
    * /academic/projects/:id does with a project outside the scope.
    */
-  private async requireEventInScope(userId: number, eventId: number) {
-    const inScope = await this.projectsService.listEventIdsInScope(userId);
+  private async requireEventInScope(
+    userId: number,
+    scope: AcademicScope,
+    eventId: number,
+  ) {
+    const inScope = await this.projectsService.listEventIdsInScope(
+      userId,
+      scope,
+    );
     const event = inScope.includes(eventId)
       ? await this.eventsService.getEventById(eventId)
       : undefined;
     if (!event?.active) throw new NotFoundException(`No se encontró el evento con ID ${eventId}`);
     return event;
   }
-}
-
-/** Term code as the university writes it: 2026 + "10" is 202610 */
-export function termCode(term: Pick<TermProto, 'year' | 'period'>): string {
-  return `${term.year}${term.period}`;
-}
-
-/** Course section of a project with the code of its term */
-type AcademicCourseWithTerm = AcademicCourse & { term?: string | null };
-
-/**
- * Adds the term code to the course section of each project: project-service only knows
- * the term id, and the terms live in event-service.
- */
-export function withTermCodes<T extends ProjectComplete>(
-  projects: T[],
-  codes: Map<number, string>,
-): T[] {
-  return projects.map((project) =>
-    project.academicCourse
-      ? {
-          ...project,
-          academicCourse: {
-            ...project.academicCourse,
-            term: codes.get(project.academicCourse.termId) ?? null,
-          } as AcademicCourseWithTerm,
-        }
-      : project,
-  );
 }
 
 /** Admin (passes every check) or a role with read:grades sees grades before publication */

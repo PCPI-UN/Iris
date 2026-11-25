@@ -64,7 +64,9 @@ service ProjectsService {
   rpc CheckProjectAccess (CheckProjectAccessRequest) returns (CheckProjectAccessResponse);
 
   // Academic read endpoints: only the projects the user may read, from their scope permissions
-  // (read_all, read_tutored, read_course, read_department :academic_projects)
+  // (read_all, read_tutored, read_course, read_department :academic_projects). Without `scope`
+  // the user reads the union of the scopes their permissions grant; with `scope`, only that one,
+  // and nothing (empty list, NOT_FOUND) if no permission of the user grants it
   rpc ListProjectsInScope (ListProjectsInScopeRequest) returns (ListProjectsResponse);
   // NOT_FOUND when the project does not exist or is outside the user's scope
   rpc GetProjectInScope (GetProjectInScopeRequest) returns (ProjectComplete);
@@ -155,8 +157,8 @@ message ProjectComplete {
   repeated PendingProjectParticipant pendingParticipants = 13;
   optional string projectCode = 14;
   repeated ProjectTutor tutors = 15;
-  // Only filled by the academic read endpoints; not set for the fill course sections: -1
-  // (created before course sections existed) and 0 (event that does not require one)
+  // Filled by GetProjectComplete and the academic read endpoints; not set for the fill course
+  // sections: -1 (created before course sections existed) and 0 (event that does not require one)
   optional AcademicCourse academicCourse = 16;
   // Jurors assigned to evaluate the project; only filled by the academic read endpoints
   optional int32 assignedJurorCount = 17;
@@ -762,6 +764,15 @@ message CheckProjectAccessResponse {
 }
 
 /************** Academic read endpoints **************/
+// One scope of the academic read endpoints, with the permission that grants it
+enum AcademicScope {
+  ACADEMIC_SCOPE_UNSPECIFIED = 0;
+  ACADEMIC_SCOPE_ALL = 1;         // read_all:academic_projects, every project
+  ACADEMIC_SCOPE_TUTORED = 2;     // read_tutored:academic_projects, the projects the user tutors
+  ACADEMIC_SCOPE_COURSE = 3;      // read_course:academic_projects, the projects of the user's course sections
+  ACADEMIC_SCOPE_DEPARTMENT = 4;  // read_department:academic_projects, the projects of the user's department
+}
+
 message ListProjectsInScopeRequest {
   int32 userId = 1;
   optional int32 eventId = 2;
@@ -770,14 +781,19 @@ message ListProjectsInScopeRequest {
   optional string q = 5;
   optional int32 currentPage = 6;   // default 1
   optional int32 itemsPerPage = 7;  // default 10, at most 100
+  optional AcademicScope scope = 8; // unset: the union of the user's scopes
 }
 
 message GetProjectInScopeRequest {
   int32 userId = 1;
   int32 projectId = 2;
+  optional AcademicScope scope = 3; // unset: the union of the user's scopes
 }
 
-message ListEventIdsInScopeRequest { int32 userId = 1; }
+message ListEventIdsInScopeRequest {
+  int32 userId = 1;
+  optional AcademicScope scope = 2; // unset: the union of the user's scopes
+}
 message ListEventIdsInScopeResponse { repeated int32 eventIds = 1; }
 
 /************** Administrative change log **************/

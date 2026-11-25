@@ -8,6 +8,7 @@ import {
   ForbiddenException,
   ConflictException,
 } from '@nestjs/common';
+import { termCode, withTermCodes } from '@app/common/utils/term-code.util';
 import { ClientGrpc } from '@nestjs/microservices';
 import { status as GrpcStatus } from '@grpc/grpc-js';
 import { firstValueFrom, lastValueFrom } from 'rxjs';
@@ -39,6 +40,7 @@ import {
   AddPendingParticipantRequest,
   JurorKey,
   ListProjectsInScopeRequest,
+  AcademicScope,
   AdminParticipantsRejection,
 } from '@app/common/generated/project';
 import { CreateProjectWithParticipantsDto } from './dto/create-project-with-participants.dto';
@@ -893,7 +895,8 @@ export class ProjectsService implements OnModuleInit {
 
   /**
    * Academic reads: project-service resolves the projects the user may read from their
-   * scope permissions (tutored, of their course sections or department, or all of them).
+   * scope permissions (tutored, of their course sections or department, or all of them):
+   * the union of them, or only the one in `scope` if the user has its permission.
    */
   async listProjectsInScope(
     request: ListProjectsInScopeRequest,
@@ -926,15 +929,20 @@ export class ProjectsService implements OnModuleInit {
   async getProjectInScope(
     userId: number,
     projectId: number,
+    scope?: AcademicScope,
   ): Promise<ProjectComplete> {
     return lastValueFrom(
-      this.projectsService.getProjectInScope({ userId, projectId }),
+      this.projectsService.getProjectInScope({ userId, projectId, scope }),
     );
   }
 
-  async listEventIdsInScope(userId: number): Promise<number[]> {
+  /** Without `scope`, the union of every scope of the user; with it, only that one */
+  async listEventIdsInScope(
+    userId: number,
+    scope?: AcademicScope,
+  ): Promise<number[]> {
     const response = await lastValueFrom(
-      this.projectsService.listEventIdsInScope({ userId }),
+      this.projectsService.listEventIdsInScope({ userId, scope }),
     );
     return response.eventIds ?? [];
   }
@@ -996,7 +1004,16 @@ export class ProjectsService implements OnModuleInit {
       throw new NotFoundException('No se encontró el proyecto');
     }
 
-    return { ...project, tutors: toProjectTutorsResponse(project.tutors) };
+    const [withTerm] = project.academicCourse
+      ? withTermCodes([project], await this.termCodes())
+      : [project];
+    return { ...withTerm, tutors: toProjectTutorsResponse(project.tutors) };
+  }
+
+  /** Term code (year + period, such as 202610) by term id */
+  private async termCodes(): Promise<Map<number, string>> {
+    const { terms } = await lastValueFrom(this.eventsService.listTerms({}));
+    return new Map((terms ?? []).map((term) => [term.id, termCode(term)]));
   }
 
   /**

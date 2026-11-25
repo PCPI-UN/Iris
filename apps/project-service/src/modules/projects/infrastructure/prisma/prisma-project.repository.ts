@@ -51,12 +51,15 @@ type AddPendingParticipantInput = {
 /** Documents shown with a project: INACTIVE ones were withdrawn by an administrator. */
 const ACTIVE_DOCUMENTS = { where: { state: 'ACTIVE' } } as const;
 
+/** Course section of a project with the name of its department. */
+const ACADEMIC_COURSE_INCLUDE = { include: { department: { select: { name: true } } } } as const;
+
 /** Relations loaded for the academic read endpoints. */
 const IN_SCOPE_INCLUDE = {
   participants: true,
   pendingParticipants: true,
   documents: ACTIVE_DOCUMENTS,
-  academicCourse: { include: { department: { select: { name: true } } } },
+  academicCourse: ACADEMIC_COURSE_INCLUDE,
   _count: { select: { jurorsAssigned: true } },
 } as const;
 
@@ -76,23 +79,26 @@ export function scopeWhere(scope: ProjectReadScope): Prisma.ProjectWhereInput | 
   return { OR: or.length ? or : [{ id: -1 }] };
 }
 
+/** Course section loaded with ACADEMIC_COURSE_INCLUDE; null for the fill rows -1 and 0, which are not real NRCs. */
+function toAcademicCourseView(academicCourse: any): AcademicCourseView | null {
+  if (!academicCourse || isFillAcademicCourse(academicCourse.id)) return null;
+  return {
+    id: academicCourse.id,
+    nrc: academicCourse.nrc,
+    termId: academicCourse.termId,
+    name: academicCourse.name,
+    professorUserId: academicCourse.professorUserId,
+    departmentId: academicCourse.departmentId,
+    departmentName: academicCourse.department.name,
+  };
+}
+
 function toProjectInScope(row: any): ProjectInScope {
   const { academicCourse, _count, ...project } = row;
   return {
     ...project,
     assignedJurorCount: _count?.jurorsAssigned ?? 0,
-    // Course sections -1 and 0 are fill rows, not real NRCs
-    academicCourse: academicCourse && !isFillAcademicCourse(academicCourse.id)
-      ? {
-          id: academicCourse.id,
-          nrc: academicCourse.nrc,
-          termId: academicCourse.termId,
-          name: academicCourse.name,
-          professorUserId: academicCourse.professorUserId,
-          departmentId: academicCourse.departmentId,
-          departmentName: academicCourse.department.name,
-        }
-      : null,
+    academicCourse: toAcademicCourseView(academicCourse),
   };
 }
 
@@ -147,6 +153,14 @@ export class PrismaProjectRepository implements ProjectRepository {
 
   async findById(id: number): Promise<Project | null> {
     return (await this.prisma.db.project.findUnique({ where: { id } })) as unknown as Project | null;
+  }
+
+  async findAcademicCourseOfProject(projectId: number): Promise<AcademicCourseView | null> {
+    const row = await this.prisma.db.project.findUnique({
+      where: { id: projectId },
+      select: { academicCourse: ACADEMIC_COURSE_INCLUDE },
+    });
+    return toAcademicCourseView(row?.academicCourse);
   }
 
   async findManyByIds(ids: number[]): Promise<Project[]> {

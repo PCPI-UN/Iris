@@ -10,6 +10,7 @@ import { EvaluationsService } from '../evaluations/evaluations.service';
 import { ProjectsService } from '../projects/projects.service';
 import { assignRankingPositions } from '../events/ranking/ranking-positions';
 import { canReadUnpublishedGrades } from '../academic/academic.service';
+import { AcademicProfile, profileScope } from '../academic/academic-profiles';
 import { AppUser } from '../auth/types/app-user.type';
 import {
   EvaluationReport,
@@ -60,17 +61,27 @@ export class EvaluationReportService {
     private readonly projectsService: ProjectsService,
   ) {}
 
-  /** Report of a category for a staff or academic user, with the rows of their scope */
+  /**
+   * Report of a category for a staff or academic user, with the rows of their scope. With a
+   * profile, only the scope of that profile (403 without its role), so the file matches the
+   * academic screen it is asked from; without one, the union of the user's scopes.
+   */
   async buildForUser(
     user: AppUser,
     eventId: number,
     categoryId: number,
+    profile?: AcademicProfile,
   ): Promise<EvaluationReport> {
-    if (canReadUnpublishedGrades(user)) {
+    const scope = profile ? profileScope(user, profile) : undefined;
+    const seesUnpublished = canReadUnpublishedGrades(user);
+    if (seesUnpublished && scope === undefined) {
       return this.build(eventId, categoryId);
     }
 
-    if (!(user.platformPermissions ?? []).includes(ACADEMIC_READ_PERMISSION)) {
+    if (
+      !seesUnpublished &&
+      !(user.platformPermissions ?? []).includes(ACADEMIC_READ_PERMISSION)
+    ) {
       throw new ForbiddenException(
         'You are not allowed to download this report',
       );
@@ -78,10 +89,16 @@ export class EvaluationReportService {
 
     const event = await this.eventsService.getEventById(eventId);
     if (!event) throw new NotFoundException(`Event ${eventId} not found`);
-    if (!event.resultsPublished) throw new ForbiddenException(NOT_PUBLISHED);
+    if (!event.resultsPublished && !seesUnpublished) {
+      throw new ForbiddenException(NOT_PUBLISHED);
+    }
 
     const [inScope, showPositions] = await Promise.all([
-      this.projectsService.listAllProjectsInScope({ userId: user.id, eventId }),
+      this.projectsService.listAllProjectsInScope({
+        userId: user.id,
+        eventId,
+        scope,
+      }),
       this.hasRanking(eventId),
     ]);
     const projectIds = inScope

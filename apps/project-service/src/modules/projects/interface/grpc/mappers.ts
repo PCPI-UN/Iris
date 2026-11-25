@@ -1,5 +1,6 @@
 import { TypedDocument ,ProjectState, ProjectDocument, Project, JurorKey, Status, ProjectTutorView } from '../../domain/entities/project.entity';
 import { AcademicCourseView } from '../../domain/repositories/project.repository';
+import { RequestedReadScope } from '../../domain/read-scope';
 import { ProjectChangeLogEntry } from '../../domain/entities/project-change-log.entity';
 import {
   JurorImportOutcome as ProtoJurorImportOutcome,
@@ -41,6 +42,20 @@ export const protoToState = (n?: number): ProjectState => {
   }
 };
 
+/**
+ * AcademicScope of the academic read requests. Unset or UNSPECIFIED is undefined: the union of
+ * the user's scopes. The enum arrives as its number or, with the String enums loader, its name.
+ */
+export const protoToReadScope = (value?: number | string): RequestedReadScope | undefined => {
+  switch (value) {
+    case 1: case 'ACADEMIC_SCOPE_ALL': return 'all';
+    case 2: case 'ACADEMIC_SCOPE_TUTORED': return 'tutored';
+    case 3: case 'ACADEMIC_SCOPE_COURSE': return 'course';
+    case 4: case 'ACADEMIC_SCOPE_DEPARTMENT': return 'department';
+    default: return undefined;
+  }
+};
+
 const TypedDocumentToProto = (t: TypedDocument): number => {
   switch (t) {
     case 'LOGO': return 1;
@@ -57,7 +72,6 @@ export const protoToTypedDocument = (n?: number): TypedDocument => {
     default: return 'POSTER';
   }
 };
-
 
 const statusToProto = (s: any): number => {
   switch (s) {
@@ -158,14 +172,6 @@ export const toProtoTutor = (t: ProjectTutorView) => ({
   email: t.email,
 });
 
-export const toProtoProjectComplete = (p: any) => ({
-  ...toProtoProject(p),
-  participants: (p.participants ?? []).map(toProtoParticipant),
-  documents: (p.documents ?? []).map(toProtoDocument),
-  pendingParticipants: (p.pendingParticipants ?? []).map(toProtoPendingParticipant),
-  tutors: (p.tutors ?? []).map(toProtoTutor),
-});
-
 export const toProtoAcademicCourse = (c: AcademicCourseView) => ({
   id: c.id,
   nrc: c.nrc,
@@ -176,10 +182,18 @@ export const toProtoAcademicCourse = (c: AcademicCourseView) => ({
   departmentName: c.departmentName,
 });
 
-/** Project of the academic read endpoints: the complete project plus its course section. */
+export const toProtoProjectComplete = (p: any) => ({
+  ...toProtoProject(p),
+  participants: (p.participants ?? []).map(toProtoParticipant),
+  documents: (p.documents ?? []).map(toProtoDocument),
+  pendingParticipants: (p.pendingParticipants ?? []).map(toProtoPendingParticipant),
+  tutors: (p.tutors ?? []).map(toProtoTutor),
+  academicCourse: p.academicCourse ? toProtoAcademicCourse(p.academicCourse) : undefined,
+});
+
+/** Project of the academic read endpoints: the complete project plus its assigned jurors. */
 export const toProtoProjectInScope = (p: any) => ({
   ...toProtoProjectComplete(p),
-  academicCourse: p.academicCourse ? toProtoAcademicCourse(p.academicCourse) : undefined,
   assignedJurorCount: p.assignedJurorCount ?? 0,
 });
 
