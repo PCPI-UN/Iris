@@ -278,6 +278,22 @@ export class EvaluationsService implements OnModuleInit {
       }));
   }
 
+  /** Whether the juror has evaluated the project, without reading the evaluation */
+  async hasEvaluated(
+    jurorUserId: number,
+    eventId: number,
+    projectId: number,
+  ): Promise<boolean> {
+    const { projects = [] } = await lastValueFrom(
+      this.evaluationService.checkEvaluationStatus({
+        userId: jurorUserId,
+        eventId,
+        projectIds: [projectId],
+      }),
+    );
+    return projects.some((p) => p.projectId === projectId && p.evaluated);
+  }
+
   /** Consolidated result of a project (no juror data); publication is checked by the caller */
   async getProjectResult(projectId: number): Promise<GetProjectResultResponse> {
     return lastValueFrom(this.evaluationService.getProjectResult({ projectId }));

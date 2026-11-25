@@ -5,6 +5,10 @@ import {
 } from '@nestjs/common';
 import { status } from '@grpc/grpc-js';
 import { GetProjectResultResponse } from '@app/common/generated/evaluation';
+import {
+  groupByComponent,
+  splitFeedback,
+} from '@app/common/utils/project-result.util';
 import { EventService } from '../events/events.service';
 import { EvaluationsService } from '../evaluations/evaluations.service';
 import { ProjectsService } from '../projects/projects.service';
@@ -14,22 +18,14 @@ import { AcademicProfile, profileScope } from '../academic/academic-profiles';
 import { AppUser } from '../auth/types/app-user.type';
 import {
   EvaluationReport,
-  EvaluationReportComponent,
   EvaluationReportProject,
   EvaluationReportScope,
 } from './evaluation-report.types';
-
-/** Separator evaluation-service uses to join the jurors' comments in one text */
-const FEEDBACK_SEPARATOR = '\n\n';
 
 /** Permission of the academic roles whose projects project-service limits to their scope */
 const ACADEMIC_READ_PERMISSION = 'read:academic_projects';
 
 const NOT_PUBLISHED = 'The results of the event have not been published yet';
-
-/** Rounds a weight to 4 decimals, enough to show 0.057 and still add up to 1 */
-const roundWeight = (weight: number): number =>
-  Math.round(weight * 10000) / 10000;
 
 /**
  * Evaluation report of one category of an event (CU-86e3vmz0b) and who may download it
@@ -258,39 +254,4 @@ export class EvaluationReportService {
       projects: rows,
     };
   }
-}
-
-/** The jurors' comments one by one, from the text evaluation-service joins */
-export function splitFeedback(feedback: string | undefined): string[] {
-  return (feedback ?? '')
-    .split(FEEDBACK_SEPARATOR)
-    .map((comment) => comment.trim())
-    .filter((comment) => comment.length > 0);
-}
-
-/**
- * Criteria grouped by component, in the order evaluation-service sends them (by
- * component, then criterion). The weight of a component is the sum of the effective
- * weights of its criteria, which is the share of the grade it had.
- */
-export function groupByComponent(
-  result: GetProjectResultResponse,
-): EvaluationReportComponent[] {
-  const components: EvaluationReportComponent[] = [];
-  for (const criterion of result.criteria ?? []) {
-    const name = criterion.component?.trim() || 'Sin componente';
-    let component = components.find((c) => c.component === name);
-    if (!component) {
-      component = { component: name, weight: 0, criteria: [] };
-      components.push(component);
-    }
-    component.weight += criterion.weight;
-    component.criteria.push({
-      criterionId: criterion.criterionId,
-      criterion: criterion.criterion,
-      weight: roundWeight(criterion.weight),
-      score: criterion.score,
-    });
-  }
-  return components.map((c) => ({ ...c, weight: roundWeight(c.weight) }));
 }
