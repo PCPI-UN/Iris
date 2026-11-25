@@ -44,6 +44,7 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'GET /academic/projects': { permission: ['read:academic_projects'] },
   'GET /academic/projects/:id': { permission: ['read:academic_projects'] },
   'GET /academic/registrations': { permission: ['read:academic_projects'] },
+  'GET /academic/stats': { permission: ['read:academic_projects'] },
   // modules/auth/auth.controller.ts
   'POST /auth/activate': { access: 'public' },
   'GET /auth/callback': { access: 'public' },
