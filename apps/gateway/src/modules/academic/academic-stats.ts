@@ -36,7 +36,7 @@ export interface AcademicStats {
   resultsPublished: boolean;
   /** true when grades exist or may exist but the caller may not see them yet; then overall is null and departments [] */
   statsHidden: boolean;
-  /** Points of the highest level of the event's grading scale; null when the event has none */
+  /** Points of the highest level of the event's grading scale; null when the event has none, and also while statsHidden */
   maxScore: number | null;
   overall: StatsBlock | null;
   /** Only with groupBy=department: one block per department, by name, the null department last */
@@ -94,12 +94,15 @@ export function byDepartment(
     group.projects.push(project);
     groups.set(key, group);
   }
-  return [...groups.values()].sort((a, b) => {
-    const nameA = a.department.departmentName;
-    const nameB = b.department.departmentName;
-    if (nameA === null || nameB === null) return nameA === null ? 1 : -1;
-    return nameA.localeCompare(nameB, 'es');
-  });
+  return [...groups.values()].sort(
+    (a, b) =>
+      Number(a.department.departmentId === null) -
+        Number(b.department.departmentId === null) ||
+      (a.department.departmentName ?? '').localeCompare(
+        b.department.departmentName ?? '',
+        'es',
+      ),
+  );
 }
 
 const round = (value: number) => Math.round(value * 10_000) / 10_000;
