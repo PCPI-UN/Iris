@@ -1,5 +1,6 @@
-import { NotFoundException } from '@nestjs/common';
-import { ProjectState } from '@app/common/generated/project';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { AcademicScope, ProjectState } from '@app/common/generated/project';
+import { AcademicProfile } from '../academic-profiles';
 import {
   AcademicService,
   canReadUnpublishedGrades,
@@ -18,6 +19,8 @@ const user = (roles: string[], permissions: string[] = []) =>
 
 const PROFESSOR = user(['Professor'], ['read:academic_projects']);
 const DEAN = user(['Dean'], ['read:academic_projects', 'read:grades']);
+const { PROFESSOR: AS_PROFESSOR, DEAN: AS_DEAN } = AcademicProfile;
+const COURSE = AcademicScope.ACADEMIC_SCOPE_COURSE;
 
 const course = { id: 2, nrc: '1001', termId: 3, name: 'PF Sistemas', professorUserId: 5, departmentId: 1, departmentName: 'Sistemas' };
 
@@ -67,9 +70,11 @@ describe('AcademicService', () => {
 
   describe('getGrades', () => {
     it('hides unpublished grades from a professor but shows the status and the counters', async () => {
-      const report = await service.getGrades(PROFESSOR, 4);
+      const report = await service.getGrades(PROFESSOR, 4, AS_PROFESSOR);
 
-      expect(projectsService.listAllProjectsInScope).toHaveBeenCalledWith({ userId: 5, eventId: 4, state: ProjectState.APPROVED });
+      expect(projectsService.listAllProjectsInScope).toHaveBeenCalledWith({
+        userId: 5, eventId: 4, state: ProjectState.APPROVED, scope: COURSE,
+      });
       expect(report).toMatchObject({ resultsPublished: false, gradeVisibility: 'PUBLISHED_ONLY' });
       expect(report.projects).toEqual([
         expect.objectContaining({
@@ -86,14 +91,14 @@ describe('AcademicService', () => {
     });
 
     it('shows preliminary grades to the dean before publication', async () => {
-      const report = await service.getGrades(DEAN, 4);
+      const report = await service.getGrades(DEAN, 4, AS_DEAN);
 
       expect(report.gradeVisibility).toBe('ALL');
       expect(report.projects[0]).toMatchObject({ gradeStatus: 'PRELIMINARY', finalScore: 4.25, gradeHidden: false });
     });
 
     it('Admin sees unpublished grades through its role, like every other check', async () => {
-      const report = await service.getGrades(user(['Admin']), 4);
+      const report = await service.getGrades(user(['Admin', 'Dean']), 4, AS_DEAN);
 
       expect(report.projects[0].finalScore).toBe(4.25);
     });
@@ -101,7 +106,7 @@ describe('AcademicService', () => {
     it('once published every caller sees official grades', async () => {
       eventsService.getEventById.mockResolvedValue({ id: 4, name: 'Feria 2026', resultsPublished: true, active: true });
 
-      const report = await service.getGrades(PROFESSOR, 4);
+      const report = await service.getGrades(PROFESSOR, 4, AS_PROFESSOR);
 
       expect(report.projects[0]).toMatchObject({ gradeStatus: 'OFFICIAL', finalScore: 4.25, gradeHidden: false });
       expect(report.projects[1]).toMatchObject({ gradeStatus: 'PENDING', finalScore: null });
@@ -110,30 +115,33 @@ describe('AcademicService', () => {
     it('a missing event is a 404', async () => {
       eventsService.getEventById.mockResolvedValue(undefined);
 
-      await expect(service.getGrades(PROFESSOR, 4)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.getGrades(PROFESSOR, 4, AS_PROFESSOR)).rejects.toBeInstanceOf(NotFoundException);
       expect(projectsService.listAllProjectsInScope).not.toHaveBeenCalled();
     });
   });
 
   it('listProjects passes the caller and the filters to project-service', async () => {
-    await service.listProjects(5, { eventId: 4, state: 'APPROVED' as any, academicCourseId: 2, q: 'eco' });
+    await service.listProjects(PROFESSOR, {
+      profile: AS_PROFESSOR, eventId: 4, state: 'APPROVED' as any, academicCourseId: 2, q: 'eco',
+    });
 
     expect(projectsService.listProjectsInScope).toHaveBeenCalledWith({
-      userId: 5, eventId: 4, state: ProjectState.APPROVED, academicCourseId: 2, q: 'eco', currentPage: 1, itemsPerPage: 10,
+      userId: 5, scope: COURSE, eventId: 4, state: ProjectState.APPROVED, academicCourseId: 2, q: 'eco', currentPage: 1, itemsPerPage: 10,
     });
   });
 
   it('listEvents keeps the order of event-service and leaves out the deleted events', async () => {
-    const events = await service.listEvents(5);
+    const events = await service.listEvents(PROFESSOR, AS_PROFESSOR);
 
+    expect(projectsService.listEventIdsInScope).toHaveBeenCalledWith(5, COURSE);
     expect(eventsService.listEventsByIds).toHaveBeenCalledWith([4, 8, 9]);
     expect(events.map((e) => e.id)).toEqual([8, 4]);
   });
 
   describe('event of /registrations and /grades', () => {
     const calls = (s: AcademicService) => [
-      () => s.getRegistrations(5, 4),
-      () => s.getGrades(PROFESSOR, 4),
+      () => s.getRegistrations(PROFESSOR, 4, AS_PROFESSOR),
+      () => s.getGrades(PROFESSOR, 4, AS_PROFESSOR),
     ];
 
     it('an event without projects of the caller is a 404, like /projects/:id outside the scope', async () => {
@@ -162,9 +170,10 @@ describe('AcademicService', () => {
       project(2, { state: 'UNDER_REVIEW', pendingParticipants: [{ studentCode: 'S2', firstName: 'Luis', status: 'PENDING' }] }),
     ]);
 
-    const report = await service.getRegistrations(5, 4);
+    const report = await service.getRegistrations(PROFESSOR, 4, AS_PROFESSOR);
 
-    expect(projectsService.listAllProjectsInScope).toHaveBeenCalledWith({ userId: 5, eventId: 4 });
+    expect(projectsService.listEventIdsInScope).toHaveBeenCalledWith(5, COURSE);
+    expect(projectsService.listAllProjectsInScope).toHaveBeenCalledWith({ userId: 5, eventId: 4, scope: COURSE });
     expect(report.totals).toEqual({
       projects: 2,
       byState: { UNDER_REVIEW: 1, APPROVED: 1, REJECTED: 0, REQUEST_CHANGES: 0 },
@@ -179,11 +188,50 @@ describe('AcademicService', () => {
       items: [project(1), project(2, { academicCourse: undefined }), project(3, { academicCourse: { ...course, termId: 99 } })],
     });
 
-    const page = await service.listProjects(5, {});
+    const page = await service.listProjects(PROFESSOR, { profile: AS_PROFESSOR });
     expect(page.items.map((p: any) => p.academicCourse?.term)).toEqual(['202610', undefined, null]);
 
-    const one: any = await service.getProject(5, 1);
+    const one: any = await service.getProject(PROFESSOR, 1, AS_PROFESSOR);
+    expect(projectsService.getProjectInScope).toHaveBeenCalledWith(5, 1, COURSE);
     expect(one.academicCourse).toMatchObject({ termId: 3, term: '202610' });
+  });
+  describe('profile', () => {
+    // Ana: Professor of NRC 10234 and Tutor of a project of NRC 9876
+    const ANA = user(['Professor', 'Tutor'], ['read:academic_projects']);
+
+    it('applies only the scope of the profile asked for', async () => {
+      await service.listProjects(ANA, { profile: AcademicProfile.TUTOR });
+      await service.listProjects(ANA, { profile: AcademicProfile.PROFESSOR });
+
+      expect(projectsService.listProjectsInScope.mock.calls.map(([request]: any[]) => request.scope)).toEqual([
+        AcademicScope.ACADEMIC_SCOPE_TUTORED,
+        AcademicScope.ACADEMIC_SCOPE_COURSE,
+      ]);
+    });
+
+    it('a profile whose role the caller lacks is a 403 on every endpoint, before calling project-service', async () => {
+      const calls = [
+        () => service.listProjects(ANA, { profile: AcademicProfile.DIRECTOR }),
+        () => service.getProject(ANA, 1, AcademicProfile.DIRECTOR),
+        () => service.listEvents(ANA, AcademicProfile.DEAN),
+        () => service.getRegistrations(ANA, 4, AcademicProfile.DIRECTOR),
+        // Admin has no academic profile: the role, not the permission guard bypass, decides
+        () => service.getGrades(user(['Admin']), 4, AcademicProfile.DEAN),
+      ];
+
+      for (const call of calls) {
+        await expect(call()).rejects.toBeInstanceOf(ForbiddenException);
+      }
+      expect(projectsService.listProjectsInScope).not.toHaveBeenCalled();
+      expect(projectsService.getProjectInScope).not.toHaveBeenCalled();
+      expect(projectsService.listEventIdsInScope).not.toHaveBeenCalled();
+    });
+
+    it('listProfiles returns the profiles of the caller roles; [] for a student or an Admin', () => {
+      expect(service.listProfiles(ANA)).toEqual(['PROFESSOR', 'TUTOR']);
+      expect(service.listProfiles(user(['User']))).toEqual([]);
+      expect(service.listProfiles(user(['Admin']))).toEqual([]);
+    });
   });
 });
 

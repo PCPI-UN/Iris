@@ -22,17 +22,20 @@ import { AcademicService } from './academic.service';
 import {
   AcademicEventQueryDto,
   AcademicGradesFormat,
+  AcademicProfileQueryDto,
   GetAcademicGradesDto,
   ListAcademicProjectsDto,
 } from './dto/academic-query.dto';
 import { buildGradesBuffer, gradesFileName } from './academic-grades.workbook';
 import { GradesReport } from './academic.types';
+import { AcademicProfile } from './academic-profiles';
 
 /**
- * Read-only endpoints of the academic roles (CU-86e3vmz0m). All of them require
- * `read:academic_projects`; project-service limits the projects to the caller's scope
- * permissions (read_all: all; read_tutored: tutored; read_course: their course sections;
- * read_department: their department). Nothing here writes.
+ * Read-only endpoints of the academic roles (CU-86e3vmz0m). /profiles lists the academic
+ * profiles of the caller (one per role: Professor, Tutor, DepartmentDirector, Dean); every
+ * other endpoint requires `read:academic_projects` and a `profile` the caller holds (403
+ * otherwise), and reads only the scope of that profile: PROFESSOR their course sections,
+ * TUTOR their tutored projects, DIRECTOR their department, DEAN all. Nothing here writes.
  */
 @ApiTags('academic')
 @ApiSecurity('JWT-auth')
@@ -40,6 +43,28 @@ import { GradesReport } from './academic.types';
 @Controller('academic')
 export class AcademicController {
   constructor(private readonly academicService: AcademicService) {}
+
+  @Get('profiles')
+  @ApiOperation({
+    summary: 'My academic profiles',
+    description:
+      'One profile per academic platform role of the caller, in this order: PROFESSOR ' +
+      '(Professor), TUTOR (Tutor), DIRECTOR (DepartmentDirector), DEAN (Dean). Empty for ' +
+      'a user without them (students, Admin and FacultyAdmin included). Only needs a ' +
+      'session. Each one is a valid `profile` for the other /academic endpoints.',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'The profiles, such as ["PROFESSOR", "TUTOR"]; [] without academic roles',
+    schema: {
+      type: 'array',
+      items: { type: 'string', enum: Object.values(AcademicProfile) },
+    },
+  })
+  listProfiles(@GetUser() user: AppUser): AcademicProfile[] {
+    return this.academicService.listProfiles(user);
+  }
 
   @Get('projects')
   @RequirePermission('read:academic_projects')
@@ -50,12 +75,16 @@ export class AcademicController {
       'participants, tutors and course section (NRC). Filters by event, state, course section and name.',
   })
   @ApiResponse({ status: 200, description: 'Page of projects' })
-  @ApiResponse({ status: 403, description: 'The user lacks read:academic_projects' })
+  @ApiResponse({
+    status: 403,
+    description:
+      'The user lacks read:academic_projects or the role of the profile',
+  })
   listProjects(
-    @GetUser('id') userId: number,
+    @GetUser() user: AppUser,
     @Query() query: ListAcademicProjectsDto,
   ) {
-    return this.academicService.listProjects(userId, query);
+    return this.academicService.listProjects(user, query);
   }
 
   @Get('projects/:id')
@@ -63,14 +92,20 @@ export class AcademicController {
   @ApiOperation({ summary: 'One project of my academic scope' })
   @ApiResponse({ status: 200, description: 'The project' })
   @ApiResponse({
+    status: 403,
+    description:
+      'The user lacks read:academic_projects or the role of the profile',
+  })
+  @ApiResponse({
     status: 404,
     description: 'The project does not exist or is outside the caller scope',
   })
   getProject(
-    @GetUser('id') userId: number,
+    @GetUser() user: AppUser,
     @Param('id', ParseIntPipe) projectId: number,
+    @Query() query: AcademicProfileQueryDto,
   ) {
-    return this.academicService.getProject(userId, projectId);
+    return this.academicService.getProject(user, projectId, query.profile);
   }
 
   @Get('events')
@@ -82,8 +117,16 @@ export class AcademicController {
       'with whether evaluations are open and results published.',
   })
   @ApiResponse({ status: 200, description: 'List of events' })
-  listEvents(@GetUser('id') userId: number) {
-    return this.academicService.listEvents(userId);
+  @ApiResponse({
+    status: 403,
+    description:
+      'The user lacks read:academic_projects or the role of the profile',
+  })
+  listEvents(
+    @GetUser() user: AppUser,
+    @Query() query: AcademicProfileQueryDto,
+  ) {
+    return this.academicService.listEvents(user, query.profile);
   }
 
   @Get('registrations')
@@ -95,12 +138,21 @@ export class AcademicController {
       'course section, tutors and students: confirmed, pending or invited, with code, semester and career.',
   })
   @ApiResponse({ status: 200, description: 'Projects and students, with totals' })
+  @ApiResponse({
+    status: 403,
+    description:
+      'The user lacks read:academic_projects or the role of the profile',
+  })
   @ApiResponse({ status: 404, description: 'The event does not exist' })
   getRegistrations(
-    @GetUser('id') userId: number,
+    @GetUser() user: AppUser,
     @Query() query: AcademicEventQueryDto,
   ) {
-    return this.academicService.getRegistrations(userId, query.eventId);
+    return this.academicService.getRegistrations(
+      user,
+      query.eventId,
+      query.profile,
+    );
   }
 
   @Get('grades')
@@ -115,12 +167,21 @@ export class AcademicController {
   })
   @ApiProduces('application/json', XLSX_CONTENT_TYPE)
   @ApiResponse({ status: 200, description: 'The grades, or the XLSX with format=excel' })
+  @ApiResponse({
+    status: 403,
+    description:
+      'The user lacks read:academic_projects or the role of the profile',
+  })
   @ApiResponse({ status: 404, description: 'The event does not exist' })
   async getGrades(
     @GetUser() user: AppUser,
     @Query() query: GetAcademicGradesDto,
   ): Promise<GradesReport | StreamableFile> {
-    const report = await this.academicService.getGrades(user, query.eventId);
+    const report = await this.academicService.getGrades(
+      user,
+      query.eventId,
+      query.profile,
+    );
     if (query.format !== AcademicGradesFormat.EXCEL) return report;
     return xlsxFile(await buildGradesBuffer(report), gradesFileName(report));
   }

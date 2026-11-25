@@ -39,6 +39,7 @@ import {
   AddPendingParticipantRequest,
   JurorKey,
   ListProjectsInScopeRequest,
+  AcademicScope,
   AdminParticipantsRejection,
 } from '@app/common/generated/project';
 import { CreateProjectWithParticipantsDto } from './dto/create-project-with-participants.dto';
@@ -893,7 +894,8 @@ export class ProjectsService implements OnModuleInit {
 
   /**
    * Academic reads: project-service resolves the projects the user may read from their
-   * scope permissions (tutored, of their course sections or department, or all of them).
+   * scope permissions (tutored, of their course sections or department, or all of them):
+   * the union of them, or only the one in `scope` if the user has its permission.
    */
   async listProjectsInScope(
     request: ListProjectsInScopeRequest,
@@ -926,15 +928,20 @@ export class ProjectsService implements OnModuleInit {
   async getProjectInScope(
     userId: number,
     projectId: number,
+    scope?: AcademicScope,
   ): Promise<ProjectComplete> {
     return lastValueFrom(
-      this.projectsService.getProjectInScope({ userId, projectId }),
+      this.projectsService.getProjectInScope({ userId, projectId, scope }),
     );
   }
 
-  async listEventIdsInScope(userId: number): Promise<number[]> {
+  /** Without `scope`, the union of every scope of the user; with it, only that one */
+  async listEventIdsInScope(
+    userId: number,
+    scope?: AcademicScope,
+  ): Promise<number[]> {
     const response = await lastValueFrom(
-      this.projectsService.listEventIdsInScope({ userId }),
+      this.projectsService.listEventIdsInScope({ userId, scope }),
     );
     return response.eventIds ?? [];
   }
