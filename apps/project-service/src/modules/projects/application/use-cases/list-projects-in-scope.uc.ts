@@ -30,7 +30,7 @@ export class ListProjectsInScopeUC {
     const itemsPerPage =
       input.itemsPerPage && input.itemsPerPage > 0 ? Math.min(input.itemsPerPage, MAX_ITEMS_PER_PAGE) : 10;
 
-    const scope = await this.resolveScope.execute(input.userId);
+    const scope = await this.resolveScope.execute(input.userId, input.scope);
     const { items: rows, total } = scope
       ? await this.repo.listInScope(scope, {
           eventId: input.eventId,

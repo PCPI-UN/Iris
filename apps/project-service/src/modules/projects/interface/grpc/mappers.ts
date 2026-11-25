@@ -1,5 +1,6 @@
 import { TypedDocument ,ProjectState, ProjectDocument, Project, JurorKey, Status, ProjectTutorView } from '../../domain/entities/project.entity';
 import { AcademicCourseView } from '../../domain/repositories/project.repository';
+import { RequestedReadScope } from '../../domain/read-scope';
 import { ProjectChangeLogEntry } from '../../domain/entities/project-change-log.entity';
 import {
   JurorImportOutcome as ProtoJurorImportOutcome,
@@ -31,6 +32,20 @@ const stateToProto = (s: ProjectState): number => {
 };
 
 // Y viceversa (proto -> dominio) si recibes en CreateProject
+/**
+ * AcademicScope of the academic read requests. Unset or UNSPECIFIED is undefined: the union of
+ * the user's scopes. The enum arrives as its number or, with the String enums loader, its name.
+ */
+export const protoToReadScope = (value?: number | string): RequestedReadScope | undefined => {
+  switch (value) {
+    case 1: case 'ACADEMIC_SCOPE_ALL': return 'all';
+    case 2: case 'ACADEMIC_SCOPE_TUTORED': return 'tutored';
+    case 3: case 'ACADEMIC_SCOPE_COURSE': return 'course';
+    case 4: case 'ACADEMIC_SCOPE_DEPARTMENT': return 'department';
+    default: return undefined;
+  }
+};
+
 export const protoToState = (n?: number): ProjectState => {
   switch (n) {
     case 1: return 'UNDER_REVIEW';
