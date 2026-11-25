@@ -2,7 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import { ProjectState } from '@app/common/generated/project';
 import { AcademicProfile } from '../academic-profiles';
 import { AcademicService } from '../academic.service';
-import { byDepartment, scoreDistribution } from '../academic-stats';
+import { byDepartment } from '../academic-stats';
 
 const user = (roles: string[], permissions: string[] = []) =>
   ({
@@ -43,34 +43,6 @@ const components = (tag: string) => [
   { id: 1, name: tag, weight: 1, average: 4, projectCount: 1, criteria: [] },
 ];
 
-describe('scoreDistribution', () => {
-  it('splits 0..maxScore in 5 equal ranges', () => {
-    expect(scoreDistribution([0, 0.99, 1, 4.25, 5], 5)).toEqual([
-      { from: 0, to: 1, count: 2 },
-      { from: 1, to: 2, count: 1 },
-      { from: 2, to: 3, count: 0 },
-      { from: 3, to: 4, count: 0 },
-      { from: 4, to: 5, count: 2 },
-    ]);
-  });
-
-  it('puts a score on a boundary in the range that starts there, despite floating point', () => {
-    const buckets = scoreDistribution([2.4], 3)!;
-    expect(buckets.map((b) => b.from)).toEqual([0, 0.6, 1.2, 1.8, 2.4]);
-    expect(buckets[4].count).toBe(1);
-  });
-
-  it('keeps scores out of 0..maxScore in the first or last range', () => {
-    const buckets = scoreDistribution([-1, 7], 5)!;
-    expect(buckets[0].count).toBe(1);
-    expect(buckets[4].count).toBe(1);
-  });
-
-  it('is null without a grading scale', () => {
-    expect(scoreDistribution([3], null)).toBeNull();
-  });
-});
-
 describe('byDepartment', () => {
   it('groups by the department of the course section, by name, without one last', () => {
     const groups = byDepartment([
@@ -102,10 +74,15 @@ describe('AcademicService.getStats', () => {
   let evaluationsService: any;
   let service: AcademicService;
 
+  const set = (evaluatedCount: number, tag: string) => ({
+    evaluatedCount,
+    components: components(tag),
+    distribution: [{ from: 0, to: 1, count: evaluatedCount }],
+  });
+
   beforeEach(() => {
     projectsService = {
       listEventIdsInScope: jest.fn().mockResolvedValue([4]),
-      // 3 has no evaluation
       listAllProjectsInScope: jest
         .fn()
         .mockResolvedValue([
@@ -123,14 +100,16 @@ describe('AcademicService.getStats', () => {
       }),
     };
     evaluationsService = {
-      getAverageGrades: jest.fn().mockResolvedValue([
-        { projectId: 1, averageGrade: 4.5, evaluationCount: 2 },
-        { projectId: 2, averageGrade: 2.5, evaluationCount: 1 },
-        { projectId: 3, averageGrade: 0, evaluationCount: 0 },
-      ]),
-      fetchCriteriaStats: jest.fn((_eventId: number, ids: number[]) =>
-        Promise.resolve({ maxScore: 5, components: components(ids.join(',')) }),
-      ),
+      getCriteriaStatsByGroups: jest
+        .fn()
+        .mockImplementation(
+          (_eventId: number, _ids: number[], groups: number[][]) =>
+            Promise.resolve({
+              maxScore: 5,
+              ...set(2, 'all'),
+              groups: groups.map((ids) => set(ids.length, ids.join(','))),
+            }),
+        ),
     };
     service = new AcademicService(
       projectsService,
@@ -149,7 +128,7 @@ describe('AcademicService.getStats', () => {
       departments: [],
     });
     expect(projectsService.listAllProjectsInScope).not.toHaveBeenCalled();
-    expect(evaluationsService.fetchCriteriaStats).not.toHaveBeenCalled();
+    expect(evaluationsService.getCriteriaStatsByGroups).not.toHaveBeenCalled();
   });
 
   it('shows them to a professor once the results are published', async () => {
@@ -166,48 +145,59 @@ describe('AcademicService.getStats', () => {
     expect(stats.departments).toBeUndefined();
   });
 
-  it('averages only the approved projects of the scope with evaluations', async () => {
+  it('asks evaluation-service for the approved projects of the scope, without groups', async () => {
     const stats = await service.getStats(DEAN, 4, AS_DEAN);
 
     expect(projectsService.listAllProjectsInScope).toHaveBeenCalledWith(
       expect.objectContaining({ eventId: 4, state: ProjectState.APPROVED }),
     );
-    expect(evaluationsService.fetchCriteriaStats).toHaveBeenCalledWith(
+    expect(evaluationsService.getCriteriaStatsByGroups).toHaveBeenCalledWith(
       4,
-      [1, 2],
+      [1, 2, 3],
+      [],
     );
-    expect(stats).toMatchObject({ statsHidden: false, maxScore: 5 });
-    expect(stats.overall).toMatchObject({
-      projectCount: 3,
-      evaluatedCount: 2,
-      components: components('1,2'),
-    });
-    expect(stats.overall!.distribution!.map((b) => b.count)).toEqual([
-      0, 0, 1, 0, 1,
-    ]);
+    expect(stats).toEqual(
+      expect.objectContaining({
+        statsHidden: false,
+        maxScore: 5,
+        overall: { projectCount: 3, ...set(2, 'all') },
+      }),
+    );
   });
 
-  it('adds one block per department with groupBy', async () => {
+  it('adds one block per department with groupBy, from the same call', async () => {
     const stats = await service.getStats(DEAN, 4, AS_DEAN, true);
 
+    expect(evaluationsService.getCriteriaStatsByGroups).toHaveBeenCalledTimes(
+      1,
+    );
+    expect(evaluationsService.getCriteriaStatsByGroups).toHaveBeenCalledWith(
+      4,
+      [1, 2, 3],
+      [[2], [1, 3]],
+    );
     expect(stats.departments).toEqual([
-      expect.objectContaining({
+      {
+        departmentId: 7,
         departmentName: 'Civil',
         projectCount: 1,
-        evaluatedCount: 1,
-        components: components('2'),
-      }),
-      expect.objectContaining({
+        ...set(1, '2'),
+      },
+      {
+        departmentId: 1,
         departmentName: 'Sistemas',
         projectCount: 2,
-        evaluatedCount: 1,
-        components: components('1'),
-      }),
+        ...set(2, '1,3'),
+      },
     ]);
   });
 
   it('has no distribution when the event has no grading scale', async () => {
-    evaluationsService.fetchCriteriaStats.mockResolvedValue({ components: [] });
+    evaluationsService.getCriteriaStatsByGroups.mockResolvedValue({
+      ...set(0, 'all'),
+      distribution: [],
+      groups: [],
+    });
 
     const stats = await service.getStats(DEAN, 4, AS_DEAN);
 

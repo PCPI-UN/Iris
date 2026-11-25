@@ -7,7 +7,8 @@ import {
 } from '../../../../grading-scales/testing/grading-scales.fixture';
 
 describe('GetEventCriteriaStatsUseCase', () => {
-  const evaluation = (score: number): StatsEvaluation => ({
+  const evaluation = (score: number, grade = score / 20): StatsEvaluation => ({
+    grade,
     details: [
       {
         criterionId: 1,
@@ -22,12 +23,12 @@ describe('GetEventCriteriaStatsUseCase', () => {
 
   const build = (scaleId: number | null = 1) => {
     const repo = {
-      findEvaluationsForStats: jest
-        .fn()
-        .mockResolvedValue([
-          [evaluation(80), evaluation(60)],
-          [evaluation(90)],
+      findEvaluationsForStats: jest.fn().mockResolvedValue(
+        new Map([
+          [5, [evaluation(80), evaluation(60)]],
+          [6, [evaluation(90)]],
         ]),
+      ),
     };
     const scales = new InMemoryGradingScaleRepository();
     scales.scales.set(50, customScale(50, [10, 20, 30, 40]));
@@ -91,6 +92,65 @@ describe('GetEventCriteriaStatsUseCase', () => {
     const result = await uc.execute({ eventId: 3 });
 
     expect(repo.findEvaluationsForStats).not.toHaveBeenCalled();
-    expect(result).toEqual({ maxScore: 90, components: [] });
+    expect(result).toEqual({
+      maxScore: 90,
+      evaluatedCount: 0,
+      components: [],
+      distribution: [
+        { from: 0, to: 18, count: 0 },
+        { from: 18, to: 36, count: 0 },
+        { from: 36, to: 54, count: 0 },
+        { from: 54, to: 72, count: 0 },
+        { from: 72, to: 90, count: 0 },
+      ],
+      groups: [],
+    });
+  });
+
+  it('spreads the final grades (average of the jurors) over the scale', async () => {
+    const { uc } = build(2); // 0 to 5
+
+    const result = await uc.execute({ eventId: 3, projectIds: [5, 6] });
+
+    // 5: (4 + 3) / 2 = 3.5; 6: 4.5
+    expect(result.evaluatedCount).toBe(2);
+    expect(result.distribution.map((bucket) => bucket.count)).toEqual([
+      0, 0, 0, 1, 1,
+    ]);
+  });
+
+  it('has no distribution when the event has no grading scale', async () => {
+    const { uc } = build(null);
+
+    const result = await uc.execute({ eventId: 3, projectIds: [5, 6] });
+
+    expect(result.distribution).toEqual([]);
+  });
+
+  it('gives the same stats per group, in order, reading the evaluations once', async () => {
+    const { uc, repo } = build(2);
+
+    const result = await uc.execute({
+      eventId: 3,
+      projectIds: [5, 6, 7],
+      groups: [{ projectIds: [6] }, { projectIds: [5, 7] }, { projectIds: [] }],
+    });
+
+    expect(repo.findEvaluationsForStats).toHaveBeenCalledTimes(1);
+    expect(repo.findEvaluationsForStats).toHaveBeenCalledWith([5, 6, 7]);
+    expect(result.evaluatedCount).toBe(2);
+    expect(result.groups).toHaveLength(3);
+    expect(result.groups[0]).toMatchObject({ evaluatedCount: 1 });
+    expect(result.groups[0].components[0]).toMatchObject({ average: 90 });
+    expect(result.groups[0].distribution.map((b) => b.count)).toEqual([
+      0, 0, 0, 0, 1,
+    ]);
+    // 7 has no evaluations: left out
+    expect(result.groups[1]).toMatchObject({ evaluatedCount: 1 });
+    expect(result.groups[1].components[0]).toMatchObject({ average: 70 });
+    expect(result.groups[2]).toMatchObject({
+      evaluatedCount: 0,
+      components: [],
+    });
   });
 });

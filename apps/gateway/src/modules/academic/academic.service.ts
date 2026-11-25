@@ -21,7 +21,10 @@ import {
 import { GetProjectResultResponse } from '@app/common/generated/evaluation';
 import { ProjectsService } from '../projects/projects.service';
 import { EventService } from '../events/events.service';
-import { EvaluationsService } from '../evaluations/evaluations.service';
+import {
+  EvaluationsService,
+  GroupCriteriaStats,
+} from '../evaluations/evaluations.service';
 import { AuthService } from '../auth/auth.service';
 import { AppUser } from '../auth/types/app-user.type';
 import { positionOf } from '../events/ranking/ranking-positions';
@@ -42,13 +45,7 @@ import {
   RegistrationsReport,
 } from './academic.types';
 import { ListAcademicProjectsDto } from './dto/academic-query.dto';
-import {
-  AcademicStats,
-  FinalScores,
-  StatsBlock,
-  byDepartment,
-  scoreDistribution,
-} from './academic-stats';
+import { AcademicStats, StatsBlock, byDepartment } from './academic-stats';
 import {
   AcademicProfile,
   academicProfilesOf,
@@ -444,56 +441,35 @@ export class AcademicService {
       state: ProjectState.APPROVED,
       scope,
     });
-    const averages = await this.evaluationsService.getAverageGrades(
-      projects.map((p) => p.id),
+    const ids = (ofProjects: ProjectComplete[]) => ofProjects.map((p) => p.id);
+    const departments = groupByDepartment ? byDepartment(projects) : [];
+    const stats = await this.evaluationsService.getCriteriaStatsByGroups(
+      eventId,
+      ids(projects),
+      departments.map((group) => ids(group.projects)),
     );
-    const scores: FinalScores = new Map(
-      averages
-        .filter((a) => a.evaluationCount > 0)
-        .map((a) => [a.projectId, a.averageGrade]),
-    );
-
-    const criteria = (ofProjects: ProjectComplete[]) =>
-      this.evaluationsService.fetchCriteriaStats(
-        eventId,
-        ofProjects.map((p) => p.id).filter((id) => scores.has(id)),
-      );
-    const overallCriteria = await criteria(projects);
-    const maxScore = overallCriteria.maxScore ?? null;
-
+    const maxScore = stats.maxScore ?? null;
     const block = (
-      ofProjects: ProjectComplete[],
-      components: StatsBlock['components'],
-    ): StatsBlock => {
-      const evaluated = ofProjects
-        .map((p) => scores.get(p.id))
-        .filter((score): score is number => score !== undefined);
-      return {
-        projectCount: ofProjects.length,
-        evaluatedCount: evaluated.length,
-        components,
-        distribution: scoreDistribution(evaluated, maxScore),
-      };
-    };
-
-    const departments = groupByDepartment
-      ? await Promise.all(
-          byDepartment(projects).map(async (group) => ({
-            ...group.department,
-            ...block(
-              group.projects,
-              (await criteria(group.projects)).components,
-            ),
-          })),
-        )
-      : undefined;
+      projectCount: number,
+      set: GroupCriteriaStats,
+    ): StatsBlock => ({
+      projectCount,
+      evaluatedCount: set.evaluatedCount,
+      components: set.components,
+      distribution: maxScore === null ? null : set.distribution,
+    });
 
     return {
       ...header,
       statsHidden: false,
       maxScore,
-      overall: block(projects, overallCriteria.components),
-      ...(departments && { departments }),
+      overall: block(projects.length, stats),
+      ...(groupByDepartment && {
+        departments: departments.map((group, i) => ({
+          ...group.department,
+          ...block(group.projects.length, stats.groups[i]),
+        })),
+      }),
     };
   }
 

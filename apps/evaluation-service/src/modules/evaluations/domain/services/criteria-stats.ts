@@ -13,6 +13,8 @@ export interface StatsDetail {
 
 /** One juror's evaluation of a project. */
 export interface StatsEvaluation {
+  /** Grade the juror gave to the project */
+  grade: number;
   details: StatsDetail[];
 }
 

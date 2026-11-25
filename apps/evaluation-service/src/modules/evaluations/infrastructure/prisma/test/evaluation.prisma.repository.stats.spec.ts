@@ -62,9 +62,9 @@ describe('EvaluationPrismaRepository - project statistics', () => {
                 criterion: { id: 1, name: 'Problema', component },
             });
             const findMany = jest.fn().mockResolvedValue([
-                { projectId: 1, scores: [detail(80, { id: 10, name: 'Fundamentación' })] },
-                { projectId: 2, scores: [detail(70, null)] },
-                { projectId: 1, scores: [detail(60, { id: 10, name: 'Fundamentación' })] },
+                { projectId: 1, grade: 4, scores: [detail(80, { id: 10, name: 'Fundamentación' })] },
+                { projectId: 2, grade: 3.5, scores: [detail(70, null)] },
+                { projectId: 1, grade: 3, scores: [detail(60, { id: 10, name: 'Fundamentación' })] },
             ]);
             const repository = new EvaluationPrismaRepository({
                 db: { evaluation: { findMany } },
@@ -75,11 +75,11 @@ describe('EvaluationPrismaRepository - project statistics', () => {
             expect(findMany).toHaveBeenCalledWith(
                 expect.objectContaining({ where: { projectId: { in: [1, 2] } } }),
             );
-            expect(projects.map((evaluations) => evaluations.map((e) => e.details[0].score))).toEqual([
-                [80, 60],
-                [70],
+            expect([...projects].map(([id, evaluations]) => [id, evaluations.map((e) => [e.grade, e.details[0].score])])).toEqual([
+                [1, [[4, 80], [3, 60]]],
+                [2, [[3.5, 70]]],
             ]);
-            expect(projects[0][0].details[0]).toEqual({
+            expect(projects.get(1)![0].details[0]).toEqual({
                 criterionId: 1,
                 criterionName: 'Problema',
                 componentId: 10,
@@ -87,7 +87,7 @@ describe('EvaluationPrismaRepository - project statistics', () => {
                 score: 80,
                 weight: 0.5,
             });
-            expect(projects[1][0].details[0]).toMatchObject({ componentId: null, componentName: null });
+            expect(projects.get(2)![0].details[0]).toMatchObject({ componentId: null, componentName: null });
         });
     });
 });
