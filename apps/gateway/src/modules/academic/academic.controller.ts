@@ -96,7 +96,7 @@ export class AcademicController {
       'OFFICIAL, assigned jurors and how many evaluated (always sent), and, when the caller ' +
       'may see the grade, the result (final grade, maxScore, criteria by component with ' +
       'their effective weights as fractions, the jurors comments without author) and the ' +
-      'position in the ranking of its category (tied projects share it; null if the project ' +
+      'position in the ranking of its category with its published awards (tied projects share it; null if the project ' +
       'is not approved or the event has no ranking). Without read:grades the result and ' +
       'the position are only sent once the results are published (resultHidden: true until then). ' +
       '`evaluation` is null when the evaluation could not be read; the project is still sent.',

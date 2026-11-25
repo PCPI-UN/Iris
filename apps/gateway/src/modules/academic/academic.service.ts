@@ -201,11 +201,20 @@ export class AcademicService {
       const own = positionOf(averages, id);
       if (!own) return null;
 
-      const { category } = await this.eventsService.getCategory(categoryId);
+      const [{ category }, { awards = [] }] = await Promise.all([
+        this.eventsService.getCategory(categoryId),
+        this.eventsService.listAwardsByProjects([id]),
+      ]);
+      // Same rule as the student results: only published awards of this event
+      const titles = awards
+        .filter((a) => a.eventId === eventId && a.resultsPublished)
+        .map((a) => a.title)
+        .filter(Boolean);
       return {
         ...own,
         categoryId,
         categoryName: category?.name?.trim() || 'Sin categoria',
+        awardTitle: titles.length ? titles.join(', ') : null,
       };
     } catch (error: unknown) {
       // An event without ranking configuration has no positions

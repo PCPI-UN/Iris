@@ -256,6 +256,10 @@ describe('AcademicService', () => {
       eventsService.getCategory = jest
         .fn()
         .mockResolvedValue({ category: { id: 6, name: ' Sistemas ' } });
+      // No award by default; the award test sets them
+      eventsService.listAwardsByProjects = jest
+        .fn()
+        .mockResolvedValue({ awards: [] });
       evaluationsService.getAverageGrades.mockImplementation(
         async (ids: number[]) =>
           ids.length === 1
@@ -301,6 +305,7 @@ describe('AcademicService', () => {
         tied: true,
         categoryId: 6,
         categoryName: 'Sistemas',
+        awardTitle: null,
       },
     };
 
@@ -447,6 +452,24 @@ describe('AcademicService', () => {
 
       expect(detail.evaluation?.ranking).toBeNull();
       expect(detail.evaluation?.result).not.toBeNull();
+    });
+
+    it('the position carries the published awards of the event only', async () => {
+      eventsService.listAwardsByProjects.mockResolvedValue({
+        awards: [
+          { eventId: 4, title: 'Primer puesto', resultsPublished: true },
+          { eventId: 4, title: 'Mención', resultsPublished: false },
+          { eventId: 9, title: 'Otro evento', resultsPublished: true },
+          { eventId: 4, title: 'Innovación', resultsPublished: true },
+        ],
+      });
+
+      const detail = await service.getProject(DEAN, 1, AS_DEAN);
+
+      expect(eventsService.listAwardsByProjects).toHaveBeenCalledWith([1]);
+      expect(detail.evaluation?.ranking?.awardTitle).toBe(
+        'Primer puesto, Innovación',
+      );
     });
 
     it('an untied position is not marked as tied', async () => {

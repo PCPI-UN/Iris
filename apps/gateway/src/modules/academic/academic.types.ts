@@ -122,6 +122,8 @@ export interface AcademicProjectRanking {
   tied: boolean;
   categoryId: number;
   categoryName: string;
+  /** Titles of the published awards the project won in the event, comma separated; null if none */
+  awardTitle: string | null;
 }
 
 /**
