@@ -8,6 +8,7 @@ import {
   ForbiddenException,
   ConflictException,
 } from '@nestjs/common';
+import { termCode, withTermCodes } from '@app/common/utils/term-code.util';
 import { ClientGrpc } from '@nestjs/microservices';
 import { status as GrpcStatus } from '@grpc/grpc-js';
 import { firstValueFrom, lastValueFrom } from 'rxjs';
@@ -1003,7 +1004,16 @@ export class ProjectsService implements OnModuleInit {
       throw new NotFoundException('No se encontró el proyecto');
     }
 
-    return { ...project, tutors: toProjectTutorsResponse(project.tutors) };
+    const [withTerm] = project.academicCourse
+      ? withTermCodes([project], await this.termCodes())
+      : [project];
+    return { ...withTerm, tutors: toProjectTutorsResponse(project.tutors) };
+  }
+
+  /** Term code (year + period, such as 202610) by term id */
+  private async termCodes(): Promise<Map<number, string>> {
+    const { terms } = await lastValueFrom(this.eventsService.listTerms({}));
+    return new Map((terms ?? []).map((term) => [term.id, termCode(term)]));
   }
 
   /**

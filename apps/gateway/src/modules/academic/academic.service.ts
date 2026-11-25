@@ -6,7 +6,11 @@ import {
   ProjectComplete,
   ProjectState,
 } from '@app/common/generated/project';
-import { TermProto } from '@app/common/generated/event';
+import {
+  AcademicCourseWithTerm,
+  termCode,
+  withTermCodes,
+} from '@app/common/utils/term-code.util';
 import { withoutOneofMarkers } from '@app/common/utils/grpc-oneof.util';
 import { pendingStatus } from '@app/common/utils/pending-status.util';
 import { ProjectsService } from '../projects/projects.service';
@@ -256,35 +260,6 @@ export class AcademicService {
     if (!event?.active) throw new NotFoundException(`No se encontró el evento con ID ${eventId}`);
     return event;
   }
-}
-
-/** Term code as the university writes it: 2026 + "10" is 202610 */
-export function termCode(term: Pick<TermProto, 'year' | 'period'>): string {
-  return `${term.year}${term.period}`;
-}
-
-/** Course section of a project with the code of its term */
-type AcademicCourseWithTerm = AcademicCourse & { term?: string | null };
-
-/**
- * Adds the term code to the course section of each project: project-service only knows
- * the term id, and the terms live in event-service.
- */
-export function withTermCodes<T extends ProjectComplete>(
-  projects: T[],
-  codes: Map<number, string>,
-): T[] {
-  return projects.map((project) =>
-    project.academicCourse
-      ? {
-          ...project,
-          academicCourse: {
-            ...project.academicCourse,
-            term: codes.get(project.academicCourse.termId) ?? null,
-          } as AcademicCourseWithTerm,
-        }
-      : project,
-  );
 }
 
 /** Admin (passes every check) or a role with read:grades sees grades before publication */
