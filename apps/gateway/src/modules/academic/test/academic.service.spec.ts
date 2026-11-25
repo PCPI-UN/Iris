@@ -141,6 +141,7 @@ describe('AcademicService', () => {
       })),
     };
     diplomasService = {
+      isAvailable: jest.fn().mockResolvedValue(true),
       getProjectDiploma: jest.fn().mockResolvedValue({
         buffer: Buffer.from('%PDF'),
         fileName: 'diploma_P1.pdf',
@@ -735,10 +736,18 @@ describe('AcademicService', () => {
 
       await expect(
         service.getDiploma(PROFESSOR, 1, AS_PROFESSOR),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      ).rejects.toThrow(
+        new ForbiddenException(
+          'El perfil académico PROFESSOR no descarga diplomas',
+        ),
+      );
       await expect(
         service.getDiploma(TUTOR, 1, AcademicProfile.TUTOR),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      ).rejects.toThrow(
+        new ForbiddenException(
+          'El perfil académico TUTOR no descarga diplomas',
+        ),
+      );
       expect(projectsService.getProjectInScope).not.toHaveBeenCalled();
       expect(diplomasService.getProjectDiploma).not.toHaveBeenCalled();
     });
@@ -757,7 +766,44 @@ describe('AcademicService', () => {
     it('a profile whose role the caller lacks is a 403', async () => {
       await expect(
         service.getDiploma(PROFESSOR, 1, AcademicProfile.DIRECTOR),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      ).rejects.toThrow(
+        new ForbiddenException(
+          'El usuario no tiene el perfil académico DIRECTOR',
+        ),
+      );
+    });
+
+    it('the detail tells a director whether the diploma can be downloaded', async () => {
+      const detail = await service.getProject(
+        DIRECTOR,
+        1,
+        AcademicProfile.DIRECTOR,
+      );
+
+      expect(diplomasService.isAvailable).toHaveBeenCalledWith(project(1));
+      expect(detail.diplomaAvailable).toBe(true);
+    });
+
+    it('the detail of a professor never offers it, without checking', async () => {
+      const detail = await service.getProject(PROFESSOR, 1, AS_PROFESSOR);
+
+      expect(detail.diplomaAvailable).toBe(false);
+      expect(diplomasService.isAvailable).not.toHaveBeenCalled();
+    });
+
+    it('a failure of the check leaves the diploma out, not the detail', async () => {
+      diplomasService.isAvailable.mockRejectedValue(
+        new Error('event-service down'),
+      );
+
+      const detail = await service.getProject(
+        DIRECTOR,
+        1,
+        AcademicProfile.DIRECTOR,
+      );
+
+      expect(detail.diplomaAvailable).toBe(false);
+      expect(detail.id).toBe(1);
     });
   });
 

@@ -135,8 +135,27 @@ export class AcademicService {
       profileScope(user, profile),
     );
     const [withTerm] = withTermCodes([project], await this.termCodes());
-    const evaluation = await this.evaluation(user, project);
-    return withoutOneofMarkers({ ...withTerm, evaluation });
+    const [evaluation, diplomaAvailable] = await Promise.all([
+      this.evaluation(user, project),
+      this.diplomaAvailable(project, profile),
+    ]);
+    return withoutOneofMarkers({ ...withTerm, evaluation, diplomaAvailable });
+  }
+
+  /** Same rule as getDiploma; a failure leaves the button out instead of the detail */
+  private async diplomaAvailable(
+    project: ProjectComplete,
+    profile: AcademicProfile,
+  ): Promise<boolean> {
+    if (!DIPLOMA_PROFILES.includes(profile)) return false;
+    try {
+      return await this.diplomasService.isAvailable(project);
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Diploma of project ${project.id} unavailable: ${(error as Error)?.message}`,
+      );
+      return false;
+    }
   }
 
   /**

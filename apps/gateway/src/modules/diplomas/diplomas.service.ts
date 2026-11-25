@@ -92,6 +92,25 @@ export class DiplomasService {
     );
   }
 
+  /**
+   * Whether getProjectDiploma gives this project its diploma, without rendering it: a
+   * design for the event, published results and a published award of the event.
+   */
+  async isAvailable(project: {
+    id: number;
+    eventId: number;
+  }): Promise<boolean> {
+    if (!this.hasDiploma(project.eventId)) return false;
+    const [event, { awards = [] }] = await Promise.all([
+      this.eventsService.getEventById(project.eventId),
+      this.eventsService.listAwardsByProjects([project.id]),
+    ]);
+    return (
+      !!event?.resultsPublished &&
+      awards.some((a) => a.eventId === project.eventId && a.resultsPublished)
+    );
+  }
+
   /** Published results, a published award of the event and a design, then the PDF */
   private async diplomaOf(
     project: { id: number; name: string },

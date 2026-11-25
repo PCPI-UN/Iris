@@ -99,7 +99,9 @@ export class AcademicController {
       'position in the ranking of its category with its published awards (tied projects share it; null if the project ' +
       'is not approved or the event has no ranking). Without read:grades the result and ' +
       'the position are only sent once the results are published (resultHidden: true until then). ' +
-      '`evaluation` is null when the evaluation could not be read; the project is still sent.',
+      '`evaluation` is null when the evaluation could not be read; the project is still sent. ' +
+      '`diplomaAvailable` tells whether GET /academic/projects/:id/diploma gives its diploma ' +
+      'to this profile (always false for PROFESSOR and TUTOR).',
   })
   @ApiResponse({ status: 200, description: 'The project and its evaluation' })
   @ApiResponse({
