@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class InviteJurorToEventDto {
   @ApiProperty({
@@ -29,8 +29,9 @@ export class InviteJurorToEventDto {
   @ApiProperty({
     description: 'Last name of the juror',
     example: 'Doe',
+    required: false,
   })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  lastName: string;
+  lastName?: string;
 }

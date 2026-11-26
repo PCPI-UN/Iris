@@ -23,6 +23,9 @@
       ],
       "@app/common/*": [
         "libs/common/src/*"
+      ],
+      "@events/*": [
+        "apps/event-service/src/modules/events/*"
       ]
     }
   }

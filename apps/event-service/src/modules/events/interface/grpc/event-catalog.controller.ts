@@ -2,10 +2,24 @@ import { Controller } from '@nestjs/common';
 import { GrpcMethod } from '@nestjs/microservices';
 import { EVENT_SERVICE_NAME } from '@app/common/generated/event';
 import { EventCatalogService } from '@events/application/event-catalog.service';
+import { ListAwardsByProjectsUC } from '@events/application/use-cases/list-awards-by-projects.uc';
+import { ListAwardsByProjectsDTO } from '@events/application/dto/list-awards-by-projects.dto';
+import { ProjectAwardMapper } from '@events/application/mappers/project-award.mapper';
+import { ListCategoriesByIdsUC } from '@events/application/use-cases/list-categories-by-ids.uc';
+import { ListCategoriesByIdsDTO } from '@events/application/dto/list-categories-by-ids.dto';
+import { EventCategoryMapper } from '@events/application/mappers/event-category.mapper';
+import { ListPublishedWinnersUC } from '@events/application/use-cases/list-published-winners.uc';
+import { ListPublishedWinnersDTO } from '@events/application/dto/list-published-winners.dto';
+import { PublishedWinnersMapper } from '@events/application/mappers/published-winners.mapper';
 
 @Controller()
 export class EventCatalogController {
-  constructor(private readonly catalogService: EventCatalogService) {}
+  constructor(
+    private readonly catalogService: EventCatalogService,
+    private readonly listAwardsByProjectsUC: ListAwardsByProjectsUC,
+    private readonly listCategoriesByIdsUC: ListCategoriesByIdsUC,
+    private readonly listPublishedWinnersUC: ListPublishedWinnersUC,
+  ) {}
 
   @GrpcMethod(EVENT_SERVICE_NAME, 'CreateCategory')
   createCategory(request: any) {
@@ -135,5 +149,23 @@ export class EventCatalogController {
   @GrpcMethod(EVENT_SERVICE_NAME, 'DeleteEventRecap')
   deleteEventRecap(request: any) {
     return this.catalogService.deleteEventRecap(request);
+  }
+
+  @GrpcMethod(EVENT_SERVICE_NAME, 'ListAwardsByProjects')
+  async listAwardsByProjects(request: ListAwardsByProjectsDTO) {
+    const awards = await this.listAwardsByProjectsUC.execute(request);
+    return ProjectAwardMapper.toListResponse(awards);
+  }
+
+  @GrpcMethod(EVENT_SERVICE_NAME, 'ListCategoriesByIds')
+  async listCategoriesByIds(request: ListCategoriesByIdsDTO) {
+    const categories = await this.listCategoriesByIdsUC.execute(request);
+    return EventCategoryMapper.toListResponse(categories);
+  }
+
+  @GrpcMethod(EVENT_SERVICE_NAME, 'ListPublishedWinners')
+  async listPublishedWinners(request: ListPublishedWinnersDTO) {
+    const page = await this.listPublishedWinnersUC.execute(request);
+    return PublishedWinnersMapper.toListResponse(page);
   }
 }

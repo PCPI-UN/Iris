@@ -1,0 +1,43 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: iris-ingress
+  namespace: pcpi
+  annotations:
+    kubernetes.io/ingress.class: traefik
+spec:
+  rules:
+    - host: localhost
+      http:
+        paths:
+          - path: /api/docs
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 3000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 3000
+    - host: iris.local
+      http:
+        paths:
+          - path: /api/docs
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 3000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 3000

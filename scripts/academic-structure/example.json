@@ -1,0 +1,28 @@
+{
+  "departments": [
+    { "name": "Ingeniería de Sistemas", "directorEmail": "director.sistemas@example.edu" },
+    { "name": "Ingeniería Industrial", "directorEmail": null }
+  ],
+  "courses": [
+    {
+      "year": 2026,
+      "period": "10",
+      "nrc": "1001",
+      "name": "Proyecto Final - Grupo 1",
+      "professorEmail": "profesor.uno@example.edu",
+      "department": "Ingeniería de Sistemas"
+    },
+    {
+      "year": 2026,
+      "period": "10",
+      "nrc": "2001",
+      "name": "Proyecto Final Industrial",
+      "professorEmail": "profesor.dos@example.edu",
+      "department": "Ingeniería Industrial"
+    }
+  ],
+  "projects": [
+    { "projectId": 12, "year": 2026, "period": "10", "nrc": "1001" },
+    { "projectId": 15, "year": 2026, "period": "10", "nrc": "2001" }
+  ]
+}

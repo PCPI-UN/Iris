@@ -1,11 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { EvaluationType, EventType } from '@app/common/generated/event';
+import { EventType } from '@app/common/generated/event';
 import {
   IsArray,
   IsBoolean,
   IsDateString,
   IsEnum,
+  IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -16,7 +17,6 @@ import {
   MinLength,
 } from 'class-validator';
 import {
-  transformEvaluationType,
   transformEventType,
 } from './event-type-transformer';
 
@@ -229,15 +229,16 @@ export class CreateEventDTO {
   locationDetails?: string;
 
   @ApiProperty({
-    description: 'Evaluation scale configured for the event',
-    enum: EvaluationType,
+    description:
+      'Grading scale of the event, from the catalog (GET /grading-scales). To use a new scale, create it first ' +
+      'with POST /grading-scales. Without it, a new event gets "Proyectos finales" and an existing event keeps its scale.',
     required: false,
-    example: 'FINAL_PROJECTS',
+    example: 1,
   })
   @IsOptional()
-  @Transform(transformEvaluationType)
-  @IsEnum(EvaluationType)
-  evaluationType?: EvaluationType;
+  @IsInt()
+  @Min(1)
+  gradingScaleId?: number;
 
   @ApiProperty({
     description: 'Additional inscription requirements for participants',
@@ -256,6 +257,24 @@ export class CreateEventDTO {
   @IsNumber()
   @Min(1)
   minimumTeamSize?: number;
+
+  @ApiProperty({
+    description:
+      'Academic term of the event (GET /terms). It resolves the NRC a student types when submitting a project',
+    example: 3,
+  })
+  @IsInt()
+  @Min(1)
+  termId: number;
+
+  @ApiProperty({
+    description:
+      'true: each project must belong to a course section (NRC) of the term, such as a final projects fair; ' +
+      'false: the event is not course work, such as a hackathon, and the submission asks for no NRC',
+    example: true,
+  })
+  @IsBoolean()
+  requiresCourse: boolean;
 
   @ApiProperty({
     description: 'Information about the event allies or partners',

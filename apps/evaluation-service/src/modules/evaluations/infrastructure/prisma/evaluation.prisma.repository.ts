@@ -4,19 +4,21 @@ import {
     EvaluationRepositoryPort,
     PaginatedEvaluations,
     ProjectStats,
-    CategoryStats,
     EvaluationWithDetails,
     TopProject
 } from '@evaluations/domain/repositories/evaluation.repository.port';
 import { Evaluation } from '@evaluations/domain/entities/evaluation.entity';
 import { EvaluationDetail } from '@evaluations/domain/entities/evaluation-detail.entity';
+import { roundGrade } from '../../../../common/utils/grade.utils';
+import { ResultEvaluation } from '../../domain/services/project-result';
+import { StatsEvaluation } from '../../domain/services/criteria-stats';
 
 @Injectable()
 export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
     constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
     async save(evaluation: Evaluation, scores: EvaluationDetail[]): Promise<Evaluation> {
-        const result = await this.prisma.evaluation.create({
+        const result = await this.prisma.db.evaluation.create({
             data: {
                 projectId: evaluation.projectId,
                 memberUserId: evaluation.memberUserId,
@@ -29,6 +31,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
                     create: scores.map(score => ({
                         criterionId: score.criterionId,
                         score: score.score,
+                        weight: score.weight,
                     })),
                 },
             },
@@ -50,8 +53,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
     }
 
     async findById(id: number): Promise<Evaluation | null> {
-        console.log('EvaluationPrismaRepository findById with id:', id);
-        const result = await this.prisma.evaluation.findUnique({
+        const result = await this.prisma.db.evaluation.findUnique({
             where: { id },
             include: {
                 scores: true,
@@ -75,7 +77,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
     }
 
     async findAll(): Promise<Evaluation[]> {
-        const results = await this.prisma.evaluation.findMany({
+        const results = await this.prisma.db.evaluation.findMany({
             include: {
                 scores: true,
             },
@@ -94,14 +96,14 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
     }
 
     async countAll(): Promise<number> {
-        return this.prisma.evaluation.count();
+        return this.prisma.db.evaluation.count();
     }
 
     async findByProjectId(projectId: number, page: number, limit: number): Promise<PaginatedEvaluations> {
         const skip = (page - 1) * limit;
 
         const [results, total] = await Promise.all([
-            this.prisma.evaluation.findMany({
+            this.prisma.db.evaluation.findMany({
                 where: { projectId },
                 include: {
                     scores: true,
@@ -110,7 +112,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
                 take: limit,
                 orderBy: { date: 'desc' },
             }),
-            this.prisma.evaluation.count({
+            this.prisma.db.evaluation.count({
                 where: { projectId },
             }),
         ]);
@@ -136,7 +138,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
         const skip = (page - 1) * limit;
 
         const [results, total] = await Promise.all([
-            this.prisma.evaluation.findMany({
+            this.prisma.db.evaluation.findMany({
                 where: {
                     memberUserId: userId,
                     memberEventId: eventId,
@@ -148,7 +150,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
                 take: limit,
                 orderBy: { date: 'desc' },
             }),
-            this.prisma.evaluation.count({
+            this.prisma.db.evaluation.count({
                 where: {
                     memberUserId: userId,
                     memberEventId: eventId,
@@ -174,7 +176,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
     }
 
     async findByProjectAndEvaluator(projectId: number, memberUserId: number, memberEventId: number, memberRoleId: number): Promise<Evaluation | null> {
-        const result = await this.prisma.evaluation.findFirst({
+        const result = await this.prisma.db.evaluation.findFirst({
             where: {
                 projectId,
                 memberUserId,
@@ -203,7 +205,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
     }
 
     async existsByProjectAndEvaluator(projectId: number, memberUserId: number, memberEventId: number): Promise<boolean> {
-        const count = await this.prisma.evaluation.count({
+        const count = await this.prisma.db.evaluation.count({
             where: {
                 projectId,
                 memberUserId,
@@ -214,8 +216,14 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
         return count > 0;
     }
 
+    async lockProjectEvaluator(projectId: number, memberUserId: number, memberEventId: number): Promise<void> {
+        // Transaction-scoped advisory lock keyed by (project, juror, event); released on commit or rollback
+        const key = `evaluation:${projectId}:${memberUserId}:${memberEventId}`;
+        await this.prisma.db.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
+    }
+
     async findEvaluationDetails(evaluationId: number): Promise<EvaluationDetail[]> {
-        const results = await this.prisma.evaluationDetail.findMany({
+        const results = await this.prisma.db.evaluationDetail.findMany({
             where: { evaluationId },
         });
 
@@ -223,78 +231,91 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
             result.evaluationId,
             result.criterionId,
             result.score,
+            result.weight,
         ));
     }
 
-    async getProjectStats(projectId: number): Promise<ProjectStats> {
-        // Get average grade and count
-        const gradeStats = await this.prisma.evaluation.aggregate({
+    async findProjectEvaluationsForResult(projectId: number): Promise<ResultEvaluation[]> {
+        const evaluations = await this.prisma.db.evaluation.findMany({
             where: { projectId },
-            _avg: { grade: true },
-            _count: true,
-        });
-
-        // Get all evaluation details with criterion info (including category and weight)
-        const evaluationDetails = await this.prisma.evaluationDetail.findMany({
-            where: {
-                evaluation: {
-                    projectId,
+            include: {
+                scores: {
+                    include: {
+                        criterion: {
+                            select: {
+                                id: true,
+                                name: true,
+                                component: { select: { name: true } },
+                            },
+                        },
+                    },
                 },
             },
-            include: {
-                criterion: {
+            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        });
+
+        return evaluations.map((evaluation) => ({
+            grade: evaluation.grade,
+            comments: evaluation.comments,
+            details: evaluation.scores.map((detail) => ({
+                criterionId: detail.criterion.id,
+                criterionName: detail.criterion.name,
+                componentName: detail.criterion.component?.name ?? null,
+                score: detail.score,
+                weight: detail.weight,
+            })),
+        }));
+    }
+
+    async findEvaluationsForStats(projectIds: number[]): Promise<StatsEvaluation[][]> {
+        const evaluations = await this.prisma.db.evaluation.findMany({
+            where: { projectId: { in: projectIds } },
+            select: {
+                projectId: true,
+                scores: {
                     select: {
-                        id: true,
-                        category: true,
+                        score: true,
                         weight: true,
+                        criterion: {
+                            select: {
+                                id: true,
+                                name: true,
+                                component: { select: { id: true, name: true } },
+                            },
+                        },
                     },
                 },
             },
         });
 
-        // Group scores by category, tracking unique criterions
-        const categoryScoresMap = new Map<string, { scores: number[]; weight: number; criterionIds: Set<number> }>();
-
-        for (const detail of evaluationDetails) {
-            const category = detail.criterion.category || 'Uncategorized';
-            
-            if (!categoryScoresMap.has(category)) {
-                categoryScoresMap.set(category, {
-                    scores: [],
-                    weight: 0,
-                    criterionIds: new Set(),
-                });
-            }
-
-            const categoryData = categoryScoresMap.get(category)!;
-            categoryData.scores.push(detail.score);
-            categoryData.criterionIds.add(detail.criterion.id);
-            // Store the weight from the first criterion in this category
-            if (categoryData.weight === 0) {
-                categoryData.weight = detail.criterion.weight;
-            }
-        }
-
-        // Calculate average per category and reverse the weight calculation
-        // Since each criterion has distributed weight (e.g., 0.06 for category with 30% / 5 criterions)
-        // We need to multiply back by the number of UNIQUE criterions to get the category weight
-        const categoryStats: CategoryStats[] = [];
-
-        for (const [category, data] of categoryScoresMap.entries()) {
-            const averageScore = data.scores.reduce((sum, score) => sum + score, 0) / data.scores.length;
-            
-            // Calculate the category weight by multiplying the distributed weight by number of UNIQUE criterions
-            const categoryWeight = data.weight * data.criterionIds.size;
-            
-            categoryStats.push({
-                category,
-                averageScore,
-                weight: categoryWeight,
+        const byProject = new Map<number, StatsEvaluation[]>();
+        for (const evaluation of evaluations) {
+            const projectEvaluations = byProject.get(evaluation.projectId) ?? [];
+            projectEvaluations.push({
+                details: evaluation.scores.map((detail) => ({
+                    criterionId: detail.criterion.id,
+                    criterionName: detail.criterion.name,
+                    componentId: detail.criterion.component?.id ?? null,
+                    componentName: detail.criterion.component?.name ?? null,
+                    score: detail.score,
+                    weight: detail.weight,
+                })),
             });
+            byProject.set(evaluation.projectId, projectEvaluations);
         }
+        return [...byProject.values()];
+    }
+
+    async getProjectStats(projectId: number): Promise<ProjectStats> {
+        // Get average grade and count
+        const gradeStats = await this.prisma.db.evaluation.aggregate({
+            where: { projectId },
+            _avg: { grade: true },
+            _count: true,
+        });
 
         // Get unique evaluator user IDs for this project
-        const evaluators = await this.prisma.evaluation.findMany({
+        const evaluators = await this.prisma.db.evaluation.findMany({
             where: { projectId },
             select: { memberUserId: true },
         });
@@ -302,9 +323,9 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
         const evaluatorIds = Array.from(new Set(evaluators.map(e => e.memberUserId)));
 
         return {
-            averageGrade: gradeStats._avg.grade || 0,
+            // Rounded here so ranking, top projects and reports compare and show the same value
+            averageGrade: roundGrade(gradeStats._avg.grade || 0),
             evaluationCount: gradeStats._count,
-            categoryStats,
             evaluatorIds,
         };
     }
@@ -314,7 +335,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
         userId: number,
         eventId: number
     ): Promise<EvaluationWithDetails[]> {
-        const evaluations = await this.prisma.evaluation.findMany({
+        const evaluations = await this.prisma.db.evaluation.findMany({
             where: {
                 projectId: { in: projectIds },
                 memberUserId: userId,
@@ -340,7 +361,8 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
                 new EvaluationDetail(
                     evaluation.id,
                     score.criterionId,
-                    score.score
+                    score.score,
+                    score.weight,
                 )
             ),
         }));
@@ -353,7 +375,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
 
         // Find evaluations for the specified projects
         // Group by projectId and calculate average grade
-        const projectGrades = await this.prisma.evaluation.groupBy({
+        const projectGrades = await this.prisma.db.evaluation.groupBy({
             by: ['projectId'],
             where: {
                 projectId: { in: projectIds },
@@ -364,7 +386,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
 
         return projectGrades.map((pg: any) => ({
             projectId: pg.projectId,
-            averageGrade: pg._avg.grade || 0,
+            averageGrade: roundGrade(pg._avg.grade || 0),
             evaluationCount: pg._count.id,
         }));
     }

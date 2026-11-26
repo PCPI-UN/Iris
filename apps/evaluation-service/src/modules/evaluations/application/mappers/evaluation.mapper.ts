@@ -3,16 +3,21 @@ import {
   FindEvaluationsByEvaluatorResponse,
   EvaluationDetailResponse,
   GetProjectStatsResponse,
-  CategoryStatsResponse,
   CheckEvaluationStatusResponse,
   ProjectEvaluationStatus,
   PaginationMetadata,
   GetTopProjectsByCourseResponse,
-  TopProjectProto
+  TopProjectProto,
+  GetProjectResultResponse,
+  GetEventCriteriaStatsResponse,
+  ComponentStatsProto,
 } from '@app/common/generated/evaluation';
+import { EventCriteriaStats } from '../use-cases/get-event-criteria-stats.use-case';
+import { ComponentStats } from '@evaluations/domain/services/criteria-stats';
+import { ProjectResultWithScale } from '../use-cases/get-project-result.use-case';
 import { Evaluation } from '@evaluations/domain/entities/evaluation.entity';
 import { EvaluationDetail } from '@evaluations/domain/entities/evaluation-detail.entity';
-import { ProjectStats, CategoryStats, ProjectEvaluationStatus as DomainProjectEvaluationStatus, TopProject } from '@evaluations/domain/repositories/evaluation.repository.port';
+import { ProjectStats, ProjectEvaluationStatus as DomainProjectEvaluationStatus, TopProject } from '@evaluations/domain/repositories/evaluation.repository.port';
 
 export class EvaluationMapper {
   static toCreateEvaluationResponse(
@@ -90,11 +95,40 @@ export class EvaluationMapper {
     evaluationId: number;
     criterionId: number;
     score: number;
+    weight?: number;
   }): EvaluationDetailResponse {
     return {
       evaluationId: detail.evaluationId,
       criterionId: detail.criterionId,
       score: detail.score,
+      ...(detail.weight !== undefined && { weight: detail.weight }),
+    };
+  }
+
+  static toGetProjectResultResponse(
+    result: ProjectResultWithScale,
+  ): GetProjectResultResponse {
+    return {
+      evaluated: result.evaluated,
+      finalScore: result.finalScore,
+      maxScore: result.maxScore,
+      criteria: result.criteria.map((c) => ({
+        criterionId: c.criterionId,
+        criterion: c.criterion,
+        component: c.component,
+        weight: c.weight,
+        score: c.score,
+      })),
+      consolidatedFeedback: result.consolidatedFeedback,
+    };
+  }
+
+  static toGetEventCriteriaStatsResponse(
+    stats: EventCriteriaStats,
+  ): GetEventCriteriaStatsResponse {
+    return {
+      ...(stats.maxScore !== undefined && { maxScore: stats.maxScore }),
+      components: stats.components.map(EvaluationMapper.toComponentStatsProto),
     };
   }
 
@@ -102,19 +136,24 @@ export class EvaluationMapper {
     stats: ProjectStats,
     projectId: number,
   ): GetProjectStatsResponse {
-
-    const categoryStats: CategoryStatsResponse[] = stats.categoryStats.map((category: CategoryStats) => ({
-      category: category.category,
-      averageScore: category.averageScore,
-      weight: category.weight,
-    }));
-
     return {
       projectId,
       averageGrade: stats.averageGrade,
       evaluationCount: stats.evaluationCount,
-      categoryStats,
       evaluatorIds: stats.evaluatorIds || [],
+    };
+  }
+
+  private static toComponentStatsProto(
+    component: ComponentStats,
+  ): ComponentStatsProto {
+    return {
+      ...(component.id !== null && { id: component.id }),
+      name: component.name,
+      weight: component.weight,
+      average: component.average,
+      projectCount: component.projectCount,
+      criteria: component.criteria,
     };
   }
 

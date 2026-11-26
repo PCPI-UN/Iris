@@ -33,7 +33,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   async validate(payload: any): Promise<AppUser> {
     if (!payload.sub) {
       this.logger.warn('Invalid token payload: missing subject');
-      throw new UnauthorizedException('Invalid token payload');
+      throw new UnauthorizedException('El contenido del token no es válido');
     }
 
     this.logger.debug(`Validating user with ID: ${payload.sub}`);
@@ -41,7 +41,13 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       const user = await this.authService.getUser(payload.sub);
       if (!user) {
         this.logger.warn(`User not found with ID: ${payload.sub}`);
-        throw new UnauthorizedException('User not found');
+        throw new UnauthorizedException('No se encontró el usuario');
+      }
+
+      // A deactivated account loses its session on the next request, not when the token expires
+      if (!user.active) {
+        this.logger.warn(`Inactive user with ID: ${payload.sub}`);
+        throw new UnauthorizedException('El usuario está inactivo');
       }
 
       const permissionsResponse =
@@ -59,10 +65,10 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         platformRoles: permissionsResponse.roles || [],
         platformPermissions: permissionsResponse.permissions || [],
       };
-      this.logger.debug(`User validated: ${JSON.stringify(appUser)}`);
+      this.logger.debug(`User validated with ID: ${appUser.id}`);
       return appUser;
     } catch (e) {
-      throw new UnauthorizedException('Failed to validate user');
+      throw new UnauthorizedException('No se pudo validar el usuario');
     }
   }
 }

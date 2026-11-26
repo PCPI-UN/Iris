@@ -13,7 +13,7 @@ export class GetEventUC {
     if (!event) {
       throw new RpcException({
         code: 5,
-        message: `Event with id ${input.id} not found`,
+        message: `No se encontró el evento con ID ${input.id}`,
       });
     }
 

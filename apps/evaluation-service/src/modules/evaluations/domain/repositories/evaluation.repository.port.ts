@@ -1,21 +1,16 @@
 import { Evaluation } from '../entities/evaluation.entity';
 import { EvaluationDetail } from '../entities/evaluation-detail.entity';
+import { ResultEvaluation } from '../services/project-result';
+import { StatsEvaluation } from '../services/criteria-stats';
 
 export interface PaginatedEvaluations {
     evaluations: Evaluation[];
     total: number;
 }
 
-export interface CategoryStats {
-    category: string;
-    averageScore: number;
-    weight: number;
-}
-
 export interface ProjectStats {
     averageGrade: number;
     evaluationCount: number;
-    categoryStats: CategoryStats[];
     evaluatorIds?: number[];
 }
 
@@ -44,8 +39,17 @@ export abstract class EvaluationRepositoryPort {
     abstract findByEvaluator(userId: number, eventId: number, page: number, limit: number): Promise<PaginatedEvaluations>;
     abstract findByProjectAndEvaluator(projectId: number, memberUserId: number, memberEventId: number, memberRoleId: number): Promise<Evaluation | null>;
     abstract existsByProjectAndEvaluator(projectId: number, memberUserId: number, memberEventId: number): Promise<boolean>;
+    /**
+     * Serializes the evaluations of one juror for one project until the current transaction ends,
+     * so two simultaneous submissions cannot both pass the "already evaluated" check.
+     */
+    abstract lockProjectEvaluator(projectId: number, memberUserId: number, memberEventId: number): Promise<void>;
     abstract findEvaluationDetails(evaluationId: number): Promise<EvaluationDetail[]>;
     abstract getProjectStats(projectId: number): Promise<ProjectStats>;
+    /** Every evaluation of the project with its scores, criteria and components, oldest first */
+    abstract findProjectEvaluationsForResult(projectId: number): Promise<ResultEvaluation[]>;
+    /** The evaluations of each project that has any, with each score's criterion and component */
+    abstract findEvaluationsForStats(projectIds: number[]): Promise<StatsEvaluation[][]>;
     abstract countAll(): Promise<number>;
     abstract findByProjectIdsAndEvaluator(
         projectIds: number[],

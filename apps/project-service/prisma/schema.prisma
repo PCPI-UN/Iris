@@ -31,6 +31,16 @@ enum PendingParticipantStatus {
   JOINED // aceptó e ingresó a ProjectParticipant
 }
 
+// What an administrative correction changed (project_change_log.action)
+enum ProjectChangeAction {
+  STATE
+  INFO
+  CATEGORY
+  PARTICIPANTS
+  TUTORS
+  DOCUMENTS
+}
+
 /**
  * ** PROJECTS, DOCUMENTS & PARTICIPANTS ***
  */
@@ -44,15 +54,22 @@ model Project {
   eventNumber     String?      @map("event_number") @db.VarChar(150)
   state           ProjectState @map("state")
   reason          String?      @map("reason") @db.Text
+  // Course section (NRC) of the project; 0 when its event does not require one, -1 for the projects created before course sections existed
+  academicCourseId Int          @map("academic_course_id")
   createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamp()
   updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamp()
 
+  academicCourse      AcademicCourse @relation(fields: [academicCourseId], references: [id], onDelete: Restrict)
   documents           ProjectDocument[]
   participants        ProjectParticipant[]
   jurorsAssigned      ProjectAssignment[]
   pendingParticipants PendingProjectParticipant[]
+  tutors              ProjectTutor[]
+  pendingTutors       PendingProjectTutor[]
+  changeLog           ProjectChangeLog[]
 
   @@unique([eventId, name])
+  @@index([academicCourseId])
   @@map("projects")
 }
 
@@ -115,4 +132,97 @@ model PendingProjectParticipant {
   @@unique([projectId, email])
   @@map("pending_project_participants")
   
+}
+
+// A tutor is a platform user (auth-service database), so userId has no foreign key
+model ProjectTutor {
+  projectId Int      @map("project_id")
+  userId    Int      @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp()
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@map("project_tutors")
+}
+
+// Tutor typed in by the student who has no account yet; linked when the invitation is accepted
+model PendingProjectTutor {
+  pendingId Int                      @id @default(autoincrement()) @map("pending_id")
+  projectId Int                      @map("project_id")
+  firstName String                   @map("first_name") @db.VarChar(100)
+  lastName  String?                  @map("last_name") @db.VarChar(100)
+  email     String                   @db.VarChar(255)
+  status    PendingParticipantStatus @default(PENDING)
+  invitedAt DateTime?                @map("invited_at") @db.Timestamp()
+  joinedAt  DateTime?                @map("joined_at") @db.Timestamp()
+  createdAt DateTime                 @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt DateTime                 @updatedAt @map("updated_at") @db.Timestamp()
+  project   Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, email])
+  @@map("pending_project_tutors")
+}
+
+// Administrative correction of a project: who changed what, before/after (only the changed
+// fields) and why. The actor is a platform user (auth-service database), so actorUserId has no foreign key
+model ProjectChangeLog {
+  id          Int                 @id @default(autoincrement())
+  projectId   Int                 @map("project_id")
+  actorUserId Int                 @map("actor_user_id")
+  action      ProjectChangeAction
+  before      Json
+  after       Json
+  reason      String?             @db.Text
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamp()
+  project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@map("project_change_log")
+}
+
+/**
+ * ** ACADEMIC STRUCTURE ***
+ * READ scope of the academic roles: a Professor reads the projects of their courses,
+ * a DepartmentDirector the projects of the courses of their department.
+ * Loaded by scripts for now.
+ *
+ * Fill rows: academic_courses -1 ("Sin NRC") holds the projects created before course
+ * sections existed, and 0 ("No aplica") the projects of events that do not require one;
+ * both in department -1 ("Sin departamento"). They have professor 0 (no user has id 0) and
+ * department -1 has no director, so nobody reads those projects through them.
+ */
+
+// A director is a platform user (auth-service database), so directorUserId has no foreign key
+model Department {
+  id             Int      @id @default(autoincrement())
+  name           String   @unique @db.VarChar(255)
+  directorUserId Int?     @unique @map("director_user_id")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp()
+
+  courses AcademicCourse[]
+
+  @@map("departments")
+}
+
+// Course identified by its NRC within an academic term; the NRC repeats across terms.
+// The term (event-service terms) and the professor (auth-service users) live in other
+// databases, so termId and professorUserId have no foreign key
+model AcademicCourse {
+  id              Int        @id @default(autoincrement())
+  nrc             String     @db.VarChar(20)
+  termId          Int        @map("term_id")
+  name            String     @db.VarChar(255)
+  professorUserId Int        @map("professor_user_id")
+  departmentId    Int        @map("department_id")
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamp()
+  department      Department @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+
+  projects Project[]
+
+  @@unique([termId, nrc])
+  @@index([professorUserId])
+  @@index([departmentId])
+  @@map("academic_courses")
 }

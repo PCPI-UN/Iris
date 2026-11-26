@@ -90,7 +90,23 @@ export abstract class AuthServicePort {
   abstract assignPlatformRoles(params: {
     userId: number;
     roleIds: number[];
+    /** Who grants them (the inviter); when set, auth-service applies the administrator rules */
+    actorUserId?: number;
   }): Promise<AssignPlatformRolesResponse>;
+
+  /** Flattened platform permissions ("action:resource") of the user's active roles. */
+  abstract getUserPermissions(userId: number): Promise<string[]>;
+
+  /**
+   * Fails (PERMISSION_DENIED / INVALID_ARGUMENT) unless the actor may grant these platform
+   * roles: platform roles only, Admin/FacultyAdmin only with manage:admins.
+   */
+  abstract checkPlatformRoleGrant(params: {
+    actorUserId: number;
+    roleIds: number[];
+    /** The user who receives them, when known: nobody grants roles to themselves */
+    targetUserId?: number;
+  }): Promise<void>;
 
   /**
    * Retrieves role details by role IDs.

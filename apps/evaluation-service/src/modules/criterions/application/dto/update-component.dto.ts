@@ -1,5 +1,6 @@
 import { IsInt, IsString, IsNumber, IsOptional, Min, Max, IsNotEmpty } from 'class-validator';
 
+// A component always stays in the event it was created for
 export class UpdateComponentDto {
   @IsInt()
   @IsNotEmpty()
@@ -14,8 +15,4 @@ export class UpdateComponentDto {
   @Max(1)
   @IsOptional()
   weight?: number;
-
-  @IsInt()
-  @IsOptional()
-  eventId?: number | null;
 }

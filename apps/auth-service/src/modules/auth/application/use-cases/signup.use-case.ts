@@ -30,7 +30,7 @@ export class SignupUseCase {
     if (existing) {
       throw new RpcException({
         code: status.ALREADY_EXISTS,
-        message: 'A user with this email already exists',
+        message: 'Ya existe un usuario con este correo',
       });
     }
 

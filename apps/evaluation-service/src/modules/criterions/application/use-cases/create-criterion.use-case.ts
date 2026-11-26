@@ -6,48 +6,81 @@ import { CreateCriterionDto } from '../dto/create-criterion.dto';
 import { Criterion } from '@criterions/domain/entities/criterion.entity';
 import { Component } from '@criterions/domain/entities/component.entity';
 import { EventServicePort } from '../../infrastructure/ports/event.service.port';
+import { CategoryLockService } from '../services/category-lock.service';
+
+const DEFAULT_RELATIVE_WEIGHT = 1;
 
 @Injectable()
 export class CreateCriterionUseCase {
   constructor(
     private readonly criterionRepository: CriterionRepositoryPort,
     private readonly eventService: EventServicePort,
+    private readonly categoryLock: CategoryLockService,
   ) { }
 
-  async execute(createCriterionDto: CreateCriterionDto): Promise<{
+  execute(createCriterionDto: CreateCriterionDto): Promise<{
     criterion: Criterion;
     courseIds: number[];
     component?: Component;
   }> {
-    const { eventId, name, description, weight, courseIds, category, componentId } = createCriterionDto;
+    // The rubric checks and the write run under the rubric lock of the event
+    return this.criterionRepository.withRubricLock([createCriterionDto.eventId], 'exclusive', () =>
+      this.create(createCriterionDto),
+    );
+  }
 
-    // Validate weight is within valid range
-    if (weight <= 0 || weight > 1) {
-      throw new RpcException({
-        code: status.INVALID_ARGUMENT,
-        message: 'Weight must be between 0 and 1',
-      });
-    }
+  private async create(createCriterionDto: CreateCriterionDto): Promise<{
+    criterion: Criterion;
+    courseIds: number[];
+    component?: Component;
+  }> {
+    const { eventId, name, description, category, componentId } = createCriterionDto;
+    const weight = createCriterionDto.weight ?? DEFAULT_RELATIVE_WEIGHT;
+    const courseIds = Array.from(new Set(createCriterionDto.courseIds ?? []));
 
     // Validate name is not empty
     if (!name || name.trim().length === 0) {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: 'Name is required and cannot be empty',
+        message: 'El nombre es obligatorio y no puede estar vacío',
+      });
+    }
+
+    // The weight is relative to the other criteria of the same component and category
+    if (!(weight > 0)) {
+      throw new RpcException({
+        code: status.INVALID_ARGUMENT,
+        message: 'El peso debe ser mayor que 0',
       });
     }
 
     try {
       await this.eventService.getEvent(eventId);
-    } catch (error) {
-      console.log('Error fetching event:', error);
+    } catch {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: `Event with ID ${eventId} not found`,
+        message: `No se encontró el evento con ID ${eventId}`,
       });
     }
 
-    if (courseIds && courseIds.length > 0) {
+    // A new criterion changes the rubric of its categories only
+    await this.categoryLock.assertNotEvaluated(eventId, courseIds);
+
+    const component = await this.criterionRepository.findComponentById(componentId);
+    if (!component) {
+      throw new RpcException({
+        code: status.NOT_FOUND,
+        message: `No se encontró el componente con ID ${componentId}`,
+      });
+    }
+    if (component.eventId !== eventId) {
+      throw new RpcException({
+        code: status.INVALID_ARGUMENT,
+        message: `El componente ${componentId} no pertenece al evento ${eventId}`,
+      });
+    }
+
+    if (courseIds.length > 0) {
       // Validate courses belong to the event
       const { valid, invalidCourses } = await this.eventService.validateCoursesBelongToEvent(
         courseIds,
@@ -57,26 +90,8 @@ export class CreateCriterionUseCase {
       if (!valid) {
         throw new RpcException({
           code: status.INVALID_ARGUMENT,
-          message: `Courses [${invalidCourses.join(', ')}] do not belong to event ${eventId}`,
+          message: `Las categorías [${invalidCourses.join(', ')}] no pertenecen al evento ${eventId}`,
         });
-      }
-
-      // Validate that total weight per course doesn't exceed 100%
-      for (const courseId of courseIds) {
-        const existingCriteria = await this.criterionRepository.findByCourseId(courseId);
-
-        // Calculate total weight of active criteria
-        const totalWeight = existingCriteria
-          .filter((c: Criterion) => c.active)
-          .reduce((sum: number, c: Criterion) => sum + c.weight, 0);
-
-        // Check if adding new criterion would exceed 100%
-        if (totalWeight + weight > 1.0) {
-          throw new RpcException({
-            code: status.INVALID_ARGUMENT,
-            message: `Total weight for course ${courseId} would exceed 100%. Current: ${(totalWeight * 100).toFixed(2)}%, Requested: ${(weight * 100).toFixed(2)}%, Total: ${((totalWeight + weight) * 100).toFixed(2)}%`,
-          });
-        }
       }
     }
 
@@ -88,7 +103,7 @@ export class CreateCriterionUseCase {
       weight,
       true,
       category || null,
-      componentId || null,
+      componentId,
       new Date(),
       new Date(),
     );
@@ -96,27 +111,20 @@ export class CreateCriterionUseCase {
     try {
       const savedCriterion = await this.criterionRepository.create(criterion);
 
-      if (courseIds && courseIds.length > 0) {
+      if (courseIds.length > 0) {
         await this.criterionRepository.associateCourses(savedCriterion.id, courseIds);
-      }
-
-      let component: Component | undefined;
-      if (componentId) {
-        const found = await this.criterionRepository.findComponentById(componentId);
-        if (found) {
-          component = found;
-        }
       }
 
       return {
         criterion: savedCriterion,
-        courseIds: courseIds || [],
-        ...(component && { component }),
+        courseIds,
+        component,
       };
     } catch (error) {
+      if (error instanceof RpcException) throw error;
       throw new RpcException({
         code: status.INTERNAL,
-        message: 'Failed to create criterion. Please try again later.',
+        message: 'No se pudo crear el criterio. Intenta de nuevo más tarde.',
       });
     }
   }

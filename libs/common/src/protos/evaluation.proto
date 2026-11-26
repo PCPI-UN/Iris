@@ -8,9 +8,13 @@ service EvaluationService {
   rpc FindEvaluationById(FindEvaluationByIdRequest) returns (EvaluationProto);
   rpc FindEvaluationsByEvaluator(FindEvaluationsByEvaluatorRequest) returns (FindEvaluationsByEvaluatorResponse);
   rpc GetProjectStats(GetProjectStatsRequest) returns (GetProjectStatsResponse);
+  // Consolidated result of a project for its participants: no juror ids nor juror count
+  rpc GetProjectResult(GetProjectResultRequest) returns (GetProjectResultResponse);
   rpc CheckEvaluationStatus(CheckEvaluationStatusRequest) returns (CheckEvaluationStatusResponse);
   rpc GetTopProjectsByCourse(GetTopProjectsByCourseRequest) returns (GetTopProjectsByCourseResponse);
   rpc GetDashboardStats(GetEvaluationDashboardStatsRequest) returns (GetEvaluationDashboardStatsResponse);
+  // Average score per rubric component over a set of projects, with the effective weights
+  rpc GetEventCriteriaStats(GetEventCriteriaStatsRequest) returns (GetEventCriteriaStatsResponse);
 
 }
 
@@ -40,6 +44,9 @@ service CriterionsService {
   rpc ListComponents (Empty) returns (ListComponentsResponse) {}
   rpc UpdateComponent (UpdateComponentRequest) returns (ComponentProto) {}
   rpc DeleteComponent (DeleteComponentRequest) returns (DeleteCriterionResponse) {}
+
+  // Tells, per category, whether the rubric of an event can be evaluated
+  rpc GetRubricReadiness (GetRubricReadinessRequest) returns (GetRubricReadinessResponse) {}
 }
 
 // ===== COMMON MESSAGES =====
@@ -110,18 +117,73 @@ message GetProjectStatsRequest {
   int32 projectId = 1;
 }
 
-message CategoryStatsResponse {
-  string category = 1;
-  double averageScore = 2;
-  double weight = 3;
-}
-
 message GetProjectStatsResponse {
+  reserved 4;
+  reserved "categoryStats";
   int32 projectId = 1;
   double averageGrade = 2;
   int32 evaluationCount = 3;
-  repeated CategoryStatsResponse categoryStats = 4;
   repeated int32 evaluatorIds = 5;
+}
+
+message GetProjectResultRequest {
+  int32 projectId = 1;
+}
+
+message CriterionResultProto {
+  int32 criterionId = 1;
+  string criterion = 2;
+  string component = 3;
+  // Effective weight of the criterion in the grade (fraction, 0-1)
+  double weight = 4;
+  // Average of the jurors' stored scores
+  double score = 5;
+}
+
+message GetProjectResultResponse {
+  // false when no juror has evaluated the project yet; the other fields are then empty
+  bool evaluated = 1;
+  // Average of the jurors' grades, rounded as the ranking does
+  double finalScore = 2;
+  // Highest grade possible with the event's evaluation type
+  double maxScore = 3;
+  repeated CriterionResultProto criteria = 4;
+  // The jurors' comments in one text, without saying who wrote each one
+  string consolidatedFeedback = 5;
+}
+
+message GetEventCriteriaStatsRequest {
+  // Event whose grading scale gives maxScore
+  int32 eventId = 1;
+  // Projects to average; the ones without evaluations are left out
+  repeated int32 projectIds = 2;
+}
+
+message CriterionStatsProto {
+  int32 id = 1;
+  string name = 2;
+  // Effective weight of the criterion in the grade (fraction, 0-1)
+  double weight = 3;
+  double average = 4;
+}
+
+message ComponentStatsProto {
+  // Absent for the criteria without component
+  optional int32 id = 1;
+  string name = 2;
+  // Sum of the effective weights of its criteria (fraction, 0-1)
+  double weight = 3;
+  // Weighted score of the component, averaged per project and then across projects
+  double average = 4;
+  // Projects with at least one evaluation of this component
+  int32 projectCount = 5;
+  repeated CriterionStatsProto criteria = 6;
+}
+
+message GetEventCriteriaStatsResponse {
+  // Highest grade of the event's grading scale; absent when the event has none
+  optional double maxScore = 1;
+  repeated ComponentStatsProto components = 2;
 }
 
 message CheckEvaluationStatusRequest {
@@ -144,6 +206,8 @@ message EvaluationDetailResponse {
   int32 evaluationId = 1;
   int32 criterionId = 2;
   double score = 3;
+  // Effective weight the criterion had in the grade when it was evaluated
+  optional double weight = 4;
 }
 
 // ===== CRITERIONS MESSAGES =====
@@ -158,6 +222,9 @@ message FindCriterionsByCourseRequest {
 message CriterionSummary {
   int32 id = 1;
   string name = 2;
+  // Effective weight in the grade (fraction of 1): component weight × relative weight ÷ Σ relative
+  // weights of the component in the category. Absent for a criterion without component
+  optional double weight = 3;
 }
 
 message CriterionCategoryProto {
@@ -176,7 +243,8 @@ message CreateCriterionRequest {
   int32 eventId = 1;
   string name = 2;
   optional string description = 3;
-  double weight = 4;
+  // Relative weight inside its component and category; 1 when not sent
+  optional double weight = 4;
   repeated int32 courseIds = 5;
   optional string category = 6;
   optional int32 componentId = 7;
@@ -252,8 +320,9 @@ message ComponentProto {
 
 message CreateComponentRequest {
   string name = 1;
+  // Fraction of the grade (0-1); the components of an event add up to 1
   double weight = 2;
-  optional int32 eventId = 3;
+  int32 eventId = 3;
 }
 
 message GetComponentRequest {
@@ -262,6 +331,34 @@ message GetComponentRequest {
 
 message ListComponentsResponse {
   repeated ComponentProto components = 1;
+}
+
+message GetRubricReadinessRequest {
+  int32 eventId = 1;
+  // When set, the response only includes this category (course)
+  optional int32 courseId = 2;
+}
+
+message RubricCategoryReadiness {
+  int32 courseId = 1;
+  bool ready = 2;
+  int32 criteriaCount = 3;
+  // Components of the event without any criterion in this category
+  repeated int32 missingComponentIds = 4;
+  // Criteria of this category that are not inside a component of the event
+  repeated int32 criteriaWithoutComponent = 5;
+  // The category has evaluated projects: its criteria can no longer change
+  bool locked = 6;
+}
+
+message GetRubricReadinessResponse {
+  int32 eventId = 1;
+  // Sum of the component weights of the event; must be 1 to evaluate
+  double componentsWeight = 2;
+  repeated ComponentProto components = 3;
+  repeated RubricCategoryReadiness categories = 4;
+  // The event has evaluations: its components can no longer change
+  bool componentsLocked = 5;
 }
 
 message UpdateComponentRequest {
@@ -337,4 +434,97 @@ message DeleteTieBreakRequest {
 message DeleteTieBreakResponse {
   bool success = 1;
   string message = 2;
+}
+
+// ===== GRADING SCALE SERVICE =====
+// Catalog of 4-level grading scales. Every event uses one scale: the juror picks a level (1-4)
+// per criterion and the points of that level are what the grade is computed with.
+service GradingScaleService {
+  rpc CreateGradingScale (CreateGradingScaleRequest) returns (GradingScaleProto) {}
+  rpc ListGradingScales (Empty) returns (ListGradingScalesResponse) {}
+  rpc GetGradingScale (GetGradingScaleRequest) returns (GradingScaleProto) {}
+  rpc UpdateGradingScale (UpdateGradingScaleRequest) returns (GradingScaleProto) {}
+  rpc DeleteGradingScale (DeleteGradingScaleRequest) returns (DeleteGradingScaleResponse) {}
+
+  // Assigns a catalog scale (scaleId) to an event. New scales are created with CreateGradingScale
+  // first. Without scaleId, the event gets the system scale of its deprecated evaluationType
+  // ("Proyectos finales" by default).
+  rpc AssignEventGradingScale (AssignEventGradingScaleRequest) returns (GradingScaleProto) {}
+  rpc GetEventGradingScale (GetEventGradingScaleRequest) returns (GradingScaleProto) {}
+  // Removes the scale assignment of an event that has no evaluations, such as an event whose
+  // creation is being rolled back. Succeeds when the event has no assignment.
+  rpc UnassignEventGradingScale (UnassignEventGradingScaleRequest) returns (UnassignEventGradingScaleResponse) {}
+}
+
+message GradingScaleLevelProto {
+  int32 level = 1;
+  string label = 2;
+  double points = 3;
+}
+
+message GradingScaleProto {
+  int32 id = 1;
+  string name = 2;
+  optional string description = 3;
+  bool isSystem = 4;
+  // FINAL_PROJECTS, ZERO_TO_FIVE or ZERO_TO_HUNDRED for the system scales
+  optional string code = 5;
+  optional int32 createdByUserId = 6;
+  string createdAt = 7;
+  repeated GradingScaleLevelProto levels = 8;
+  // True when the scale can no longer be edited or deleted
+  bool locked = 9;
+}
+
+message GradingScaleInput {
+  string name = 1;
+  optional string description = 2;
+  repeated GradingScaleLevelProto levels = 3;
+}
+
+message CreateGradingScaleRequest {
+  GradingScaleInput scale = 1;
+  optional int32 userId = 2;
+}
+
+message ListGradingScalesResponse {
+  repeated GradingScaleProto scales = 1;
+}
+
+message GetGradingScaleRequest {
+  int32 id = 1;
+}
+
+message UpdateGradingScaleRequest {
+  int32 id = 1;
+  GradingScaleInput scale = 2;
+}
+
+message DeleteGradingScaleRequest {
+  int32 id = 1;
+}
+
+message DeleteGradingScaleResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message AssignEventGradingScaleRequest {
+  int32 eventId = 1;
+  optional int32 scaleId = 2;
+  reserved 3, 4;
+  reserved "scale", "userId";
+}
+
+message GetEventGradingScaleRequest {
+  int32 eventId = 1;
+}
+
+message UnassignEventGradingScaleRequest {
+  int32 eventId = 1;
+}
+
+message UnassignEventGradingScaleResponse {
+  // False when the event had no assignment
+  bool removed = 1;
 }

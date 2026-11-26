@@ -17,6 +17,8 @@ import { GetUsersDto } from '@users/application/dto/get-users.dto';
 import { GetUsersUseCase } from '@users/application/use-cases/get-users.use-case';
 import { UpdateUserDto } from '@users/application/dto/update-user.dto';
 import { UpdateUserUseCase } from '@users/application/use-cases/update-user.use-case';
+import { UpdateOwnProfileDto } from '@users/application/dto/update-own-profile.dto';
+import { UpdateOwnProfileUseCase } from '@users/application/use-cases/update-own-profile.use-case';
 import { DeactivateUserDto } from '@users/application/dto/deactivate-user.dto';
 import { DeactivateUserUseCase } from '@users/application/use-cases/deactivate-user.use-case';
 import { GetUserByEmailUseCase } from '@users/application/use-cases/get-user-by-email.use-case';
@@ -26,6 +28,8 @@ import { ActivateUserDto } from '@users/application/dto/activate-user.dto';
 import { ActivateUserWithMicrosoftDto } from '@users/application/dto/activate-user-with-microsoft.dto';
 import { ActivateUserResponse } from '@app/common/generated/auth';
 import { ActivateUserWithMicrosoftUseCase } from '@users/application/use-cases/activate-user-with-microsoft.use-case';
+import { SetUserPlatformRolesUseCase } from '@users/application/use-cases/set-user-platform-roles.use-case';
+import { SetUserPlatformRolesDto } from '@users/application/dto/set-user-platform-roles.dto';
 
 @Controller()
 export class UsersController {
@@ -36,9 +40,11 @@ export class UsersController {
     private readonly getUserByEmailUseCase: GetUserByEmailUseCase,
     private readonly getUsersUseCase: GetUsersUseCase,
     private readonly updateUserUseCase: UpdateUserUseCase,
+    private readonly updateOwnProfileUseCase: UpdateOwnProfileUseCase,
     private readonly deactivateUserUseCase: DeactivateUserUseCase,
     private readonly activateUserUseCase: ActivateUserUseCase,
     private readonly activateUserWithMicrosoftUseCase: ActivateUserWithMicrosoftUseCase,
+    private readonly setUserPlatformRolesUseCase: SetUserPlatformRolesUseCase,
   ) { }
 
 
@@ -89,10 +95,24 @@ export class UsersController {
     return UserMapper.toGetUserResponse(updatedUser);
   }
 
+  @GrpcMethod(AUTH_SERVICE_NAME, 'UpdateOwnProfile')
+  async updateOwnProfile(request: UpdateOwnProfileDto): Promise<UserProto> {
+    const updatedUser = await this.updateOwnProfileUseCase.execute(request);
+    return UserMapper.toGetUserResponse(updatedUser);
+  }
+
   @GrpcMethod(AUTH_SERVICE_NAME, 'DeactivateUser')
   async deactivateUser(
     request: DeactivateUserDto,
   ): Promise<DeactivateUserResponse> {
     return this.deactivateUserUseCase.execute(request);
+  }
+
+  @GrpcMethod(AUTH_SERVICE_NAME, 'SetUserPlatformRoles')
+  async setUserPlatformRoles(request: SetUserPlatformRolesDto) {
+    const roles = await this.setUserPlatformRolesUseCase.execute(request);
+    return {
+      roles: roles.map(({ id, name, description, scope }) => ({ id, name, description, scope })),
+    };
   }
 }

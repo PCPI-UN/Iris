@@ -20,6 +20,7 @@ import {
   ListCriterionsResponse,
   FindCriterionsByCourseResponse,
   DeleteCriterionResponse,
+  GetRubricReadinessResponse,
 } from '@app/common/generated/evaluation';
 
 @Injectable()
@@ -80,6 +81,42 @@ export class CriterionsService implements OnModuleInit {
     return firstValueFrom(
       this.criterionsService.deleteCriterion({ id } as DeleteCriterionRequest),
     );
+  }
+
+  async getRubricReadiness(
+    eventId: number,
+    courseId?: number,
+  ): Promise<GetRubricReadinessResponse> {
+    const readiness = await firstValueFrom(
+      this.criterionsService.getRubricReadiness({
+        eventId,
+        ...(courseId !== undefined && { courseId }),
+      }),
+    );
+    return this.withReadinessDefaults(readiness);
+  }
+
+  /**
+   * This client does not fill proto3 defaults, so false, 0 and empty lists would be missing
+   * from the JSON; clients get every field of the contract.
+   */
+  private withReadinessDefaults(
+    readiness: GetRubricReadinessResponse,
+  ): GetRubricReadinessResponse {
+    return {
+      ...readiness,
+      componentsWeight: readiness.componentsWeight ?? 0,
+      componentsLocked: readiness.componentsLocked ?? false,
+      components: readiness.components ?? [],
+      categories: (readiness.categories ?? []).map((category) => ({
+        ...category,
+        ready: category.ready ?? false,
+        criteriaCount: category.criteriaCount ?? 0,
+        missingComponentIds: category.missingComponentIds ?? [],
+        criteriaWithoutComponent: category.criteriaWithoutComponent ?? [],
+        locked: category.locked ?? false,
+      })),
+    };
   }
 
   // Component methods

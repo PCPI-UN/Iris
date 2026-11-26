@@ -2,7 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../common/prisma/prisma.service';
 import { EventRepository } from '../../domain/repositories/event.repository';
 import { Event as DomainEvent } from '../../domain/entities/event.entity';
-import { EvaluationType, EventStatus, EventType } from '@app/common/generated/event';
+import {
+  EvaluationType,
+  EventStatus,
+  EventType,
+} from '@app/common/generated/event';
+import {
+  isInscriptionDeadlinePassed,
+  startOfBogotaDay,
+} from '@app/common/utils/bogota-date.util';
 
 type PrismaEvent = any;
 
@@ -17,7 +25,9 @@ function toProtoEventType(value: string | null | undefined): EventType {
   }
 }
 
-function toPrismaEventType(value: EventType | undefined): 'Exposition' | 'Competition' {
+function toPrismaEventType(
+  value: EventType | undefined,
+): 'Exposition' | 'Competition' {
   switch (value) {
     case EventType.COMPETENCIA:
       return 'Competition';
@@ -28,7 +38,9 @@ function toPrismaEventType(value: EventType | undefined): 'Exposition' | 'Compet
   }
 }
 
-function toProtoEvaluationType(value: string | null | undefined): EvaluationType {
+function toProtoEvaluationType(
+  value: string | null | undefined,
+): EvaluationType {
   switch (value) {
     case 'FINAL_PROJECTS':
       return EvaluationType.FINAL_PROJECTS;
@@ -70,6 +82,7 @@ function toDomainEvent(p: any): DomainEvent {
     inscriptionDeadline: p.inscriptionDeadline,
     inscriptionCost: p.inscriptionCost ?? null,
     evaluationsOpened: p.evaluationsOpened,
+    resultsPublished: p.resultsPublished ?? false,
     startDate: p.startDate,
     endDate: p.endDate,
     active: p.active,
@@ -87,6 +100,8 @@ function toDomainEvent(p: any): DomainEvent {
     eventType: toProtoEventType(p.eventType),
     collaborators: p.collaborators ?? [],
     organizers: p.organizers ?? [],
+    termId: p.termId,
+    requiresCourse: p.requiresCourse,
   };
 }
 
@@ -97,11 +112,15 @@ export class PrismaEventRepository extends EventRepository {
   }
 
   private buildStatusCondition(status: EventStatus, now: Date) {
+    // The deadline day counts in full, in Bogotá time: inscriptions are open while the
+    // deadline falls on today (Bogotá) or later, whatever the zone of the server
+    const todayStart = startOfBogotaDay(now);
+
     if (status === EventStatus.UPCOMING) {
       return {
         AND: [
           { startDate: { gt: now } },
-          { inscriptionDeadline: { gt: now } },
+          { inscriptionDeadline: { gte: todayStart } },
         ],
       };
     }
@@ -109,7 +128,7 @@ export class PrismaEventRepository extends EventRepository {
     if (status === EventStatus.REGISTRATION_CLOSED) {
       return {
         AND: [
-          { inscriptionDeadline: { lte: now } },
+          { inscriptionDeadline: { lt: todayStart } },
           { startDate: { gt: now } },
         ],
       };
@@ -117,10 +136,7 @@ export class PrismaEventRepository extends EventRepository {
 
     if (status === EventStatus.AVAILABLE) {
       return {
-        AND: [
-          { startDate: { lte: now } },
-          { endDate: { gte: now } },
-        ],
+        AND: [{ startDate: { lte: now } }, { endDate: { gte: now } }],
       };
     }
 
@@ -133,7 +149,11 @@ export class PrismaEventRepository extends EventRepository {
     return undefined;
   }
 
-  private buildWhere(where?: { q?: string; onlyActive?: boolean; statuses?: EventStatus[] }) {
+  private buildWhere(where?: {
+    q?: string;
+    onlyActive?: boolean;
+    statuses?: EventStatus[];
+  }) {
     const filters: any = {};
     if (where?.onlyActive) filters.active = true;
     if (where?.q?.trim()) {
@@ -171,8 +191,14 @@ export class PrismaEventRepository extends EventRepository {
       : undefined;
 
     if (end && now > end) return EventStatus.CLOSED;
-    if (start && now >= start && (!end || now <= end)) return EventStatus.AVAILABLE;
-    if (inscriptionDeadline && start && now >= inscriptionDeadline && now < start) {
+    if (start && now >= start && (!end || now <= end))
+      return EventStatus.AVAILABLE;
+    if (
+      inscriptionDeadline &&
+      start &&
+      isInscriptionDeadlinePassed(inscriptionDeadline, now) &&
+      now < start
+    ) {
       return EventStatus.REGISTRATION_CLOSED;
     }
     return EventStatus.UPCOMING;
@@ -206,6 +232,8 @@ export class PrismaEventRepository extends EventRepository {
       organizers: input.organizers ?? [],
       active: input.active ?? true,
       createdByUserId: input.createdByUserId ?? 0,
+      termId: input.termId,
+      requiresCourse: input.requiresCourse,
     };
 
     const created = await this.prisma.event.create({ data });
@@ -220,6 +248,50 @@ export class PrismaEventRepository extends EventRepository {
     if (!row) return null;
 
     return toDomainEvent(row);
+  }
+
+  async findByIdsAndPeriod(params: {
+    ids: number[];
+    period: 'current' | 'past';
+    now: Date;
+    page: number;
+    limit: number;
+  }): Promise<{ events: DomainEvent[]; total: number }> {
+    const { ids, period, now, page, limit } = params;
+    if (!ids.length) return { events: [], total: 0 };
+
+    const where = {
+      id: { in: ids },
+      active: true,
+      endDate: period === 'current' ? { gte: now } : { lt: now },
+    };
+    const orderBy =
+      period === 'current'
+        ? [{ startDate: 'asc' as const }, { id: 'asc' as const }]
+        : [{ endDate: 'desc' as const }, { id: 'desc' as const }];
+
+    const [rows, total] = await Promise.all([
+      this.prisma.event.findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.event.count({ where }),
+    ]);
+
+    return { events: rows.map(toDomainEvent), total };
+  }
+
+  async findByIds(ids: number[]): Promise<DomainEvent[]> {
+    if (!ids.length) return [];
+
+    const rows = await this.prisma.event.findMany({
+      where: { id: { in: ids } },
+      orderBy: [{ startDate: 'desc' }, { id: 'desc' }],
+    });
+
+    return rows.map(toDomainEvent);
   }
 
   async findByAccessCode(accessCode: string): Promise<DomainEvent | null> {
@@ -242,12 +314,14 @@ export class PrismaEventRepository extends EventRepository {
   async update(id: number, input: any) {
     const data = {
       name: input.name,
-      description: input.description !== undefined ? input.description : undefined,
+      description:
+        input.description !== undefined ? input.description : undefined,
       accessCode: input.accessCode,
       isPubliclyJoinable: input.isPubliclyJoinable,
       inscriptionDeadline: input.inscriptionDeadline,
       inscriptionCost: input.inscriptionCost,
       evaluationsOpened: input.evaluationsOpened,
+      resultsPublished: input.resultsPublished,
       startDate: input.startDate,
       endDate: input.endDate,
       location: input.location,
@@ -266,10 +340,15 @@ export class PrismaEventRepository extends EventRepository {
         input.minimumTeamSize !== undefined ? input.minimumTeamSize : undefined,
       aboutOurAllies:
         input.aboutOurAllies !== undefined ? input.aboutOurAllies : undefined,
-      eventType: input.eventType !== undefined ? toPrismaEventType(input.eventType) : undefined,
+      eventType:
+        input.eventType !== undefined
+          ? toPrismaEventType(input.eventType)
+          : undefined,
       collaborators: input.collaborators,
       organizers: input.organizers,
       active: input.active,
+      termId: input.termId,
+      requiresCourse: input.requiresCourse,
     };
 
     const updated = await this.prisma.event.update({
@@ -337,11 +416,13 @@ export class PrismaEventRepository extends EventRepository {
     // ==========================================================
     // 🔎 LOG 1: Ver todos los EventMembers del usuario
     // ==========================================================
-    const userMemberships = await (this.prisma as any).staffEventMember.findMany({
+    const userMemberships = await (
+      this.prisma as any
+    ).staffEventMember.findMany({
       where: { userId },
     });
 
-    console.log("🔎 [EventMember] Registros encontrados para userId:", userId);
+    console.log('🔎 [EventMember] Registros encontrados para userId:', userId);
     console.log(JSON.stringify(userMemberships, null, 2));
 
     // ==========================================================
@@ -357,7 +438,7 @@ export class PrismaEventRepository extends EventRepository {
       },
     };
 
-    console.log("🧩 [QueryWhere] Filtro de búsqueda construido:");
+    console.log('🧩 [QueryWhere] Filtro de búsqueda construido:');
     console.log(JSON.stringify(where, null, 2));
 
     // ==========================================================
@@ -370,15 +451,23 @@ export class PrismaEventRepository extends EventRepository {
       orderBy: { createdAt: 'desc' },
     });
 
-    console.log("📦 [Eventos encontrados]:");
-    console.log(JSON.stringify(rows.map(r => ({ id: r.id, name: r.name })), null, 2));
+    console.log('📦 [Eventos encontrados]:');
+    console.log(
+      JSON.stringify(
+        rows.map((r) => ({ id: r.id, name: r.name })),
+        null,
+        2,
+      ),
+    );
 
     const total = await this.prisma.event.count({ where });
 
     // ==========================================================
     // 🔎 LOG 4: Mostrar el total
     // ==========================================================
-    console.log(`📊 [Total]: ${total} eventos permitidos para userId ${userId}`);
+    console.log(
+      `📊 [Total]: ${total} eventos permitidos para userId ${userId}`,
+    );
 
     // ==========================================================
     // FIN LOGS - Mapear a Domain
@@ -473,13 +562,11 @@ export class PrismaEventRepository extends EventRepository {
     const rows = await this.prisma.event.findMany({
       where: {
         active: true,
-        latitude:  { not: null },
+        latitude: { not: null },
         longitude: { not: null },
       },
       orderBy: { startDate: 'asc' },
     });
     return rows.map(toDomainEvent);
   }
-
-
 }

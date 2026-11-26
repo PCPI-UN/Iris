@@ -23,6 +23,13 @@ import { GrpcAuthClientAdapter } from '@events/infrastructure/adapters/grpc-auth
 import { EventRepository } from '@events/domain/repositories/event.repository';
 import { EventMemberRepository } from '@events/domain/repositories/event-member.repository';
 import { AUTH_SERVICE_NAME, protobufPackage } from '@app/common/generated/auth';
+import {
+  PROJECTS_SERVICE_NAME,
+  protobufPackage as projectProtobufPackage,
+} from '@app/common/generated/project';
+import { ProjectClientPort } from '@events/infrastructure/ports/project-client.port';
+import { GrpcProjectClientAdapter } from '@events/infrastructure/adapters/grpc-project-client.adapter';
+import { ListMyEventsWithRolesUseCase } from '@events/application/use-cases/list-my-events-with-roles.use-case';
 import { EventCatalogService } from '@events/application/event-catalog.service';
 import { GetEventDashboardStatsUC } from '@events/application/use-cases/get-dashboard-stats.uc';
 import { RankingEventController } from '@events/interface/grpc/ranking-event.controller';
@@ -34,6 +41,19 @@ import { GetRankingEventUseCase } from '@events/application/use-cases/ranking-ev
 import { GetRankingEventByEventIdUseCase } from '@events/application/use-cases/ranking-event/get-ranking-event-by-event-id.use-case';
 import { DeleteRankingEventUseCase } from '@events/application/use-cases/ranking-event/delete-ranking-event.use-case';
 import { GetEventsForARUseCase } from './application/use-cases/get-events-for-ar.use-case';
+import { ListEventsByIdsUC } from '@events/application/use-cases/list-events-by-ids.uc';
+import { ListAwardsByProjectsUC } from '@events/application/use-cases/list-awards-by-projects.uc';
+import { ListPublishedWinnersUC } from '@events/application/use-cases/list-published-winners.uc';
+import { AwardWinnerRepository } from '@events/domain/repositories/award-winner.repository';
+import { PrismaAwardWinnerRepository } from '@events/infrastructure/prisma/prisma-award-winner.repository';
+import { ListCategoriesByIdsUC } from '@events/application/use-cases/list-categories-by-ids.uc';
+import { CategoryRepository } from '@events/domain/repositories/category.repository';
+import { PrismaCategoryRepository } from '@events/infrastructure/prisma/prisma-category.repository';
+import { TermsController } from '@events/interface/grpc/terms.controller';
+import { TermRepository } from '@events/domain/repositories/term.repository';
+import { PrismaTermRepository } from '@events/infrastructure/prisma/prisma-term.repository';
+import { ListTermsUC } from '@events/application/use-cases/list-terms.uc';
+import { CreateTermUC } from '@events/application/use-cases/create-term.uc';
 
 
 @Module({
@@ -48,9 +68,18 @@ import { GetEventsForARUseCase } from './application/use-cases/get-events-for-ar
           url: process.env.AUTH_SERVICE_URL || 'auth-service:50051',
         },
       },
+      {
+        name: PROJECTS_SERVICE_NAME,
+        transport: Transport.GRPC,
+        options: {
+          package: projectProtobufPackage,
+          protoPath: 'libs/common/src/protos/project.proto',
+          url: process.env.PROJECT_SERVICE_URL || 'project-service:50055',
+        },
+      },
     ]),
   ],
-  controllers: [EventsController, EventMemberController, EventCatalogController, RankingEventController],
+  controllers: [EventsController, EventMemberController, EventCatalogController, RankingEventController, TermsController],
   providers: [
     PrismaService,
     EventCatalogService,
@@ -66,6 +95,10 @@ import { GetEventsForARUseCase } from './application/use-cases/get-events-for-ar
       provide: AuthClientPort,
       useClass: GrpcAuthClientAdapter,
     },
+    {
+      provide: ProjectClientPort,
+      useClass: GrpcProjectClientAdapter,
+    },
     // Event use cases
     CreateEventUC,
     UpdateEventUC,
@@ -73,9 +106,31 @@ import { GetEventsForARUseCase } from './application/use-cases/get-events-for-ar
     ListEventsUC,
     DeleteEventUC,
     ListMyEventsUseCase,
+    ListMyEventsWithRolesUseCase,
     GetEventStatusesUC,
     GetEventDashboardStatsUC,
     GetEventsForARUseCase,
+    ListEventsByIdsUC,
+    // Award winners (student dashboard)
+    {
+      provide: AwardWinnerRepository,
+      useClass: PrismaAwardWinnerRepository,
+    },
+    ListAwardsByProjectsUC,
+    // Public winners view across events
+    ListPublishedWinnersUC,
+    {
+      provide: CategoryRepository,
+      useClass: PrismaCategoryRepository,
+    },
+    ListCategoriesByIdsUC,
+    // Academic terms
+    {
+      provide: TermRepository,
+      useClass: PrismaTermRepository,
+    },
+    ListTermsUC,
+    CreateTermUC,
     // Ranking event
     {
       provide: RankingEventRepository,

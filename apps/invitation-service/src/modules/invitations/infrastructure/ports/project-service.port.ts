@@ -14,6 +14,12 @@ export abstract class ProjectServicePort {
   abstract getProject(projectId: number): Promise<Project | null>;
 
   /**
+   * Fails with PERMISSION_DENIED unless the user is a confirmed participant of the project
+   * or holds manage:events (project-service CheckProjectAccess, EDIT).
+   */
+  abstract checkCanEditProject(userId: number, projectId: number): Promise<void>;
+
+  /**
    * Adds a participant to a project.
    *
    * @param params - Participant creation parameters
@@ -24,6 +30,16 @@ export abstract class ProjectServicePort {
     userId: number;
     studentCode: string;
   }): Promise<AddParticipantResponse>;
+
+  /**
+   * Links a platform user as tutor of a project and marks the pending tutor
+   * with that email as joined. Fails when the project has no pending tutor with that email.
+   */
+  abstract addProjectTutor(params: {
+    projectId: number;
+    userId: number;
+    email: string;
+  }): Promise<void>;
 
   /**
    * Retrieves the pending participants for a project.

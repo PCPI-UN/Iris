@@ -9,46 +9,15 @@ import { CriterionRepositoryPort } from '../../../criterions/domain/repositories
 import { Evaluation } from '../../domain/entities/evaluation.entity';
 import { EvaluationDetail } from '../../domain/entities/evaluation-detail.entity';
 import { EvaluateProjectDto } from '../dto/evaluate-project.dto';
-import { EvaluationType } from '../../../../common/constants/evaluation-type.constants';
-import { EvaluationType as EventEvaluationType } from '@app/common/generated/event';
-import { ScoreMapperFactory } from '../mappers/score-mapper.factory';
-import { ScoreValidatorFactory } from '../validators/score-validator.factory';
+import { EventGradingScaleResolver } from '../../../grading-scales/application/event-grading-scale.resolver';
+import { ScaleScorer } from '../../../grading-scales/domain/scale-scorer';
 import { Role } from '@app/common/generated/auth';
+import { isFullWeight, roundGrade } from '../../../../common/utils/grade.utils';
+import { buildRubric } from '../../../criterions/domain/services/rubric';
 
 @Injectable()
 export class EvaluateProjectUseCase {
     private readonly logger = new Logger(EvaluateProjectUseCase.name);
-
-    private resolveEvaluationType(evaluationType: unknown): EvaluationType {
-        if (
-            evaluationType === undefined ||
-            evaluationType === null ||
-            evaluationType === EventEvaluationType.EVALUATION_TYPE_UNSPECIFIED ||
-            evaluationType === EventEvaluationType.FINAL_PROJECTS ||
-            evaluationType === EvaluationType.FINAL_PROJECTS
-        ) {
-            return EvaluationType.FINAL_PROJECTS;
-        }
-
-        if (
-            evaluationType === EventEvaluationType.ZERO_TO_FIVE ||
-            evaluationType === EvaluationType.ZERO_TO_FIVE
-        ) {
-            return EvaluationType.ZERO_TO_FIVE;
-        }
-
-        if (
-            evaluationType === EventEvaluationType.ZERO_TO_HUNDRED ||
-            evaluationType === EvaluationType.ZERO_TO_HUNDRED
-        ) {
-            return EvaluationType.ZERO_TO_HUNDRED;
-        }
-
-        throw new RpcException({
-            code: status.INVALID_ARGUMENT,
-            message: `Unsupported evaluation type: ${evaluationType}`,
-        });
-    }
 
     constructor(
         private readonly evaluationRepository: EvaluationRepositoryPort,
@@ -56,17 +25,18 @@ export class EvaluateProjectUseCase {
         private readonly eventService: EventServicePort,
         private readonly authService: AuthServicePort,
         private readonly criterionRepository: CriterionRepositoryPort,
+        private readonly gradingScaleResolver: EventGradingScaleResolver,
     ) { }
 
     async execute(request: EvaluateProjectDto): Promise<{ evaluation: Evaluation; scores: EvaluationDetail[] }> {
-        const { projectId, userId, scores, comments } = request;
+        const { projectId, userId } = request;
 
         // 0. Get project to extract eventId
         const project = await this.projectService.getProject(projectId);
         if (!project) {
             throw new RpcException({
                 code: status.NOT_FOUND,
-                message: 'Project not found',
+                message: 'No se encontró el proyecto',
             });
         }
 
@@ -79,7 +49,7 @@ export class EvaluateProjectUseCase {
             this.logger.error('Juror role not found in the system roles');
             throw new RpcException({
                 code: status.INTERNAL,
-                message: 'An error ocurred while processing the evaluation',
+                message: 'Ocurrió un error al procesar la evaluación',
             });
         }
         const memberRoleId = jurorRole.id;
@@ -90,14 +60,14 @@ export class EvaluateProjectUseCase {
         if (!event) {
             throw new RpcException({
                 code: status.NOT_FOUND,
-                message: 'Event not found',
+                message: 'No se encontró el evento',
             });
         }
 
         if (!event.evaluationsOpened) {
             throw new RpcException({
                 code: status.FAILED_PRECONDITION,
-                message: 'Evaluations are not opened for this event',
+                message: 'Las evaluaciones no están abiertas para este evento',
             });
         }
 
@@ -108,7 +78,7 @@ export class EvaluateProjectUseCase {
         if (now < startDate || now > endDate) {
             throw new RpcException({
                 code: status.FAILED_PRECONDITION,
-                message: 'Evaluations are not allowed at this time',
+                message: 'En este momento no se permiten evaluaciones',
             });
         }
 
@@ -121,11 +91,44 @@ export class EvaluateProjectUseCase {
         if (!isAssigned) {
             throw new RpcException({
                 code: status.FAILED_PRECONDITION,
-                message: 'Juror is not assigned to this project',
+                message: 'El jurado no está asignado a este proyecto',
             });
         }
 
-        // 3. Check if already evaluated
+        // 3-6 run in one transaction under the rubric lock of the event, so the rubric cannot change
+        // between reading it and saving the evaluation. The lock is shared: evaluations do not wait for each other.
+        const { savedEvaluation, evaluationDetails } = await this.criterionRepository.withRubricLock(
+            [memberEventId],
+            'shared',
+            () => this.gradeAndSave(request, project.courseId, memberEventId, memberRoleId),
+        );
+
+        // 7. Return evaluation with scores in the expected format
+        const scoresResponse: EvaluationDetail[] = evaluationDetails.map(detail => ({
+            evaluationId: savedEvaluation.id,
+            criterionId: detail.criterionId,
+            score: detail.score,
+            weight: detail.weight,
+        }));
+
+        return {
+            evaluation: savedEvaluation,
+            scores: scoresResponse,
+        };
+    }
+
+    private async gradeAndSave(
+        request: EvaluateProjectDto,
+        courseId: number,
+        memberEventId: number,
+        memberRoleId: number,
+    ): Promise<{ savedEvaluation: Evaluation; evaluationDetails: EvaluationDetail[] }> {
+        const { projectId, userId: memberUserId, scores, comments } = request;
+
+        // 3. Check if already evaluated. The rubric lock is shared, so two simultaneous submissions of the
+        // same juror would both pass this check: lock (project, juror) first, inside the same transaction.
+        await this.evaluationRepository.lockProjectEvaluator(projectId, memberUserId, memberEventId);
+
         const alreadyEvaluated = await this.evaluationRepository.existsByProjectAndEvaluator(
             projectId,
             memberUserId,
@@ -135,76 +138,124 @@ export class EvaluateProjectUseCase {
         if (alreadyEvaluated) {
             throw new RpcException({
                 code: status.FAILED_PRECONDITION,
-                message: 'Project already evaluated by this juror',
+                message: 'Este jurado ya evaluó el proyecto',
             });
         }
 
-        // 4. Calculate Grade
+        // 4. Load the rubric the juror must fill: active criteria of the project's course in this event
+        if (!scores || scores.length === 0) {
+            throw new RpcException({
+                code: status.INVALID_ARGUMENT,
+                message: 'Se requiere al menos un puntaje',
+            });
+        }
+
+        const [courseCriteria, components] = await Promise.all([
+            this.criterionRepository.findByCourseId(courseId),
+            this.criterionRepository.findComponentsByEvent(memberEventId),
+        ]);
+        const rubric = courseCriteria.filter((criterion) => criterion.eventId === memberEventId);
+
+        if (rubric.length === 0) {
+            throw new RpcException({
+                code: status.FAILED_PRECONDITION,
+                message: 'No hay criterios de evaluación configurados para este proyecto',
+            });
+        }
+
+        // Effective weight = component weight × relative weight ÷ Σ relative weights of the component in this course
+        const { ready, componentsWeight, missingComponentIds, criteriaWithoutComponent, effectiveWeights } =
+            buildRubric(components, rubric);
+
+        if (!ready) {
+            const problems: string[] = [];
+            if (!isFullWeight(componentsWeight)) {
+                problems.push(`los pesos de los componentes deben sumar 100% (actual: ${(componentsWeight * 100).toFixed(2)}%)`);
+            }
+            if (missingComponentIds.length > 0) {
+                problems.push(`componentes sin criterios para esta categoría: ${missingComponentIds.join(', ')}`);
+            }
+            if (criteriaWithoutComponent.length > 0) {
+                problems.push(`criterios sin un componente del evento: ${criteriaWithoutComponent.join(', ')}`);
+            }
+            throw new RpcException({
+                code: status.FAILED_PRECONDITION,
+                message: `La rúbrica de evaluación de este proyecto no está lista: ${problems.join('; ')}`,
+            });
+        }
+
+        // 5. Calculate Grade
         let totalGrade = 0;
         const evaluationDetails: EvaluationDetail[] = [];
+        const rubricById = new Map(rubric.map((criterion) => [criterion.id, criterion]));
+        const scoredCriterionIds = new Set<number>();
 
-        // Resolve score validation and mapping from the event evaluation type
-        const evaluationType = this.resolveEvaluationType(event.evaluationType);
-        const scoreValidator = ScoreValidatorFactory.create(evaluationType);
-        const scoreMapper = ScoreMapperFactory.create(evaluationType);
+        // The juror picks a level per criterion; the event's grading scale gives its points. It is read under
+        // the rubric lock, so the scale cannot change while this evaluation is graded.
+        const gradingScale = await this.gradingScaleResolver.resolve(memberEventId);
+        const scorer = new ScaleScorer(gradingScale);
 
         for (const scoreItem of scores) {
-            const criterion = await this.criterionRepository.findById(scoreItem.criterionId);
+            if (scoredCriterionIds.has(scoreItem.criterionId)) {
+                throw new RpcException({
+                    code: status.INVALID_ARGUMENT,
+                    message: `El criterio ${scoreItem.criterionId} se calificó más de una vez`,
+                });
+            }
+
+            const criterion = rubricById.get(scoreItem.criterionId);
 
             if (!criterion) {
                 throw new RpcException({
-                    code: status.NOT_FOUND,
-                    message: `Criterion ${scoreItem.criterionId} not found`,
+                    code: status.INVALID_ARGUMENT,
+                    message: `El criterio ${scoreItem.criterionId} no está en la rúbrica de evaluación de este proyecto`,
                 });
             }
 
-            const numericScore = Math.round(scoreItem.score);
+            const mappedValue = Number.isInteger(scoreItem.score) ? scorer.pointsFor(scoreItem.score) : undefined;
 
-            const validation = scoreValidator.validate(numericScore, evaluationType);
-
-            if (!validation.valid) {
+            if (mappedValue === undefined) {
                 throw new RpcException({
                     code: status.INVALID_ARGUMENT,
-                    message: validation.error,
+                    message:
+                        `El puntaje del criterio ${scoreItem.criterionId} debe ser un nivel de la escala de calificación ` +
+                        `"${gradingScale.name}": ${scorer.levels.join(', ')}`,
                 });
             }
 
-            const mappedValue = scoreMapper.map(numericScore, evaluationType);
+            const effectiveWeight = effectiveWeights.get(criterion.id)!;
+            totalGrade += mappedValue * effectiveWeight;
+            scoredCriterionIds.add(scoreItem.criterionId);
 
-
-            // Calculate weighted score
-            // Assumption: criterion.weight is the distributed weight (e.g. 0.06)
-            totalGrade += mappedValue * criterion.weight;
-
-            const detail = new EvaluationDetail(0, scoreItem.criterionId, mappedValue);
-
-            evaluationDetails.push(detail);
+            // The effective weight is stored so later rubric changes never alter how this evaluation was graded
+            evaluationDetails.push(new EvaluationDetail(0, scoreItem.criterionId, mappedValue, effectiveWeight));
         }
 
-        // 5. Create Evaluation
+        const missingCriterionIds = rubric
+            .filter((criterion) => !scoredCriterionIds.has(criterion.id))
+            .map((criterion) => criterion.id);
+
+        if (missingCriterionIds.length > 0) {
+            throw new RpcException({
+                code: status.INVALID_ARGUMENT,
+                message: `Se deben calificar todos los criterios. Faltan los criterios: ${missingCriterionIds.join(', ')}`,
+            });
+        }
+
+        // 6. Create Evaluation
         const evaluation = new Evaluation(
             0,
             projectId,
             memberUserId,
             memberEventId,
             memberRoleId,
-            totalGrade,
+            roundGrade(totalGrade),
             comments ?? null,
             new Date()
         );
 
         const savedEvaluation = await this.evaluationRepository.save(evaluation, evaluationDetails);
 
-        // 6. Return evaluation with scores in the expected format
-        const scoresResponse: EvaluationDetail[] = evaluationDetails.map(detail => ({
-            evaluationId: savedEvaluation.id,
-            criterionId: detail.criterionId,
-            score: detail.score,
-        }));
-
-        return {
-            evaluation: savedEvaluation,
-            scores: scoresResponse,
-        };
+        return { savedEvaluation, evaluationDetails };
     }
 }

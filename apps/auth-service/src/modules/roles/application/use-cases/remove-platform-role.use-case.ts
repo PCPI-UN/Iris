@@ -20,14 +20,14 @@ export class RemovePlatformRoleUseCase {
     if (!platformStaff) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: 'User does not have this platform role',
+        message: 'El usuario no tiene este rol de plataforma',
       });
     }
 
     if (!platformStaff.active) {
       throw new RpcException({
         code: status.FAILED_PRECONDITION,
-        message: 'Role assignment is already inactive',
+        message: 'La asignación del rol ya está inactiva',
       });
     }
 
@@ -43,7 +43,7 @@ export class RemovePlatformRoleUseCase {
       if (otherAdminsCount === 0) {
         throw new RpcException({
           code: status.FAILED_PRECONDITION,
-          message: 'Cannot remove the last admin from the platform',
+          message: 'No se puede quitar el último administrador de la plataforma',
         });
       }
     }
@@ -53,7 +53,7 @@ export class RemovePlatformRoleUseCase {
 
     return {
       success: true,
-      message: `Role ${platformStaff.role?.name} removed from user ${platformStaff.user?.email}`,
+      message: `Se quitó el rol ${platformStaff.role?.name} al usuario ${platformStaff.user?.email}`,
     };
   }
 }

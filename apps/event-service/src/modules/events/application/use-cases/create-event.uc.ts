@@ -3,10 +3,15 @@ import { RpcException } from '@nestjs/microservices';
 import { EventRepository } from '@events/domain/repositories/event.repository';
 import { CreateEventDTO } from '@events/application/dto/create-event.dto';
 import { parseBogotaToUTC } from '@events/domain/utils/timezone.util';
+import { TermRepository } from '@events/domain/repositories/term.repository';
+import { assertSelectableTerm } from '@events/application/use-cases/assert-selectable-term';
 
 @Injectable()
 export class CreateEventUC {
-  constructor(private readonly repo: EventRepository) {}
+  constructor(
+    private readonly repo: EventRepository,
+    private readonly terms: TermRepository,
+  ) {}
 
   async execute(input: CreateEventDTO) {
     // Convert input dates from Colombia timezone (UTC-5) to UTC for storage
@@ -19,22 +24,24 @@ export class CreateEventUC {
       throw new RpcException({
         code: 3,
         message:
-          'Validation failed: inscriptionDeadline must be before startDate',
+          'Validación fallida: inscriptionDeadline debe ser anterior a startDate',
       });
     }
 
     if (startDate >= endDate) {
       throw new RpcException({
         code: 3,
-        message: 'Validation failed: startDate must be before endDate',
+        message: 'Validación fallida: startDate debe ser anterior a endDate',
       });
     }
+
+    await assertSelectableTerm(this.terms, input.termId);
 
     const existingEvent = await this.repo.findByAccessCode(input.accessCode);
     if (existingEvent) {
       throw new RpcException({
         code: 6,
-        message: `Event with accessCode "${input.accessCode}" already exists`,
+        message: `Ya existe un evento con el código de acceso "${input.accessCode}"`,
       });
     }
 
@@ -59,6 +66,8 @@ export class CreateEventUC {
       organizers: input.organizers ?? [],
       active: true,
       createdByUserId: input.createdByUserId ?? 0,
+      termId: input.termId,
+      requiresCourse: input.requiresCourse,
     });
   }
 }

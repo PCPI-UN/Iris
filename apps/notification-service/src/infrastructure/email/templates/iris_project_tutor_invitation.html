@@ -1,0 +1,153 @@
+---
+subject: Iris | Te invitaron como tutor del proyecto {{ projectName }}
+---
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>IRIS | Invitación como tutor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      body {
+        font-family: 'Poppins', Arial, sans-serif;
+        background: #050814;
+        background-image: radial-gradient(circle at top, oklch(0.75 0.15 195 / 0.3), oklch(0.12 0.01 264) 80%);
+        color: #e5e7eb;
+        padding: 24px 8px;
+        margin: 0;
+        text-align: center;
+      }
+
+      .container {
+        max-width: 600px;
+        margin: auto;
+        padding: 40px 30px;
+        border-radius: 16px;
+
+        /* Glass-card replicado */
+        background: rgba(18, 18, 28, 0.2);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow:
+          0 8px 32px rgba(0,0,0,0.37),
+          inset 0 1px 0 rgba(255,255,255,0.05);
+      }
+
+      .logo {
+        width: 120px;
+        display: block;
+        margin: 0 auto 0px;
+      }
+      
+      .title {
+        color: oklch(0.75 0.15 195);
+        font-size: 1.8em;
+        margin-top: 5px;
+        letter-spacing: 0.5px;
+      }
+
+      .badge-text {
+        font-weight: 700;
+        color: rgb(255, 255, 255);
+      }
+
+      p {
+        line-height: 1.6;
+        font-size: 1.05em;
+      }
+
+      strong {
+        color: rgb(255, 255, 255);
+      }
+
+      .badge {
+        display: inline-block;
+        margin-top: 8px;
+        padding: 6px 14px;
+        border-radius: 999px;
+        font-size: 0.9em;
+        letter-spacing: 0.06em;
+        background: rgba(0, 202, 203, 0.2);
+        border: 1px solid rgb(0, 202, 203, 0.6);
+        backdrop-filter: blur(10px);
+      }
+
+      .meta {
+        font-size: 0.9em;
+        color: #9ca3af;
+        margin-top: 6px;
+      }
+
+      .footer {
+        font-size: 0.85em;
+        color: #6b7280;
+        margin-top: 28px;
+        border-top: 1px solid rgba(148, 163, 184, 0.3);
+        padding-top: 14px;
+      }
+
+      @media (max-width: 600px) {
+        .container {
+          padding: 10vw 5vw;
+        }
+        .title {
+          font-size: 1.4em;
+        }
+        p {
+          font-size: 0.95em;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container">
+
+      <!-- LOGO IRIS -->
+      <img
+        src="https://irislab.blob.core.windows.net/irislabcontainer/Iris.png?sp=r&st=2025-11-19T01:36:47Z&se=2035-03-01T09:51:47Z&sv=2024-11-04&sr=b&sig=eyXFqbujtfz8WZFlDsK6506qkn8WP3arzZBPKOZVtKs%3D"
+        alt="IRIS Logo"
+        class="logo"
+      />
+      
+      <h2 class="title">Te invitaron como tutor</h2>
+
+      <p class="badge badge-text">Tutor del proyecto</p>
+
+      <p>Hola <strong>{{ firstName }} {{ lastName }}</strong>,</p>
+
+      <p>
+        Fuiste indicado como tutor del proyecto <strong>{{ projectName }}</strong>
+        en la plataforma de Iris. Al aceptar la invitación, tu cuenta queda
+        vinculada al proyecto con el rol de <strong>Tutor</strong>.
+      </p>
+
+      <p>
+        Para aceptar la invitación, ingresa a la plataforma en el siguiente enlace:
+      </p>
+
+      <p style="margin-top: 12px;">
+        <a href="{{ invitationLink }}"
+          style="
+            color: oklch(0.75 0.15 195);
+            font-weight: 700;
+            text-decoration: underline;
+          "
+        >
+          Aceptar la invitación aquí
+        </a>
+      </p>
+
+      <p class="meta">
+        Si tienes dudas, estaremos encantados de ayudarte en lo que necesites.
+      </p>
+
+      <p style="margin-top: 10px;">
+        <a href="https://discord.com/invite/AaHvrBJ5t7">Canal de soporte</a>
+      </p>
+
+       <p class="footer">© {{ currentYear }} Iris · Todos los derechos reservados</p>
+    </div>
+  </body>
+</html>

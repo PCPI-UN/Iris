@@ -21,6 +21,55 @@ import { InvitationWithRolesResponseDto } from './dto/invitation-with-roles-resp
 import { GetInvitationByTokenWithRolesResponseDto } from './dto/get-invitation-by-token-response.dto';
 import { InviteJurorToEventDto } from './dto/invite-juror-to-event.dto';
 
+/** A juror to invite to an event, with the name to use if the account has to be created */
+export interface JurorInvitee {
+  email: string;
+  firstName: string;
+  lastName?: string;
+}
+
+/** Outcome of inviting several jurors to an event, by email */
+export interface JurorInvitationsResult {
+  /** A new invitation was created and its email sent */
+  sent: string[];
+  /** They already had a pending invitation to the event: no new email */
+  reused: string[];
+  /** The invitation could not be created */
+  failed: { email: string; message: string }[];
+}
+
+const JUROR_INVITATION_CONCURRENCY = 10;
+
+/** The message of a failed gRPC call: RpcException, gRPC error or plain Error */
+const grpcErrorMessage = (error: unknown): string => {
+  const e = error as {
+    details?: string;
+    message?: string;
+    getError?: () => unknown;
+  };
+  const rpc = e?.getError?.() as { message?: string } | string | undefined;
+  return (
+    (typeof rpc === 'string' ? rpc : rpc?.message) ||
+    e?.details ||
+    e?.message ||
+    'error inesperado'
+  );
+};
+
+async function forEachWithConcurrency<T>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) await fn(items[next++]);
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, worker),
+  );
+}
+
 @Injectable()
 export class InvitationsService implements OnModuleInit {
   private invitationService: InvitationServiceClient;
@@ -48,6 +97,17 @@ export class InvitationsService implements OnModuleInit {
   }
 
   async createInvitation(dto: CreateInvitationDto, invitedByUserId: number): Promise<InvitationWithRolesResponseDto> {
+    // invitation-service decides whether the caller may create this invitation (403 otherwise)
+    await firstValueFrom(
+      this.invitationService.authorizeInvitation({
+        inviterUserId: invitedByUserId,
+        email: dto.email,
+        targetType: dto.targetType as unknown as string,
+        targetId: dto.targetId,
+        roleIds: dto.roleIds ?? [],
+      }),
+    );
+
     const invitation = await firstValueFrom(
       this.invitationService.createInvitation({
         ...dto,
@@ -125,7 +185,7 @@ export class InvitationsService implements OnModuleInit {
     if (!jurorRole) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: 'Juror role not found in the system',
+        message: 'No se encontró el rol de jurado en el sistema',
       });
     }
 
@@ -164,6 +224,96 @@ export class InvitationsService implements OnModuleInit {
       roles,
       createdAt: invitation.createdAt,
     };
+  }
+
+  /**
+   * Invites several jurors to an event at once. The Juror role is looked up once for all of them.
+   * A juror who already has a pending invitation to the event gets no new email; if that invitation
+   * lacks the Juror role, it is added to it. A failure is reported per juror and does not stop the
+   * others.
+   */
+  async inviteJurorsToEvent(
+    eventId: number,
+    eventType: string,
+    jurors: JurorInvitee[],
+    invitedByUserId: number,
+  ): Promise<JurorInvitationsResult> {
+    const result: JurorInvitationsResult = { sent: [], reused: [], failed: [] };
+    if (!jurors.length) return result;
+    const jurorRole = await this.findJurorRole();
+    const targetType = InvitationTargetType[InvitationTargetType.EVENT];
+
+    await forEachWithConcurrency(
+      jurors,
+      JUROR_INVITATION_CONCURRENCY,
+      async (juror) => {
+        try {
+          // Same lookup CreateInvitation does before reusing a pending invitation
+          const pending = await firstValueFrom(
+            this.invitationService.findPendingByEmail({
+              email: juror.email,
+              targetType,
+              targetId: eventId,
+            }),
+          );
+          if (pending.invitation) {
+            // A pending invitation with other roles (as organizer, say) gets the Juror role
+            // added by CreateInvitation, without a new email: otherwise accepting it would
+            // leave the juror without the role to evaluate the assigned projects
+            if (!(pending.invitation.roleIds ?? []).includes(jurorRole.id)) {
+              await firstValueFrom(
+                this.invitationService.createInvitation({
+                  email: juror.email,
+                  eventType,
+                  firstName: juror.firstName,
+                  lastName: juror.lastName,
+                  targetType,
+                  targetId: eventId,
+                  invitedByUserId,
+                  roleIds: [jurorRole.id],
+                }),
+              );
+            }
+            result.reused.push(juror.email);
+            return;
+          }
+          await firstValueFrom(
+            this.invitationService.createInvitation({
+              email: juror.email,
+              eventType,
+              firstName: juror.firstName,
+              lastName: juror.lastName,
+              targetType,
+              targetId: eventId,
+              invitedByUserId,
+              roleIds: [jurorRole.id],
+            }),
+          );
+          result.sent.push(juror.email);
+        } catch (error) {
+          result.failed.push({
+            email: juror.email,
+            message: grpcErrorMessage(error),
+          });
+        }
+      },
+    );
+    return result;
+  }
+
+  /** The event-scoped Juror role from auth-service */
+  private async findJurorRole(): Promise<Role> {
+    const rolesResponse = await firstValueFrom(this.authService.getRoles({}));
+    const jurorRole = rolesResponse.roles.find(
+      (role) => role.name === 'Juror' && role.scope === 'EVENT',
+    );
+    if (!jurorRole) {
+      throw new RpcException({
+        code: status.NOT_FOUND,
+        message: 'Juror role not found in the system',
+      });
+    }
+    return jurorRole;
   }
 
   async getEventInvitations(

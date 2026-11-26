@@ -35,22 +35,22 @@ export class JwtRefreshStrategy extends PassportStrategy(
   async validate(req: Request, payload: any) {
     const refreshToken = req.cookies?.['refresh_token'];
     if (!refreshToken) {
-      throw new UnauthorizedException('Refresh token not found');
+      throw new UnauthorizedException('No se encontró la sesión; inicia sesión de nuevo');
     }
 
     if (!payload.sub) {
-      throw new UnauthorizedException('Invalid token payload');
+      throw new UnauthorizedException('El contenido del token no es válido');
     }
 
     try {
       const user = await this.authService.getUser(payload.sub);
       if (!user) {
-        throw new UnauthorizedException('User not found');
+        throw new UnauthorizedException('No se encontró el usuario');
       }
 
       return { ...user, refreshToken };
     } catch (e) {
-      throw new UnauthorizedException('Failed to validate refresh token');
+      throw new UnauthorizedException('No se pudo validar la sesión; inicia sesión de nuevo');
     }
   }
 }

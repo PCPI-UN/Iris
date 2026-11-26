@@ -1,8 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@common/prisma/prisma.service';
+import { PrismaService } from '../../../../common/prisma/prisma.service';
 import { InvitationRepositoryPort } from '@invitations/domain/repositories/invitation.repository.port';
-import { Invitation } from '@invitations/domain/entities/invitation.entity';
+import {
+  Invitation,
+  InvitationTargetType,
+} from '@invitations/domain/entities/invitation.entity';
 import { InvitationMapper } from './mappers/invitation.mapper';
+import { normalizeEmail } from '@app/common/utils/email.util';
 
 @Injectable()
 export class PrismaInvitationRepository implements InvitationRepositoryPort {
@@ -38,7 +42,7 @@ export class PrismaInvitationRepository implements InvitationRepositoryPort {
 
   async findByEmail(email: string): Promise<Invitation[]> {
     const prismaInvitations = await this.prisma.invitation.findMany({
-      where: { email },
+      where: { email: this.emailMatches(email) },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -60,7 +64,7 @@ export class PrismaInvitationRepository implements InvitationRepositoryPort {
   async findPendingByEmailAndTargetType(email: string, targetType: string, targetId: number): Promise<Invitation | null> {
     const prismaInvitation = await this.prisma.invitation.findFirst({
       where: {
-        email,
+        email: this.emailMatches(email),
         targetType: targetType as any,
         targetId,
         status: 'PENDING',
@@ -74,7 +78,7 @@ export class PrismaInvitationRepository implements InvitationRepositoryPort {
   async findAcceptedByEmailAndTargetType(email: string, targetType: string, targetId: number): Promise<Invitation | null> {
     const prismaInvitation = await this.prisma.invitation.findFirst({
       where: {
-        email,
+        email: this.emailMatches(email),
         targetType: targetType as any,
         targetId,
         status: 'ACCEPTED',
@@ -93,7 +97,9 @@ export class PrismaInvitationRepository implements InvitationRepositoryPort {
 
   async findByEventId(eventId: number, page: number, limit: number, roleId?: number): Promise<{ invitations: Invitation[]; total: number }> {
     const skip = (page - 1) * limit;
+    // targetId alone also matches projects with the same id
     const where: any = {
+      targetType: InvitationTargetType.EVENT,
       targetId: eventId,
     };
 
@@ -151,5 +157,9 @@ export class PrismaInvitationRepository implements InvitationRepositoryPort {
       invitations: invitations.map(InvitationMapper.toDomain),
       total,
     };
+  }
+
+  private emailMatches(email: string) {
+    return { equals: normalizeEmail(email), mode: 'insensitive' as const };
   }
 }

@@ -105,18 +105,6 @@ export class CacheService implements OnModuleDestroy {
   }
 
   /**
-   * Generate a cache key for permission checks
-   */
-  generatePermissionCacheKey(
-    userId: number,
-    requiredPermissions: string[],
-  ): string {
-    const sortedPermissions = [...requiredPermissions].sort();
-    const permissionsHash = this.hashObject(sortedPermissions);
-    return `permission:check:${userId}:${permissionsHash}`;
-  }
-
-  /**
    * Generate a cache key for user permissions
    */
   generateUserPermissionsCacheKey(userId: number): string {

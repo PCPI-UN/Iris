@@ -18,9 +18,31 @@ export interface Project {
 export interface ProjectDocument {
   id: number;
   projectId: number;
-  type: DocumentType;
+  type: TypedDocument;
   state : Status;
   url: string;
+}
+
+/** Role id stored in project assignments for jurors */
+export const JUROR_ROLE_ID = 4;
+/** Platform roles: Professor may be chosen as tutor; the tutor of a project always ends up with Tutor. */
+export const PROFESSOR_ROLE_ID = 9;
+export const TUTOR_ROLE_ID = 10;
+
+/** event-service term that holds the events created before terms existed */
+export const NO_TERM_ID = -1;
+/** Course section that holds the projects created before course sections existed ("we do not know") */
+export const NO_ACADEMIC_COURSE_ID = -1;
+/** Course section of the projects of an event that does not require one ("it has no course") */
+export const NOT_APPLICABLE_ACADEMIC_COURSE_ID = 0;
+
+/** The fill course sections (-1 and 0), which are not real NRCs */
+export const isFillAcademicCourse = (id: number) =>
+  id === NO_ACADEMIC_COURSE_ID || id === NOT_APPLICABLE_ACADEMIC_COURSE_ID;
+
+/** A project of an event with the users assigned to it as jurors */
+export interface ProjectWithJurorIds extends Project {
+  jurorUserIds: number[];
 }
 
 export interface JurorKey {
@@ -33,6 +55,14 @@ export interface ProjectParticipant {
   userId: number;
   projectId: number;
   studentCode: string;
+}
+
+// A confirmed participation of a user, with the academic data captured at submission
+export interface UserParticipation {
+  project: Project;
+  studentCode: string;
+  career?: string | null;
+  semester?: string | null;
 }
 
 export interface ProjectParticipantWithUserInfo {
@@ -48,6 +78,8 @@ export interface ProjectParticipantWithUserInfo {
 }
 
 export interface PendingProjectParticipant {
+  /** Set on rows read from the database */
+  pendingId?: number;
   projectId: number;
   firstName: string;
   lastName?: string | null;
@@ -56,4 +88,31 @@ export interface PendingProjectParticipant {
   semester: string;
   career: string;
   status: StudentStatus;
+  /** Set once the invitation (approval email) was sent */
+  invitedAt?: Date | null;
+}
+
+/** Tutor typed in at submission who has no platform account yet. */
+export interface PendingProjectTutor {
+  projectId: number;
+  firstName: string;
+  lastName?: string | null;
+  email: string;
+  status: StudentStatus;
+}
+
+/** Tutor as shown in reads: linked (userId set) or pending. */
+export interface ProjectTutorView {
+  userId?: number;
+  firstName: string;
+  lastName?: string | null;
+  pending: boolean;
+  /** Only for pending tutors. */
+  email?: string;
+}
+
+export interface PendingProjectTutorInput {
+  firstName: string;
+  lastName?: string | null;
+  email: string;
 }

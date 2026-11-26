@@ -4,7 +4,9 @@ import {
   GetEventResponse,
   DeleteEventResponse,
   ListMyEventsResponse,
+  ListMyEventsWithRolesResponse,
   ListEventsResponse,
+  ListEventsByIdsResponse,
   EventProto,
   EventWithRole,
   PaginationMetadata,
@@ -33,6 +35,9 @@ export class EventMapper {
         ? e.inscriptionDeadline.toISOString()
         : '',
       evaluationsOpened: e.evaluationsOpened ?? false,
+      resultsPublished: e.resultsPublished ?? false,
+      termId: e.termId,
+      requiresCourse: e.requiresCourse,
       startDate: e.startDate ? e.startDate.toISOString() : '',
       endDate: e.endDate ? e.endDate.toISOString() : '',
       active: e.active ?? true,
@@ -79,6 +84,12 @@ export class EventMapper {
   static toGetEventResponse(event: Event): GetEventResponse {
     return {
       event: this.toEventProto(event),
+    };
+  }
+
+  static toListEventsByIdsResponse(events: Event[]): ListEventsByIdsResponse {
+    return {
+      events: events.map((event) => this.toEventProto(event)),
     };
   }
 
@@ -145,6 +156,28 @@ export class EventMapper {
     return {
       events: eventProtos,
       meta,
+    };
+  }
+
+  static toListMyEventsWithRolesResponse(result: {
+    items: Array<{ event: Event; roles: string[] }>;
+    total: number;
+    page: number;
+    limit: number;
+  }): ListMyEventsWithRolesResponse {
+    const { items, total, page, limit } = result;
+    return {
+      events: items.map(({ event, roles }) => ({
+        event: this.toEventProto(event),
+        roles,
+      })),
+      meta: {
+        total,
+        itemsOnCurrentPage: items.length,
+        itemsPerPage: limit,
+        currentPage: page,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
     };
   }
 

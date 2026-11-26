@@ -11,11 +11,15 @@ import { GetComponentUseCase } from './application/use-cases/get-component.use-c
 import { ListComponentsUseCase } from './application/use-cases/list-components.use-case';
 import { UpdateComponentUseCase } from './application/use-cases/update-component.use-case';
 import { DeleteComponentUseCase } from './application/use-cases/delete-component.use-case';
+import { GetRubricReadinessUseCase } from './application/use-cases/get-rubric-readiness.use-case';
 import { PrismaCriterionRepository } from './infrastructure/prisma/prisma-criterion.repository';
 import { CriterionRepositoryPort } from './domain/repositories/criterion.repository.port';
 import { PrismaModule } from '@common/prisma/prisma.module';
 import { EventServicePort } from './infrastructure/ports/event.service.port';
 import { EventServiceAdapter } from './infrastructure/adapters/event.service.adapter';
+import { ProjectServicePort } from './infrastructure/ports/project.service.port';
+import { ProjectServiceAdapter } from './infrastructure/adapters/project.service.adapter';
+import { CategoryLockService } from './application/services/category-lock.service';
 
 @Module({
   imports: [PrismaModule],
@@ -32,6 +36,8 @@ import { EventServiceAdapter } from './infrastructure/adapters/event.service.ada
     ListComponentsUseCase,
     UpdateComponentUseCase,
     DeleteComponentUseCase,
+    GetRubricReadinessUseCase,
+    CategoryLockService,
     {
       provide: CriterionRepositoryPort,
       useClass: PrismaCriterionRepository,
@@ -39,6 +45,10 @@ import { EventServiceAdapter } from './infrastructure/adapters/event.service.ada
     {
       provide: EventServicePort,
       useClass: EventServiceAdapter,
+    },
+    {
+      provide: ProjectServicePort,
+      useClass: ProjectServiceAdapter,
     },
   ],
   exports: [CriterionRepositoryPort],

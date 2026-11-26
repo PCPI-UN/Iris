@@ -1,41 +1,64 @@
-import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  NotFoundException,
+  OnModuleInit,
+} from '@nestjs/common';
+import { roundGrade } from '@app/common/utils/grade-rounding';
 import { ClientGrpc } from '@nestjs/microservices';
 import { lastValueFrom } from 'rxjs';
 import {
   EVALUATION_SERVICE_NAME,
   CRITERIONS_SERVICE_NAME,
-  TIE_BREAK_SERVICE_NAME,
   EvaluationServiceClient,
   CriterionsServiceClient,
-  TieBreakServiceClient,
-  TieBreakProto,
   FindEvaluationsByEvaluatorResponse,
   FindCriterionsByCourseResponse,
   GetProjectStatsRequest,
   GetProjectStatsResponse,
+  GetProjectResultResponse,
   EvaluateProjectRequest,
   EvaluationProto,
   GetTopProjectsByCourseResponse,
+  GetEventCriteriaStatsResponse,
+  ComponentStatsProto,
 } from '@app/common/generated/evaluation';
+import {
+  EVENT_SERVICE_NAME,
+  EventServiceClient,
+} from '@app/common/generated/event';
 import {
   PROJECTS_SERVICE_NAME,
   ProjectsServiceClient,
   ListAssignedProjectsResponse,
   Project,
+  ProjectState,
+  ProjectComplete,
 } from '@app/common/generated/project';
+import {
+  assignRankingPositions,
+  filterVisiblePositions,
+} from '../events/ranking/ranking-positions';
+
+/** Grade statistics of a project with the average of each rubric component. */
+export interface ProjectStatsWithComponents extends GetProjectStatsResponse {
+  components: ComponentStatsProto[];
+  /** Highest grade of the event's grading scale; absent when the event has none */
+  maxScore?: number;
+}
 
 @Injectable()
 export class EvaluationsService implements OnModuleInit {
   private evaluationService: EvaluationServiceClient;
   private criterionsService: CriterionsServiceClient;
-  private tieBreakService: TieBreakServiceClient;
   private projectsService: ProjectsServiceClient;
+  private eventsService: EventServiceClient;
 
   constructor(
     @Inject(EVALUATION_SERVICE_NAME) private evaluationClient: ClientGrpc,
     @Inject(CRITERIONS_SERVICE_NAME) private criterionsClient: ClientGrpc,
-    @Inject(TIE_BREAK_SERVICE_NAME) private tieBreakClient: ClientGrpc,
     @Inject(PROJECTS_SERVICE_NAME) private projectsClient: ClientGrpc,
+    @Inject(EVENT_SERVICE_NAME) private eventsClient: ClientGrpc,
   ) {}
 
   onModuleInit() {
@@ -47,14 +70,12 @@ export class EvaluationsService implements OnModuleInit {
       this.criterionsClient.getService<CriterionsServiceClient>(
         CRITERIONS_SERVICE_NAME,
       );
-    this.tieBreakService =
-      this.tieBreakClient.getService<TieBreakServiceClient>(
-        TIE_BREAK_SERVICE_NAME,
-      );
     this.projectsService =
       this.projectsClient.getService<ProjectsServiceClient>(
         PROJECTS_SERVICE_NAME,
       );
+    this.eventsService =
+      this.eventsClient.getService<EventServiceClient>(EVENT_SERVICE_NAME);
   }
 
   async getAssignedProjects(
@@ -142,13 +163,140 @@ export class EvaluationsService implements OnModuleInit {
     );
   }
 
-  async getProjectStats(projectId: number): Promise<GetProjectStatsResponse> {
+  /**
+   * Grade, evaluation count and jurors of a project, plus the average of each rubric
+   * component and its criteria and the highest grade of the event's scale. Fails with
+   * NOT_FOUND when the project does not exist.
+   */
+  async getProjectStats(projectId: number): Promise<ProjectStatsWithComponents> {
     const request: GetProjectStatsRequest = { projectId };
-    return await lastValueFrom(this.evaluationService.getProjectStats(request));
+    const [stats, { project }] = await Promise.all([
+      lastValueFrom(this.evaluationService.getProjectStats(request)),
+      lastValueFrom(this.projectsService.getProject({ id: projectId })),
+    ]);
+
+    // project-service answers NOT_FOUND for a missing project; proto3 still types it optional
+    if (!project) {
+      throw new NotFoundException('No se encontró el proyecto');
+    }
+    const criteriaStats = await this.fetchCriteriaStats(project.eventId, [
+      projectId,
+    ]);
+
+    return { ...stats, ...criteriaStats };
+  }
+
+  /**
+   * Average score of each rubric component and its criteria over the projects of an
+   * event, with the effective weights, and the highest grade of the event's scale.
+   * With a course, only its projects count. Projects of any state count; the ones
+   * without evaluations are left out by evaluation-service. Fails with NOT_FOUND when
+   * the event does not exist.
+   */
+  async getEventCriteriaStats(
+    eventId: number,
+    courseId?: number,
+  ): Promise<GetEventCriteriaStatsResponse> {
+    const [, projects] = await Promise.all([
+      lastValueFrom(this.eventsService.getEvent({ id: eventId })),
+      this.listAllProjectsByEvent(eventId, courseId),
+    ]);
+
+    return this.fetchCriteriaStats(
+      eventId,
+      projects.map((project) => project.id),
+    );
+  }
+
+  /** Called even without projects: maxScore comes from the event's scale. */
+  private async fetchCriteriaStats(
+    eventId: number,
+    projectIds: number[],
+  ): Promise<GetEventCriteriaStatsResponse> {
+    const response = await lastValueFrom(
+      this.evaluationService.getEventCriteriaStats({ eventId, projectIds }),
+    );
+
+    // proto3 omits empty lists
+    return {
+      ...(response.maxScore !== undefined && { maxScore: response.maxScore }),
+      components: (response.components ?? []).map((component) => ({
+        ...component,
+        criteria: component.criteria ?? [],
+      })),
+    };
+  }
+
+  /** Every project of the event (optionally of one course), page by page. */
+  private async listAllProjectsByEvent(
+    eventId: number,
+    courseId?: number,
+  ): Promise<ProjectComplete[]> {
+    const projects: ProjectComplete[] = [];
+    let currentPage = 1;
+    let totalPages = 1;
+    do {
+      const response = await lastValueFrom(
+        this.projectsService.listProjectsByEvent({
+          eventId,
+          courseId,
+          currentPage,
+          itemsPerPage: 100,
+        }),
+      );
+      projects.push(...(response.items ?? []));
+      totalPages = response.totalPages || 1;
+      currentPage += 1;
+    } while (currentPage <= totalPages);
+    return projects;
   }
 
   async getDashboardStats() {
     return lastValueFrom(this.evaluationService.getDashboardStats({}));
+  }
+
+  /**
+   * Average grade and number of evaluations of each project that has evaluations, in
+   * one call. Same value and rounding as getProjectStats; projects without evaluations
+   * are left out.
+   */
+  async getAverageGrades(
+    projectIds: number[],
+  ): Promise<
+    { projectId: number; averageGrade: number; evaluationCount: number }[]
+  > {
+    if (!projectIds.length) return [];
+    const response = await lastValueFrom(
+      this.evaluationService.getTopProjectsByCourse({ projectIds }),
+    );
+    return (response.topProjects ?? [])
+      .filter((p) => p.evaluationCount > 0)
+      .map((p) => ({
+        projectId: p.projectId,
+        averageGrade: roundGrade(p.averageGrade),
+        evaluationCount: p.evaluationCount,
+      }));
+  }
+
+  /** Whether the juror has evaluated the project, without reading the evaluation */
+  async hasEvaluated(
+    jurorUserId: number,
+    eventId: number,
+    projectId: number,
+  ): Promise<boolean> {
+    const { projects = [] } = await lastValueFrom(
+      this.evaluationService.checkEvaluationStatus({
+        userId: jurorUserId,
+        eventId,
+        projectIds: [projectId],
+      }),
+    );
+    return projects.some((p) => p.projectId === projectId && p.evaluated);
+  }
+
+  /** Consolidated result of a project (no juror data); publication is checked by the caller */
+  async getProjectResult(projectId: number): Promise<GetProjectResultResponse> {
+    return lastValueFrom(this.evaluationService.getProjectResult({ projectId }));
   }
 
   async evaluateProject(
@@ -166,16 +314,24 @@ export class EvaluationsService implements OnModuleInit {
     return await lastValueFrom(this.evaluationService.evaluateProject(request));
   }
 
+  /**
+   * Top projects of a course, with the same rules as the event ranking
+   * (EventService.generateRankingReport): only approved projects with
+   * evaluations compete, averages are compared rounded to 2 decimals, tied
+   * projects are co-winners sharing the position (no tie-break), and the cut
+   * keeps every project tied at the last visible position.
+   */
   async getTopProjectsByCourse(
     courseId: number,
     eventId: number,
     limit: number = 5,
   ) {
-    // 1. Fetch all project IDs for the course and event from project service
+    // 1. Fetch the approved projects of the course and event from project service
     const projectsResponse = await lastValueFrom(
       this.projectsService.listProjectsByEvent({
         eventId,
         courseId,
+        state: ProjectState.APPROVED,
         currentPage: 1,
         itemsPerPage: 1000, // Fetch all projects for the course
       }),
@@ -187,131 +343,68 @@ export class EvaluationsService implements OnModuleInit {
       return { items: [], courseId, eventId };
     }
 
-    const projectIds = allProjects.map((p) => p.id);
-
     // 2. Get evaluation statistics for these projects from evaluation service
     const response: GetTopProjectsByCourseResponse = await lastValueFrom(
-      this.evaluationService.getTopProjectsByCourse({ projectIds }),
+      this.evaluationService.getTopProjectsByCourse({
+        projectIds: allProjects.map((p) => p.id),
+      }),
     );
 
-    const projectStats = response.topProjects;
+    const rankable = (response.topProjects ?? [])
+      .filter((stats) => stats.evaluationCount > 0)
+      .map((stats) => ({
+        projectId: stats.projectId,
+        averageGrade: roundGrade(stats.averageGrade),
+        evaluationCount: stats.evaluationCount,
+        position: 0,
+      }));
 
-    if (projectStats === undefined || projectStats.length === 0) {
+    if (rankable.length === 0) {
       return { items: [], courseId, eventId };
     }
 
-    // 3. Sort by averageGrade descending, applying tiebreak order if there are ties
-    const sorted = projectStats.sort((a, b) => b.averageGrade - a.averageGrade);
-
-    const hasTies = sorted.some(
-      (p, i, arr) => i > 0 && arr[i - 1].averageGrade === p.averageGrade,
+    // 3. Dense positions for co-winners, then the top-N cut (0 shows every project)
+    const topProjects = filterVisiblePositions(
+      assignRankingPositions(rankable),
+      limit,
     );
 
-    let appliedTiebreaks: TieBreakProto[] = [];
-
-    if (hasTies) {
-      const tiebreaksResponse = await lastValueFrom(
-        this.tieBreakService.listTieBreaks({ eventId, categoryId: courseId }),
-      );
-      appliedTiebreaks = tiebreaksResponse.tiebreaks ?? [];
-      const tiebreakMap = new Map<number, number>(
-        appliedTiebreaks.map((tb) => [tb.projectId, tb.tiebreakOrder]),
-      );
-      sorted.sort((a, b) => {
-        if (b.averageGrade !== a.averageGrade)
-          return b.averageGrade - a.averageGrade;
-        const orderA = tiebreakMap.get(a.projectId) ?? Infinity;
-        const orderB = tiebreakMap.get(b.projectId) ?? Infinity;
-        if (orderA === Infinity && orderB === Infinity) return 0;
-        return orderA - orderB;
-      });
-    }
-
-    const tiebreakProjectIds = new Set(
-      appliedTiebreaks.map((tb) => tb.projectId),
+    // 4. Fetch full project details for the top projects in parallel
+    const projectsResponses = await Promise.all(
+      topProjects.map((tp) =>
+        lastValueFrom(
+          this.projectsService.getProjectComplete({ id: tp.projectId }),
+        ).catch(() => null),
+      ),
     );
-    const sizeReal = limit || sorted.length;
-    const topProjects = sorted.slice(0, sizeReal);
-
-    // Detect disputed: projects outside the limit tied with the last position and without a tiebreak record
-    const disputedStats =
-      topProjects.length > 0
-        ? sorted
-            .slice(sizeReal)
-            .filter(
-              (p) =>
-                p.averageGrade ===
-                  topProjects[topProjects.length - 1].averageGrade &&
-                !tiebreakProjectIds.has(p.projectId),
-            )
-        : [];
-
-    // 4. Fetch full project details for the top N and disputed projects in parallel
-    const topProjectIds = topProjects.map((tp) => tp.projectId);
-    const disputedProjectIds = disputedStats.map((dp) => dp.projectId);
-
-    const [projectsResponses, disputedResponses] = await Promise.all([
-      Promise.all(
-        topProjectIds.map((id) =>
-          lastValueFrom(this.projectsService.getProjectComplete({ id })).catch(
-            () => null,
-          ),
-        ),
-      ),
-      Promise.all(
-        disputedProjectIds.map((id) =>
-          lastValueFrom(this.projectsService.getProjectComplete({ id })).catch(
-            () => null,
-          ),
-        ),
-      ),
-    ]);
-
-    const buildEnrichedProject = (
-      tp: { projectId: number; averageGrade: number; evaluationCount: number },
-      response: any,
-    ) => {
-      if (!response || !response.items || response.items.length === 0)
-        return null;
-      const project = response.items[0];
-      return {
-        id: project.id,
-        eventId: project.eventId,
-        name: project.name,
-        description: project.description,
-        eventNumber: project.eventNumber,
-        createdAt: project.createdAt,
-        updatedAt: project.updatedAt,
-        courseId: project.courseId,
-        state: project.state,
-        reason: project.reason,
-        participants: project.participants,
-        documents: project.documents,
-        pendingParticipants: project.pendingParticipants,
-        averageGrade: tp.averageGrade,
-        evaluationCount: tp.evaluationCount,
-      };
-    };
 
     // 5. Merge data
-    const enrichedProjects = topProjects
-      .map((tp, idx) => buildEnrichedProject(tp, projectsResponses[idx]))
-      .filter((p) => p !== null);
-    const disputedProjects = disputedStats
-      .map((dp, idx) => buildEnrichedProject(dp, disputedResponses[idx]))
+    const items = topProjects
+      .map((tp, idx) => {
+        const projectResponse: any = projectsResponses[idx];
+        if (!projectResponse?.items?.length) return null;
+        const project = projectResponse.items[0];
+        return {
+          id: project.id,
+          eventId: project.eventId,
+          name: project.name,
+          description: project.description,
+          eventNumber: project.eventNumber,
+          createdAt: project.createdAt,
+          updatedAt: project.updatedAt,
+          courseId: project.courseId,
+          state: project.state,
+          reason: project.reason,
+          participants: project.participants,
+          documents: project.documents,
+          pendingParticipants: project.pendingParticipants,
+          position: tp.position,
+          averageGrade: tp.averageGrade,
+          evaluationCount: tp.evaluationCount,
+        };
+      })
       .filter((p) => p !== null);
 
-    const enrichedProjectIds = new Set(enrichedProjects.map((p) => p.id));
-    const relevantTiebreaks = appliedTiebreaks.filter((tb) =>
-      enrichedProjectIds.has(tb.projectId),
-    );
-
-    return {
-      items: enrichedProjects,
-      courseId,
-      eventId,
-      ...(relevantTiebreaks.length > 0 && { tiebreaks: relevantTiebreaks }),
-      ...(disputedProjects.length > 0 && { disputedProjects }),
-    };
+    return { items, courseId, eventId };
   }
 }

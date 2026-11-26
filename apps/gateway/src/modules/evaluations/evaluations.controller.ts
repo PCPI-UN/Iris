@@ -50,12 +50,15 @@ export class EvaluationsController {
         );
     }
 
+    @RequirePermission('read:grades')
     @Get('projects/:projectId/stats')
     @ApiOperation({
         summary: 'Get project evaluation statistics',
         description:
-            'Returns statistics for a project including average grade, evaluation count, and category-based stats. ' +
-            'Each category shows the average score and weight for that category across all evaluations.',
+            'Returns statistics for a project: average grade, evaluation count, and the average score of each rubric ' +
+            'component and its criteria, weighted with the effective weights stored with each score. ' +
+            'maxScore is the highest grade of the event scale; it is absent when the event has no scale. ' +
+            'Requires read:grades: it shows grades before the event publishes its results.',
     })
     @ApiParam({
         name: 'projectId',
@@ -74,13 +77,49 @@ export class EvaluationsController {
         return this.evaluationsService.getProjectStats(projectId);
     }
 
-    @RequirePermission('manage:events')
+    @RequirePermission('read:grades')
+    @Get('events/:eventId/stats')
+    @ApiOperation({
+        summary: 'Get the average score per rubric component of an event',
+        description:
+            'Average score of each rubric component over the projects of the event, using the effective weights ' +
+            'stored with each score: inside a project the jurors are averaged, and each evaluated project counts the ' +
+            'same. Projects without evaluations are left out (projectCount). Each component lists its criteria with ' +
+            'their effective weight. With categoryId, only the projects of that category count. ' +
+            'maxScore is the highest grade of the event scale; it is absent when the event has no scale. ' +
+            'Requires read:grades: it shows grades before the event publishes its results.',
+    })
+    @ApiParam({ name: 'eventId', description: 'Event ID', example: 1 })
+    @ApiQuery({
+        name: 'categoryId',
+        description: 'Category (course) of the projects',
+        example: 2,
+        required: false,
+    })
+    @ApiResponse({
+        status: 200,
+        description: '{ maxScore, components: [{ id, name, weight, average, projectCount, criteria: [{ id, name, weight, average }] }] }',
+    })
+    @ApiResponse({
+        status: 404,
+        description: 'Event not found',
+    })
+    async getEventCriteriaStats(
+        @Param('eventId', ParseIntPipe) eventId: number,
+        @Query('categoryId', new ParseIntPipe({ optional: true })) categoryId?: number,
+    ) {
+        return this.evaluationsService.getEventCriteriaStats(eventId, categoryId);
+    }
+
+    @RequirePermission('read:grades')
     @Get('courses/:courseId/top-projects')
     @ApiOperation({
         summary: 'Get top N projects for a course',
         description:
-            'Returns the top N projects for a specific course within an event, ranked by average evaluation grade. ' +
-            'Each project includes complete project details along with average grade and evaluation count.',
+            'Returns the top N positions of a course within an event, with the same rules as the event ranking: ' +
+            'only approved projects with evaluations, averages rounded to 2 decimals, and tied projects share the ' +
+            'position (co-winners, no tie-break), so a position can hold more than one project. ' +
+            'Each project includes complete project details along with position, average grade and evaluation count.',
     })
     @ApiParam({
         name: 'courseId',
@@ -95,7 +134,7 @@ export class EvaluationsController {
     })
     @ApiQuery({
         name: 'limit',
-        description: 'Number of top projects to return',
+        description: 'Number of top positions to return (0 returns every project)',
         example: 5,
         required: false,
     })

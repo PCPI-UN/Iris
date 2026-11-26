@@ -6,7 +6,8 @@ import {
   Project,
   AddParticipantResponse,
   PendingProjectParticipant,
-  PROJECTS_SERVICE_NAME
+  PROJECTS_SERVICE_NAME,
+  ProjectAccessAction,
 } from '@app/common/generated/project';
 import { ProjectServicePort } from '../ports/project-service.port';
 
@@ -31,12 +32,31 @@ export class ProjectServiceAdapter implements ProjectServicePort, OnModuleInit {
     return response.project || null;
   }
 
+  async checkCanEditProject(userId: number, projectId: number): Promise<void> {
+    await firstValueFrom(
+      this.projectService.checkProjectAccess({
+        userId,
+        projectId,
+        documentId: 0,
+        action: ProjectAccessAction.PROJECT_ACCESS_EDIT,
+      }),
+    );
+  }
+
   async addParticipant(params: {
     projectId: number;
     userId: number;
     studentCode: string;
   }): Promise<AddParticipantResponse> {
     return await firstValueFrom(this.projectService.addParticipant(params));
+  }
+
+  async addProjectTutor(params: {
+    projectId: number;
+    userId: number;
+    email: string;
+  }): Promise<void> {
+    await firstValueFrom(this.projectService.addProjectTutor(params));
   }
 
   async listPendingParticipants(

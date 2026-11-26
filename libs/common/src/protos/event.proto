@@ -12,10 +12,21 @@ service EventService {
   rpc GetEvent (GetEventRequest) returns (GetEventResponse) {}
   rpc DeleteEvent (DeleteEventRequest) returns (DeleteEventResponse) {}
   rpc ListMyEvents (ListMyEventsRequest) returns (ListMyEventsResponse) {}
+  // Events of the user with every role they hold in each one (JURY, PARTICIPANT, TUTOR), filtered by current/past
+  rpc ListMyEventsWithRoles (ListMyEventsWithRolesRequest) returns (ListMyEventsWithRolesResponse) {}
   rpc ListEvents (ListEventsRequest) returns (ListEventsResponse) {}
   rpc GetEventStatuses (GetEventStatusesRequest) returns (GetEventStatusesResponse) {}
   rpc GetDashboardStats (GetEventDashboardStatsRequest) returns (GetEventDashboardStatsResponse) {}
   rpc GetEventsForAR (GetEventsForARRequest) returns (GetEventsForARResponse);
+  // Events by id, newest first (by start date), soft deleted ones included (active = false);
+  // used by the student dashboard and the academic read endpoints
+  rpc ListEventsByIds (ListEventsByIdsRequest) returns (ListEventsByIdsResponse) {}
+
+  // ---- ACADEMIC TERMS ----
+  // Terms an event can be created or edited with, newest first (the "no term" row -1 is left out)
+  rpc ListTerms (ListTermsRequest) returns (ListTermsResponse) {}
+  // ALREADY_EXISTS when the (year, period) term exists
+  rpc CreateTerm (CreateTermRequest) returns (TermProto) {}
 
   // ---- EVENT MEMBERS ----
   rpc CreateEventMember (CreateEventMemberRequest) returns (CreateEventMemberResponse) {}
@@ -53,6 +64,12 @@ service EventService {
   rpc GetAwardWinner (GetAwardWinnerRequest) returns (GetAwardWinnerResponse) {}
   rpc ListAwardWinners (ListAwardWinnersRequest) returns (ListAwardWinnersResponse) {}
   rpc DeleteAwardWinner (DeleteAwardWinnerRequest) returns (DeleteAwardWinnerResponse) {}
+  // Awards won by the given projects in active categories, with the award, category and event they belong to
+  rpc ListAwardsByProjects (ListAwardsByProjectsRequest) returns (ListAwardsByProjectsResponse) {}
+  // Winners of every event with a published ranking, newest event first (public winners page)
+  rpc ListPublishedWinners (ListPublishedWinnersRequest) returns (ListPublishedWinnersResponse) {}
+  // Categories by id, inactive ones included (active = false)
+  rpc ListCategoriesByIds (ListCategoriesByIdsRequest) returns (ListCategoriesByIdsResponse) {}
 
   // ---- EVENT INSCRIPTION DETAILS ----
   rpc CreateEventInscriptionDetail (CreateEventInscriptionDetailRequest) returns (CreateEventInscriptionDetailResponse) {}
@@ -143,6 +160,12 @@ message EventProto {
   string aboutOurAllies = 24;
   optional double latitude = 25;
   optional double longitude = 26;
+  // true when the admin published the results: participants can see their scores and awards
+  bool resultsPublished = 27;
+  // Academic term of the event; -1 for the events created before terms existed
+  int32 termId = 28;
+  // true: each project needs a course section (NRC) of the term; false: not course work
+  bool requiresCourse = 29;
 }
 
 message CreateEventRequest {
@@ -165,6 +188,11 @@ message CreateEventRequest {
   optional string inscriptionRequirements = 17;
   optional int32 minimumTeamSize = 18;
   optional string aboutOurAllies = 19;
+  // Required: an existing term other than -1
+  int32 termId = 20;
+  // Required (optional only so that a missing value is told apart from false): true when each
+  // project needs a course section (NRC) of the term, false for events that are not course work
+  optional bool requiresCourse = 21;
 }
 
 message CreateEventResponse {
@@ -192,6 +220,12 @@ message UpdateEventRequest {
   optional string inscriptionRequirements = 18;
   optional int32 minimumTeamSize = 19;
   optional string aboutOurAllies = 20;
+  // Not sent: unchanged
+  optional bool resultsPublished = 21;
+  // Not sent: unchanged. When sent, an existing term other than -1
+  optional int32 termId = 22;
+  // Not sent: unchanged. Projects already submitted keep their course section
+  optional bool requiresCourse = 23;
 }
 
 message UpdateEventResponse {
@@ -250,6 +284,25 @@ message EventWithRole {
 
 message ListMyEventsResponse {
   repeated EventWithRole events = 1;
+  PaginationMetadata meta = 2;
+}
+
+message ListMyEventsWithRolesRequest {
+  int32 userId = 1;
+  // "current" (endDate >= now, startDate asc) | "past" (endDate < now, endDate desc)
+  string status = 2;
+  optional int32 page = 3;
+  optional int32 limit = 4;
+}
+
+message EventWithRoles {
+  EventProto event = 1;
+  // JURY | PARTICIPANT | TUTOR | PROFESSOR | DIRECTOR
+  repeated string roles = 2;
+}
+
+message ListMyEventsWithRolesResponse {
+  repeated EventWithRoles events = 1;
   PaginationMetadata meta = 2;
 }
 
@@ -825,4 +878,103 @@ message DeleteRankingEventRequest {
 
 message DeleteRankingEventResponse {
   bool ok = 1;
+}
+
+// ===== STUDENT DASHBOARD =====
+
+message ListEventsByIdsRequest {
+  repeated int32 ids = 1;
+}
+
+message ListEventsByIdsResponse {
+  repeated EventProto events = 1;
+}
+
+message ListAwardsByProjectsRequest {
+  repeated int32 projectIds = 1;
+}
+
+// One award won by a project. Co-winners of the same award get one row each.
+message ProjectAwardProto {
+  int32 winnerId = 1;
+  int32 projectId = 2;
+  int32 awardId = 3;
+  string title = 4;
+  int32 position = 5;
+  int32 categoryId = 6;
+  string categoryName = 7;
+  int32 eventId = 8;
+  // true when the admin published the event results (event.results_published)
+  bool resultsPublished = 9;
+}
+
+message ListAwardsByProjectsResponse {
+  repeated ProjectAwardProto awards = 1;
+}
+
+message ListPublishedWinnersRequest {
+  optional int32 page = 1;
+  optional int32 limit = 2;
+}
+
+// One winner of an award. Co-winners of the same award are one entry each.
+message PublishedWinnerProto {
+  int32 winnerId = 1;
+  int32 projectId = 2;
+  // unset unless the event ranking shows grades (ranking_event.grade_visible)
+  optional double grade = 3;
+}
+
+message PublishedAwardProto {
+  int32 awardId = 1;
+  string title = 2;
+  int32 position = 3;
+  // true when the award has more than one winner
+  bool coWinners = 4;
+  repeated PublishedWinnerProto winners = 5;
+}
+
+message PublishedCategoryWinnersProto {
+  int32 categoryId = 1;
+  string name = 2;
+  repeated PublishedAwardProto awards = 3;
+}
+
+message PublishedEventWinnersProto {
+  int32 eventId = 1;
+  string name = 2;
+  string startDate = 3;
+  string endDate = 4;
+  repeated PublishedCategoryWinnersProto categories = 5;
+}
+
+message ListPublishedWinnersResponse {
+  repeated PublishedEventWinnersProto events = 1;
+  PaginationMetadata meta = 2;
+}
+
+message ListCategoriesByIdsRequest {
+  repeated int32 ids = 1;
+}
+
+message ListCategoriesByIdsResponse {
+  repeated CategoryProto categories = 1;
+}
+
+// =====================
+//   ACADEMIC TERMS
+// =====================
+// Year and period code: 2026 + "10" is the term 202610
+message TermProto {
+  int32 id = 1;
+  int32 year = 2;
+  string period = 3;
+}
+
+message ListTermsRequest {}
+message ListTermsResponse { repeated TermProto terms = 1; }
+
+message CreateTermRequest {
+  int32 year = 1;
+  string period = 2;
 }

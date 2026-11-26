@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { EventsController } from './events.controller';
+import { MeEventsController } from './me-events.controller';
 import { EventService } from './events.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
@@ -101,7 +102,7 @@ import { ListConfirmedJurorsByEventUseCase } from './use-cases/list-confirmed-ju
     ]),
     ProjectsModule,
   ],
-  controllers: [EventsController],
+  controllers: [EventsController, MeEventsController],
   providers: [
     EventService,
     FetchConfirmedJurorMembersUseCase,

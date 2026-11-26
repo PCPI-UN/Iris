@@ -62,7 +62,15 @@ export class InvitationsController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Create an invitation',
-    description: 'Creates a new invitation for a user to join a platform, event, or project. The invitation is sent via email.',
+    description:
+      'Creates a new invitation for a user to join a platform, event, or project. The invitation is sent via email. ' +
+      'invitation-service checks the caller first: PLATFORM needs create:invitations and only grants roles the caller may give ' +
+      '(Admin/FacultyAdmin only with manage:admins, never to oneself); EVENT needs manage:events; PROJECT and PROJECT_TUTOR need ' +
+      'a participant of the project or manage:events and only give the Participant or Tutor role.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'The caller may not create this invitation',
   })
   @ApiResponse({
     status: 201,
@@ -181,11 +189,11 @@ export class InvitationsController {
     );
   }
   @Get('events/:eventId')
-  @RequirePermission('manage:events')
+  @RequirePermission('read:invitations')
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get invitations for an event',
-    description: 'Retrieves a list of invitations for a specific event. Can be filtered by role (e.g., "Juror", "Participant").',
+    description: 'Retrieves a list of invitations for a specific event. Can be filtered by role (e.g., "Juror", "Participant"). Each invitation carries `emailStatus` with the delivery state of its email: `PENDING` (registered or waiting for a retry), `SENT` or `FAILED` (every attempt failed). It is absent when unknown (no delivery recorded, or the notification service returned an error).',
   })
   @ApiParam({
     name: 'eventId',
@@ -224,7 +232,7 @@ export class InvitationsController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - User does not have manage:events permission',
+    description: 'Forbidden - User does not have read:invitations permission',
   })
   @ApiResponse({
     status: 404,

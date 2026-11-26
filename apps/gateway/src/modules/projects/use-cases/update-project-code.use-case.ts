@@ -38,7 +38,7 @@ export class UpdateProjectCodeUseCase {
     const project: ProjectComplete | undefined = res.items?.[0];
 
     if (!project) {
-      throw new NotFoundException('Project not found');
+      throw new NotFoundException('No se encontró el proyecto');
     }
 
     const projectStateLabel =
@@ -51,7 +51,7 @@ export class UpdateProjectCodeUseCase {
 
     if (!canUpdateCode) {
       throw new BadRequestException(
-        `Project can only have its code updated when in REQUEST_CHANGES state. Current state: ${projectStateLabel}`,
+        `Solo se puede actualizar el código de un proyecto en estado REQUEST_CHANGES. Estado actual: ${projectStateLabel}`,
       );
     }
 
@@ -65,7 +65,7 @@ export class UpdateProjectCodeUseCase {
 
     if (!isParticipant) {
       throw new ForbiddenException(
-        'Only participants of the project can update the project code',
+        'Solo los participantes del proyecto pueden actualizar su código',
       );
     }
 

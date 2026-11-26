@@ -1,4 +1,4 @@
-import { IsInt, IsArray, Min } from 'class-validator';
+import { IsInt, IsArray, IsOptional, Min } from 'class-validator';
 
 export class AssignPlatformRolesDto {
   @IsInt()
@@ -8,4 +8,10 @@ export class AssignPlatformRolesDto {
   @IsArray()
   @IsInt({ each: true })
   roleIds: number[];
+
+  /** Who grants the roles; when set, the administrator rules apply */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  actorUserId?: number;
 }

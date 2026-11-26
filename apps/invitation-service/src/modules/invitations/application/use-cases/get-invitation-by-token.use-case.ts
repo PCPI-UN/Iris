@@ -23,14 +23,14 @@ export class GetInvitationByTokenUseCase {
     if (!invitation || !invitation.canBeAccepted()) {
       throw new RpcException({
         code: status.NOT_FOUND,
-        message: 'Invitation not found or is invalid',
+        message: 'No se encontró la invitación o no es válida',
       });
     }
 
     if (!invitation.invitedUserId) {
       throw new RpcException({
         code: status.FAILED_PRECONDITION,
-        message: 'Invitation is missing a valid user reference.',
+        message: 'La invitación no tiene un usuario válido.',
       });
     }
 

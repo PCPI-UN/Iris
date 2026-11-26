@@ -15,7 +15,7 @@ export class RejectProjectUC {
 
   async execute(input: { id: number; actingUserId: number; reason?: string, eventType: string }) {
     const project = await this.repo.findById(input.id);
-    if (!project) throw new NotFoundError('Project not found');
+    if (!project) throw new NotFoundError('No se encontró el proyecto');
 
     if (project.state === 'REJECTED') {
       console.log('Project already rejected:', project.id);
@@ -24,7 +24,7 @@ export class RejectProjectUC {
 
     if (project.state !== 'UNDER_REVIEW') {
       throw new ValidationError(
-        `Project in invalid state for rejection: ${project.state}`,
+        `El proyecto no se puede rechazar en el estado ${project.state}`,
       );
     }
 

@@ -4,6 +4,8 @@ import { EventStatus } from '@app/common/generated/event';
 export abstract class EventRepository {
   abstract create(input: any): Promise<DomainEvent>;
   abstract findById(id: number): Promise<DomainEvent | null>;
+  /** Events with the given ids, newest first (by start date), soft deleted ones included (active = false). */
+  abstract findByIds(ids: number[]): Promise<DomainEvent[]>;
   abstract findByAccessCode(accessCode: string): Promise<DomainEvent | null>;
   abstract findAll(): Promise<DomainEvent[]>;
   abstract update(id: number, input: any): Promise<DomainEvent>;
@@ -36,6 +38,18 @@ export abstract class EventRepository {
     events: Array<DomainEvent & { userEventRoleId?: number }>;
     total: number;
   }>;
+
+  /**
+   * Active events among `ids`. `current` = endDate >= now, startDate asc;
+   * `past` = endDate < now, endDate desc.
+   */
+  abstract findByIdsAndPeriod(params: {
+    ids: number[];
+    period: 'current' | 'past';
+    now: Date;
+    page: number;
+    limit: number;
+  }): Promise<{ events: DomainEvent[]; total: number }>;
 
   abstract findActiveWithCoordinates(): Promise<DomainEvent[]>;
 }

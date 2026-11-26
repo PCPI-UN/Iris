@@ -35,7 +35,7 @@ export class CreateEventDTO {
   @IsString()
   @IsNotEmpty()
   @Matches(/^[a-zA-Z0-9-]+$/, {
-    message: 'accessCode must contain only alphanumeric characters and hyphens',
+    message: 'accessCode solo puede tener letras, números y guiones',
   })
   @MinLength(3)
   @MaxLength(50)
@@ -104,6 +104,15 @@ export class CreateEventDTO {
   @IsInt()
   @Min(1)
   createdByUserId?: number;
+
+  /** Academic term of the event; CreateEventUC checks that it exists */
+  @IsInt()
+  @Min(1)
+  termId: number;
+
+  /** true: each project needs a course section (NRC) of the term; false: not course work */
+  @IsBoolean()
+  requiresCourse: boolean;
 
   @IsOptional()
   @IsNumber()

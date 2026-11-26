@@ -3,16 +3,17 @@ import {
   ForbiddenException,
   Injectable,
   Inject,
+  Logger,
   OnModuleInit,
 } from '@nestjs/common';
 import { ClientGrpc } from '@nestjs/microservices';
 import { firstValueFrom } from 'rxjs';
-import * as ExcelJS from 'exceljs';
 import { CreateEventDTO } from './dto/events/create-event.dto';
 import { DeleteEventDTO } from './dto/events/delete-event.dto';
 import { GetEventDTO } from './dto/events/get-event.dto';
 import { ListEventsDTO } from './dto/events/list-events.dto';
 import { ListMyEventsDTO } from './dto/events/list-my-events.dto';
+import { ListMyEventsWithRolesDTO } from './dto/events/list-my-events-with-roles.dto';
 import { UpdateEventDTO } from './dto/events/update-event.dto';
 import { CreateEventMemberDTO } from './dto/event-members/create-event-member.dto';
 import { DeleteEventMemberDTO } from './dto/event-members/delete-event-member.dto';
@@ -23,6 +24,7 @@ import { ListCoursesDTO } from './dto/courses/list-course.dto';
 import { ListCoursesForDropdownDTO } from './dto/courses/list-courses-for-dropdown.dto';
 import { UpdateCourseDTO } from './dto/courses/update-course.dto';
 import { ProjectsService } from '../projects/projects.service';
+import { ProjectStateFilter } from '../projects/dto/list-projects-by-event.dto';
 import {
   CreateAwardWinnerDTO,
   CreateCategoryAwardDTO,
@@ -73,6 +75,8 @@ import {
   GetEventStatusesResponse,
   EventStatusMapping,
   EventProto,
+  TermProto,
+  CreateTermRequest,
   EventWithRole,
   CreateCategoryRequest,
   CreateCategoryResponse,
@@ -109,6 +113,7 @@ import {
   GetAwardWinnerResponse,
   ListAwardWinnersRequest,
   ListAwardWinnersResponse,
+  ListAwardsByProjectsResponse,
   DeleteAwardWinnerRequest,
   DeleteAwardWinnerResponse,
   CreateEventInscriptionDetailRequest,
@@ -142,18 +147,27 @@ import {
   GetEventsForARResponse,
 } from '@app/common/generated/event';
 import { CreateRankingEventDTO } from './dto/ranking-event/create-ranking-event.dto';
+import { ListPublishedWinnersDTO } from './dto/winners/list-published-winners.dto';
+import { WinnersPageResponse } from './dto/winners/winners-page.response';
+import { DEFAULT_PUBLISHED_WINNERS_LIMIT } from '@app/common/constants/published-winners';
 import { UpdateRankingEventDTO } from './dto/ranking-event/update-ranking-event.dto';
 import {
   EVALUATION_SERVICE_NAME,
   EvaluationServiceClient,
-  TIE_BREAK_SERVICE_NAME,
-  TieBreakServiceClient,
+  GRADING_SCALE_SERVICE_NAME,
+  GradingScaleProto,
+  GradingScaleServiceClient,
 } from '@app/common/generated/evaluation';
 import { ProjectComplete } from '@app/common/generated/project';
 import {
   GetRankingReportDto,
   RankingReportFormat,
 } from './dto/ranking-report/get-ranking-report.dto';
+import {
+  assignRankingPositions,
+  filterVisiblePositions,
+} from './ranking/ranking-positions';
+import { roundGrade } from '@app/common/utils/grade-rounding';
 
 type RankingScope = 'admin' | 'public';
 
@@ -171,7 +185,6 @@ interface RankingReportRow {
   evaluationCount: number;
   individualGrades: number[];
   averageGrade: number;
-  tieBreakOrder?: number;
 }
 
 export interface RankingReportResult {
@@ -203,7 +216,8 @@ export class EventService implements OnModuleInit {
   private eventService!: EventServiceClient;
   private authService!: AuthServiceClient;
   private evaluationService!: EvaluationServiceClient;
-  private tieBreakService!: TieBreakServiceClient;
+  private gradingScaleService!: GradingScaleServiceClient;
+  private readonly logger = new Logger(EventService.name);
   private statusCache: EventStatusMapping[] | null = null;
   private rolesCache: any[] | null = null;
 
@@ -225,10 +239,94 @@ export class EventService implements OnModuleInit {
       this.evaluationClient.getService<EvaluationServiceClient>(
         EVALUATION_SERVICE_NAME,
       );
-    this.tieBreakService =
-      this.evaluationClient.getService<TieBreakServiceClient>(
-        TIE_BREAK_SERVICE_NAME,
+    this.gradingScaleService =
+      this.evaluationClient.getService<GradingScaleServiceClient>(
+        GRADING_SCALE_SERVICE_NAME,
       );
+  }
+
+  /**
+   * Assigns the grading scale of an event in evaluation-service: a catalog scale (gradingScaleId) or,
+   * without one, the default system scale "Proyectos finales".
+   */
+  private assignGradingScale(
+    eventId: number,
+    gradingScaleId: number | undefined,
+  ): Promise<GradingScaleProto> {
+    return firstValueFrom(
+      this.gradingScaleService.assignEventGradingScale({
+        eventId,
+        scaleId: gradingScaleId ?? undefined,
+      }),
+    );
+  }
+
+  /**
+   * Undoes a failed event creation: deletes the event and then its grading scale assignment, so the
+   * scale is not kept in use by an event that no longer exists. Each step logs its own failure and
+   * never throws, so the caller reports the error that made the creation fail.
+   */
+  private async rollBackCreatedEvent(eventId: number): Promise<void> {
+    try {
+      await this.delete({ id: eventId });
+    } catch (error) {
+      this.logger.error(
+        `Could not delete event ${eventId} after its creation failed: ${(error as Error)?.message}`,
+      );
+      // The event still exists, so it keeps its scale
+      return;
+    }
+    try {
+      await firstValueFrom(
+        this.gradingScaleService.unassignEventGradingScale({ eventId }),
+      );
+    } catch (error) {
+      this.logger.error(
+        `Could not remove the grading scale of deleted event ${eventId}: ${(error as Error)?.message}`,
+      );
+    }
+  }
+
+  /**
+   * Updates the event fields after its grading scale changed; when that update fails, the previous
+   * scale is assigned again so the event is left as it was.
+   */
+  private async updateEventRestoringScale(
+    eventPayload: UpdateEventRequest,
+    previousScale: GradingScaleProto | null,
+    newScale: GradingScaleProto | null,
+  ): Promise<UpdateEventResponse> {
+    try {
+      return await firstValueFrom(this.eventService.updateEvent(eventPayload));
+    } catch (error) {
+      if (previousScale && newScale && previousScale.id !== newScale.id) {
+        try {
+          await this.assignGradingScale(eventPayload.id, previousScale.id);
+        } catch (restoreError) {
+          this.logger.error(
+            `Could not restore grading scale ${previousScale.id} of event ${eventPayload.id} after its update failed: ` +
+              `${(restoreError as Error)?.message}`,
+          );
+        }
+      }
+      throw error;
+    }
+  }
+
+  /** Grading scale shown with the event; `null` when evaluation-service cannot give it. */
+  private async findEventGradingScale(
+    eventId: number,
+  ): Promise<GradingScaleProto | null> {
+    try {
+      return await firstValueFrom(
+        this.gradingScaleService.getEventGradingScale({ eventId }),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Could not load the grading scale of event ${eventId}: ${(error as Error)?.message}`,
+      );
+      return null;
+    }
   }
 
   /**
@@ -245,7 +343,7 @@ export class EventService implements OnModuleInit {
    * Produces a unified participant list for a project, including both
    * confirmed and pending members.
    */
-  private getProjectParticipantNames(project: ProjectComplete): string[] {
+  getProjectParticipantNames(project: ProjectComplete): string[] {
     const confirmed = (project.participants ?? [])
       .map((participant) => {
         const firstName = participant.firstName?.trim() ?? '';
@@ -267,12 +365,51 @@ export class EventService implements OnModuleInit {
     return [...confirmed, ...pending];
   }
 
+  /** Academic terms an event can be created or edited with, newest first */
+  async listTerms(): Promise<TermProto[]> {
+    const response = await firstValueFrom(this.eventService.listTerms({}));
+    return response.terms ?? [];
+  }
+
+  /** 409 when the (year, period) term already exists */
+  async createTerm(request: CreateTermRequest): Promise<TermProto> {
+    return firstValueFrom(this.eventService.createTerm(request));
+  }
+
+  /** Events by id as event-service returns them, soft deleted ones included */
+  async listEventsByIds(ids: number[]): Promise<EventProto[]> {
+    if (!ids.length) return [];
+    const response = await firstValueFrom(
+      this.eventService.listEventsByIds({ ids }),
+    );
+    return response.events ?? [];
+  }
+
+  /** The event as event-service returns it, without the catalog enrichment of `get` */
+  async getEventById(id: number): Promise<EventProto | undefined> {
+    const response = await firstValueFrom(this.eventService.getEvent({ id }));
+    return response.event;
+  }
+
+  /** Approved projects of one category of the event, every page */
+  async listApprovedProjects(
+    eventId: number,
+    categoryId: number,
+  ): Promise<ProjectComplete[]> {
+    return this.listAllProjectsByEvent(
+      eventId,
+      categoryId,
+      ProjectStateFilter.APPROVED,
+    );
+  }
+
   /**
-   * Paginates through all projects for an event (optionally by category).
+   * Paginates through all projects for an event (optionally by category and state).
    */
   private async listAllProjectsByEvent(
     eventId: number,
     categoryId?: number,
+    state?: ProjectStateFilter,
   ): Promise<ProjectComplete[]> {
     let currentPage = 1;
     const itemsPerPage = 50;
@@ -282,6 +419,7 @@ export class EventService implements OnModuleInit {
     do {
       const response = await this.projectsService.listProjectsByEvent(eventId, {
         courseId: categoryId,
+        state,
         currentPage,
         itemsPerPage,
       });
@@ -292,35 +430,6 @@ export class EventService implements OnModuleInit {
     } while (currentPage <= totalPages);
 
     return projects;
-  }
-
-  /**
-   * Ranking comparator rules:
-   * 1) Higher average first.
-   * 2) Tie-break order from tie-break table (lower order wins).
-   * 3) Stable lexical fallback by project name.
-   * 4) Final numeric fallback by project id.
-   */
-  private compareRankingRows(a: RankingReportRow, b: RankingReportRow): number {
-    if (a.averageGrade !== b.averageGrade) {
-      return b.averageGrade - a.averageGrade;
-    }
-
-    const tieA = a.tieBreakOrder ?? Number.POSITIVE_INFINITY;
-    const tieB = b.tieBreakOrder ?? Number.POSITIVE_INFINITY;
-
-    if (tieA !== tieB) {
-      return tieA - tieB;
-    }
-
-    const nameComparison = a.projectName.localeCompare(b.projectName, 'es', {
-      sensitivity: 'base',
-    });
-    if (nameComparison !== 0) {
-      return nameComparison;
-    }
-
-    return a.projectId - b.projectId;
   }
 
   /**
@@ -373,7 +482,7 @@ export class EventService implements OnModuleInit {
       format !== RankingReportFormat.JSON &&
       format !== RankingReportFormat.EXCEL
     ) {
-      throw new BadRequestException('Invalid format. Use json or excel');
+      throw new BadRequestException('Formato no válido. Usa json o excel');
     }
 
     const [eventResponse, rankingConfigResponse, categoriesResponse] =
@@ -395,13 +504,13 @@ export class EventService implements OnModuleInit {
 
     if (!rankingConfig) {
       throw new BadRequestException(
-        `Ranking configuration not found for event ${String(eventId)}`,
+        `No se encontró la configuración de ranking del evento ${String(eventId)}`,
       );
     }
 
     if (scope === 'public' && !rankingConfig.visiblePublic) {
       throw new ForbiddenException(
-        'Public ranking is not enabled for this event',
+        'El ranking público no está habilitado para este evento',
       );
     }
 
@@ -413,22 +522,12 @@ export class EventService implements OnModuleInit {
       ]),
     );
 
-    const projects = await this.listAllProjectsByEvent(eventId, query.categoryId);
-
-    const tieBreakResponse = await firstValueFrom(
-      this.tieBreakService.listTieBreaks({
-        eventId,
-        categoryId: query.categoryId,
-      }),
+    // Only approved projects compete in the ranking.
+    const projects = await this.listAllProjectsByEvent(
+      eventId,
+      query.categoryId,
+      ProjectStateFilter.APPROVED,
     );
-
-    const tieBreakByProjectAndCategory = new Map<string, number>();
-    for (const tieBreak of tieBreakResponse.tiebreaks ?? []) {
-      tieBreakByProjectAndCategory.set(
-        `${String(tieBreak.projectId)}:${String(tieBreak.categoryId)}`,
-        tieBreak.tiebreakOrder,
-      );
-    }
 
     const evaluatorProjectGrades = new Map<number, Map<number, number>>();
     const rows: RankingReportRow[] = [];
@@ -438,6 +537,12 @@ export class EventService implements OnModuleInit {
       const stats = await firstValueFrom(
         this.evaluationService.getProjectStats({ projectId: project.id }),
       );
+
+      // Projects without evaluations have no grade to rank; leaving them in
+      // would tie them all at 0 and push them into the public cut together.
+      if (!stats.evaluationCount) {
+        continue;
+      }
 
       const individualGrades: number[] = [];
       for (const evaluatorId of stats.evaluatorIds ?? []) {
@@ -457,16 +562,14 @@ export class EventService implements OnModuleInit {
 
         const grade = evaluatorProjectGrades.get(evaluatorId)?.get(project.id);
         if (grade !== undefined) {
-          individualGrades.push(grade);
+          // Historical grades were stored without rounding; show them with the same 2 decimals as the average
+          individualGrades.push(roundGrade(grade));
         }
       }
 
       const categoryId = project.courseId;
       const categoryName =
         categoryNameById.get(categoryId) || `Categoria ${String(categoryId)}`;
-      const tieBreakOrder = tieBreakByProjectAndCategory.get(
-        `${String(project.id)}:${String(categoryId)}`,
-      );
 
       rows.push({
         projectId: project.id,
@@ -476,24 +579,22 @@ export class EventService implements OnModuleInit {
         categoryId,
         category: categoryName,
         position: 0,
-        evaluationCount: stats.evaluationCount ?? individualGrades.length,
+        evaluationCount: stats.evaluationCount,
         individualGrades,
-        averageGrade: stats.averageGrade ?? 0,
-        tieBreakOrder,
+        // Rounded with the same rule used for positions, so co-winners always
+        // show the same grade.
+        averageGrade: roundGrade(stats.averageGrade ?? 0),
       });
     }
 
-    // Sorting determines final ranking positions.
-    rows.sort((a, b) => this.compareRankingRows(a, b));
-    rows.forEach((row, index) => {
-      row.position = index + 1;
-    });
+    // Tied averages share the position (co-winners); no tie-break is applied.
+    const rankedRows = assignRankingPositions(rows);
 
-    // Public scope can expose only top-N rows depending on configuration.
-    let visibleRows = rows;
-    if (scope === 'public' && rankingConfig.positions > 0) {
-      visibleRows = rows.slice(0, rankingConfig.positions);
-    }
+    // Public scope exposes only the top-N positions, including every co-winner.
+    const visibleRows =
+      scope === 'public'
+        ? filterVisiblePositions(rankedRows, rankingConfig.positions)
+        : rankedRows;
 
     // In public mode, grade fields are conditional by ranking configuration.
     const showGrades = scope === 'admin' || rankingConfig.gradeVisible;
@@ -521,113 +622,6 @@ export class EventService implements OnModuleInit {
         averageGrade: showGrades ? row.averageGrade : undefined,
       })),
     };
-  }
-
-  /**
-   * Builds an XLSX buffer from ranking JSON data.
-   * The controller is responsible for setting download headers.
-   */
-  async generateRankingExcelBuffer(report: RankingReportResult): Promise<Buffer> {
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Ranking');
-
-    worksheet.columns = [
-      { header: 'Posición', key: 'position', width: 10 },
-      { header: 'Código', key: 'projectCode', width: 10 },
-      { header: 'Proyecto', key: 'projectName', width: 32 },
-      { header: 'Categoría', key: 'category', width: 24 },
-      { header: 'Participantes', key: 'participantNames', width: 48 },
-      { header: 'Evaluaciones', key: 'evaluationCount', width: 14 },
-      { header: 'Calificaciones', key: 'individualGrades', width: 28 },
-      { header: 'Puntaje Final', key: 'averageGrade', width: 14 },
-    ];
-
-    for (const item of report.items) {
-      worksheet.addRow({
-        position: item.position,
-        projectCode: item.projectCode || '',
-        projectName: item.projectName,
-        category: item.category,
-        participantNames: item.participantNames.join(', '),
-        evaluationCount: item.evaluationCount,
-        individualGrades: item.individualGrades?.length
-          ? item.individualGrades.join(', ')
-          : '',
-        averageGrade:
-          item.averageGrade !== undefined
-            ? Number(item.averageGrade.toFixed(2))
-            : '',
-      });
-    }
-
-    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
-    worksheet.autoFilter = 'A1:H1';
-
-    const headerRow = worksheet.getRow(1);
-    headerRow.height = 20;
-    headerRow.eachCell((cell: ExcelJS.Cell) => {
-      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-      cell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FF5B9BD5' },
-      };
-      cell.alignment = {
-        horizontal: 'center',
-        vertical: 'middle',
-        wrapText: true,
-      };
-      cell.border = {
-        top: { style: 'thin', color: { argb: 'FF9CC2E5' } },
-        left: { style: 'thin', color: { argb: 'FF9CC2E5' } },
-        bottom: { style: 'thin', color: { argb: 'FF9CC2E5' } },
-        right: { style: 'thin', color: { argb: 'FF9CC2E5' } },
-      };
-    });
-
-    for (let rowIndex = 2; rowIndex <= worksheet.rowCount; rowIndex += 1) {
-      const row = worksheet.getRow(rowIndex);
-      row.eachCell((cell: ExcelJS.Cell, columnNumber: number) => {
-        cell.alignment = {
-          horizontal: columnNumber <= 2 ? 'center' : 'left',
-          vertical: 'middle',
-          wrapText: true,
-        };
-        cell.border = {
-          top: { style: 'thin', color: { argb: 'FFD9E2F3' } },
-          left: { style: 'thin', color: { argb: 'FFD9E2F3' } },
-          bottom: { style: 'thin', color: { argb: 'FFD9E2F3' } },
-          right: { style: 'thin', color: { argb: 'FFD9E2F3' } },
-        };
-        if (rowIndex % 2 === 0) {
-          cell.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFF7FBFF' },
-          };
-        }
-      });
-    }
-
-    worksheet.getColumn(1).width = 10;
-    worksheet.getColumn(1).alignment = {
-      horizontal: 'center',
-      vertical: 'middle',
-    };
-    worksheet.getColumn(2).width = 10;
-    worksheet.getColumn(2).alignment = {
-      horizontal: 'center',
-      vertical: 'middle',
-    };
-    worksheet.getColumn(3).width = 32;
-    worksheet.getColumn(4).width = 24;
-    worksheet.getColumn(5).width = 48;
-    worksheet.getColumn(6).width = 14;
-    worksheet.getColumn(7).width = 28;
-    worksheet.getColumn(8).width = 14;
-
-    const rawBuffer = await workbook.xlsx.writeBuffer();
-    return Buffer.from(rawBuffer);
   }
 
   private mapCourseForFrontend(
@@ -813,7 +807,7 @@ export class EventService implements OnModuleInit {
         const categoryId = award.categoryId ?? defaultCategoryId;
         if (!categoryId) {
           throw new BadRequestException(
-            'categoryId is required to create an award',
+            'categoryId es obligatorio para crear un premio',
           );
         }
 
@@ -883,6 +877,7 @@ export class EventService implements OnModuleInit {
       awards,
       specificInscriptionDetails,
       eventInscriptionDetails,
+      gradingScaleId,
       ...eventPayload
     } = createEventDTO as CreateEventDTO & {
       category?: CreateCategoryDTO;
@@ -896,6 +891,19 @@ export class EventService implements OnModuleInit {
     const response = await firstValueFrom(
       this.eventService.createEvent(eventPayload as CreateEventRequest),
     );
+
+    let eventGradingScale: GradingScaleProto | null = null;
+    if (response.event) {
+      try {
+        eventGradingScale = await this.assignGradingScale(
+          response.event.id,
+          gradingScaleId,
+        );
+      } catch (error) {
+        await this.rollBackCreatedEvent(response.event.id);
+        throw error;
+      }
+    }
 
     if (response.event) {
       let createdCategoryId: number | undefined;
@@ -924,7 +932,7 @@ export class EventService implements OnModuleInit {
             await this.deleteCategory(createdCategoryId);
           } catch {}
         }
-        await this.delete({ id: response.event.id });
+        await this.rollBackCreatedEvent(response.event.id);
         throw error;
       }
     }
@@ -940,7 +948,7 @@ export class EventService implements OnModuleInit {
           ),
         );
       } catch (error) {
-        await this.delete({ id: response.event.id });
+        await this.rollBackCreatedEvent(response.event.id);
         throw error;
       }
     }
@@ -951,7 +959,9 @@ export class EventService implements OnModuleInit {
         response.event,
         statuses,
       );
-      return { event: enrichedEvent as EventProto };
+      return {
+        event: { ...enrichedEvent, gradingScale: eventGradingScale } as any,
+      };
     }
 
     return response;
@@ -974,9 +984,11 @@ export class EventService implements OnModuleInit {
         response.event,
         statuses,
       );
-      const enrichedEventWithCatalog =
-        await this.enrichEventWithCatalogData(enrichedEvent);
-      return { event: enrichedEventWithCatalog as any };
+      const [enrichedEventWithCatalog, gradingScale] = await Promise.all([
+        this.enrichEventWithCatalogData(enrichedEvent),
+        this.findEventGradingScale(response.event.id),
+      ]);
+      return { event: { ...enrichedEventWithCatalog, gradingScale } as any };
     }
 
     return response;
@@ -996,11 +1008,30 @@ export class EventService implements OnModuleInit {
       statusDescription,
       createdByUserId,
       category,
+      gradingScaleId,
       ...eventPayload
     } = normalizedDTO;
 
-    const response = await firstValueFrom(
-      this.eventService.updateEvent(eventPayload as UpdateEventRequest),
+    // The scale goes first: when it cannot change (the event already has evaluations) nothing is
+    // updated, and when the event update fails the previous scale is assigned again
+    let previousGradingScale: GradingScaleProto | null = null;
+    let eventGradingScale: GradingScaleProto | null = null;
+    if (gradingScaleId !== undefined && gradingScaleId !== null) {
+      previousGradingScale = await firstValueFrom(
+        this.gradingScaleService.getEventGradingScale({
+          eventId: eventPayload.id,
+        }),
+      );
+      eventGradingScale = await this.assignGradingScale(
+        eventPayload.id,
+        gradingScaleId,
+      );
+    }
+
+    const response = await this.updateEventRestoringScale(
+      eventPayload as UpdateEventRequest,
+      previousGradingScale,
+      eventGradingScale,
     );
 
     await this.updateEventCatalogData(
@@ -1016,9 +1047,11 @@ export class EventService implements OnModuleInit {
         response.event,
         statuses,
       );
-      const enrichedEventWithCatalog =
-        await this.enrichEventWithCatalogData(enrichedEvent);
-      return { event: enrichedEventWithCatalog as any };
+      const [enrichedEventWithCatalog, gradingScale] = await Promise.all([
+        this.enrichEventWithCatalogData(enrichedEvent),
+        eventGradingScale ?? this.findEventGradingScale(response.event.id),
+      ]);
+      return { event: { ...enrichedEventWithCatalog, gradingScale } as any };
     }
 
     return response;
@@ -1149,7 +1182,7 @@ export class EventService implements OnModuleInit {
     const category = response.category;
 
     if (!category) {
-      throw new Error(`Category ${id} was not returned by event-service`);
+      throw new Error(`event-service no devolvió la categoría ${id}`);
     }
 
     return {
@@ -1272,7 +1305,7 @@ export class EventService implements OnModuleInit {
   }
 
   async createAwardWinner(
-    dto: CreateAwardWinnerDTO,
+    dto: CreateAwardWinnerDTO & { assignedByUserId: number },
   ): Promise<CreateAwardWinnerResponse> {
     return firstValueFrom(
       this.eventService.createAwardWinner(dto as CreateAwardWinnerRequest),
@@ -1280,7 +1313,7 @@ export class EventService implements OnModuleInit {
   }
 
   async updateAwardWinner(
-    dto: UpdateAwardWinnerDTO,
+    dto: UpdateAwardWinnerDTO & { assignedByUserId: number },
   ): Promise<UpdateAwardWinnerResponse> {
     return firstValueFrom(
       this.eventService.updateAwardWinner(dto as UpdateAwardWinnerRequest),
@@ -1291,6 +1324,13 @@ export class EventService implements OnModuleInit {
     return firstValueFrom(
       this.eventService.getAwardWinner({ id } as GetAwardWinnerRequest),
     );
+  }
+
+  /** Awards won by the given projects in active categories, with the event publication flag */
+  async listAwardsByProjects(
+    projectIds: number[],
+  ): Promise<ListAwardsByProjectsResponse> {
+    return firstValueFrom(this.eventService.listAwardsByProjects({ projectIds }));
   }
 
   async listAwardWinners(
@@ -1411,6 +1451,70 @@ export class EventService implements OnModuleInit {
     );
   }
 
+  /**
+   * Public winners view across events (CU-86e3wzr5x): winners and co-winners of every
+   * event with published results and a public ranking, newest event first, with each
+   * project's name. event-service applies the visibility rule, rounds grades and hides
+   * those the ranking does not show.
+   */
+  async listPublishedWinners(
+    dto: ListPublishedWinnersDTO,
+  ): Promise<WinnersPageResponse> {
+    const response = await firstValueFrom(
+      this.eventService.listPublishedWinners({
+        page: dto.page,
+        limit: dto.limit,
+      }),
+    );
+    const events = response.events ?? [];
+
+    const projectIds = events.flatMap((event) =>
+      (event.categories ?? []).flatMap((category) =>
+        (category.awards ?? []).flatMap((award) =>
+          (award.winners ?? []).map((winner) => winner.projectId),
+        ),
+      ),
+    );
+    const projectNames = projectIds.length
+      ? await this.projectsService.getProjectNamesByIds(projectIds)
+      : new Map<number, string>();
+
+    return {
+      events: events.map((event) => ({
+        eventId: event.eventId,
+        name: event.name,
+        startDate: event.startDate,
+        endDate: event.endDate,
+        categories: (event.categories ?? []).map((category) => ({
+          categoryId: category.categoryId,
+          name: category.name,
+          awards: (category.awards ?? []).map((award) => ({
+            awardId: award.awardId,
+            title: award.title,
+            position: award.position,
+            coWinners: award.coWinners ?? false,
+            winners: (award.winners ?? []).map((winner) => ({
+              winnerId: winner.winnerId,
+              projectId: winner.projectId,
+              projectName: projectNames.get(winner.projectId) ?? null,
+              grade: winner.grade ?? null,
+            })),
+          })),
+        })),
+      })),
+      meta: {
+        total: response.meta?.total ?? 0,
+        itemsOnCurrentPage: response.meta?.itemsOnCurrentPage ?? events.length,
+        itemsPerPage:
+          response.meta?.itemsPerPage ??
+          dto.limit ??
+          DEFAULT_PUBLISHED_WINNERS_LIMIT,
+        currentPage: response.meta?.currentPage ?? dto.page ?? 1,
+        totalPages: response.meta?.totalPages ?? 0,
+      },
+    };
+  }
+
   async getRankingEventByEventId(eventId: number): Promise<RankingEventResponse> {
     return firstValueFrom(
       this.eventService.getRankingEventByEventId({ eventId } as GetRankingEventByEventIdRequest),
@@ -1491,6 +1595,28 @@ export class EventService implements OnModuleInit {
   }
 
   /**
+   * Events of the user with every role they hold in each one (GET /me/events)
+   */
+  async listMyEventsWithRoles(userId: number, dto: ListMyEventsWithRolesDTO) {
+    const response = await firstValueFrom(
+      this.eventService.listMyEventsWithRoles({ userId, ...dto }),
+    );
+    const items = (response.events ?? []).filter(
+      (item): item is typeof item & { event: EventProto } => !!item.event,
+    );
+    const statuses = items.length ? await this.getAndCacheStatuses() : [];
+    return {
+      events: items.map(({ event, roles }) => {
+        // accessCode is left out: any role in the event would receive the join code
+        const { accessCode: _accessCode, ...publicEvent } =
+          this.enrichSingleEventWithStatus(event, statuses);
+        return { ...publicEvent, roles };
+      }),
+      meta: response.meta,
+    };
+  }
+
+  /**
    * List events where the user is a member (with role information)
    * Enriches events with human-readable status names and role details
    */
@@ -1566,6 +1692,11 @@ export class EventService implements OnModuleInit {
       ...response,
       events: enrichedEventsWithCatalog as any,
     };
+  }
+
+  /** Course sections (NRC) a student can pick when submitting a project to the event */
+  async listCourseSections(eventId: number) {
+    return this.projectsService.listCourseSections(eventId);
   }
 
   async getMyProjectForEvent(userId: number, eventId: number) {

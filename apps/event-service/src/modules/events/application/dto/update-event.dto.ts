@@ -37,7 +37,7 @@ export class UpdateEventDTO {
   @IsOptional()
   @IsString()
   @Matches(/^[a-zA-Z0-9-]+$/, {
-    message: 'accessCode must contain only alphanumeric characters and hyphens',
+    message: 'accessCode solo puede tener letras, números y guiones',
   })
   @MinLength(3)
   @MaxLength(50)
@@ -54,6 +54,10 @@ export class UpdateEventDTO {
   @IsOptional()
   @IsBoolean()
   evaluationsOpened?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  resultsPublished?: boolean;
 
   @IsOptional()
   @IsISO8601()
@@ -113,4 +117,15 @@ export class UpdateEventDTO {
   @IsArray()
   @IsString({ each: true })
   organizers?: string[];
+
+  /** Not sent: unchanged. UpdateEventUC checks that it exists */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  termId?: number;
+
+  /** Not sent: unchanged. Projects already submitted keep their course section */
+  @IsOptional()
+  @IsBoolean()
+  requiresCourse?: boolean;
 }

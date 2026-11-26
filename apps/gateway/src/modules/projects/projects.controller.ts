@@ -6,14 +6,18 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Put,
   UploadedFile,
   UploadedFiles,
   UseInterceptors,
   Get,
   Query,
+  HttpCode,
   HttpException,
   HttpStatus,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import {
   FileFieldsInterceptor,
   FileInterceptor,
@@ -39,10 +43,7 @@ import { ReassignProjectJurorDto } from './dto/reassign-project-juror.dto';
 import { RemoveJurorFromProjectDto } from './dto/remove-juror-from-project.dto';
 import { RejectProjectDto } from './dto/reject-project.dto';
 import { ListProjectsByEventDto } from './dto/list-projects-by-event.dto';
-import {
-  DocumentStatusFilter,
-  UpdateProjectDocumentDto,
-} from './dto/update-project-document.dto';
+import { UpdateProjectDocumentDto } from './dto/update-project-document.dto';
 import { TypedDocument } from './dto/project-document-input.dto';
 import { ListProjectsAssignedToJurorDto } from './dto/list-projects-assigned-to-juror.dto';
 import { AddProjectDocumentsMultipartDto } from './dto/add-project-files-multipart.dto';
@@ -50,6 +51,22 @@ import { RequestChangesProjectDto } from './dto/request-changes-project.dto';
 import { UpdateProjectInfoDto } from './dto/update-project-info.dto';
 import { UpdateProjectCodeDto } from './dto/update-project-code.dto';
 import { ApproveProjectDto } from './dto/approve-project.dto';
+import { ProjectTutorsInputDto } from './dto/project-tutors-input.dto';
+import { TutorCandidatesQueryDto } from './dto/tutor-candidates-query.dto';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
+import { ProjectChangeLogResponseDto } from './dto/project-change-log-response.dto';
+import { AdminChangeProjectStateDto } from './dto/admin-change-project-state.dto';
+import { AdminUpdateProjectDto } from './dto/admin-update-project.dto';
+import {
+  AdminAddParticipantDto,
+  AdminRemoveParticipantQueryDto,
+} from './dto/admin-participant.dto';
+import { RequireAnyPermission } from '../../common/decorators/require-any-permission.decorator';
+import {
+  ADMIN_DOCUMENT_MAX_FILE_SIZE,
+  AdminChangeProjectDocumentStateDto,
+  AdminReplaceProjectDocumentDto,
+} from './dto/admin-project-document.dto';
 
 @ApiTags('projects')
 @ApiSecurity('JWT-auth')
@@ -78,7 +95,9 @@ export class ProjectsController {
       'Public endpoint that allows anyone to submit a project with participants and document files. ' +
       'Accepts up to 4 files: 1 logo, 1 poster, and 2 supporting documents. ' +
       'Maximum file size: 25MB per file. ' +
-      'Files are uploaded to Azure Blob Storage. No authentication required.',
+      'Files are uploaded to Azure Blob Storage. No authentication required. ' +
+      'The optional `tutors` field takes the project tutors (see the body schema); they get the Tutor role ' +
+      'and their invitations when the project is approved.',
   })
   @ApiBody({
     description: 'Project data with file uploads (max 4 files, 5MB each)',
@@ -115,23 +134,29 @@ export class ProjectsController {
     );
   }
 
-  // TODO: Add platform permission guard - only admins/team leaders can add/update pending participants
   @Post('add-update-participants')
   @ApiOperation({
     summary: 'Add a pending participant to a project or update an existing one',
     description:
-      'Adds a new pending participant to a project or updates an existing pending participant if the email already exists for that project. ',
+      'Adds a new pending participant to a project or updates an existing pending participant if the email already exists for that project. ' +
+      'Only a participant of the project or a user with manage:events.',
   })
   @ApiResponse({
     status: 201,
     description: 'Participant created/updated successfully',
   })
-  addPendingParticipant(@Body() body: AddPendingParticipantDto) {
+  async addPendingParticipant(
+    @Body() body: AddPendingParticipantDto,
+    @GetUser('id') userId: number,
+  ) {
+    await this.projectsService.assertProjectAccess(userId, 'EDIT', {
+      projectId: body.projectId,
+    });
     return this.projectsService.addPendingParticipant(body);
   }
 
-  // TODO: Add platform permission guard - only admins/event managers can assign jurors
   @Post('assign-jurors')
+  @RequirePermission('manage:events')
   @ApiOperation({
     summary: 'Assign a juror to multiple projects',
     description:
@@ -157,8 +182,8 @@ export class ProjectsController {
     return this.projectsService.assignJurorToProjects(assignJurorDto);
   }
 
-  // TODO: Add platform permission guard - only admins/event managers can reassign jurors
   @Patch('reassign-juror')
+  @RequirePermission('manage:events')
   @ApiOperation({
     summary: 'Reassign a project from one juror to another',
     description:
@@ -185,6 +210,7 @@ export class ProjectsController {
   }
 
   @Delete(':projectId/jurors/:jurorId')
+  @RequirePermission('manage:events')
   @ApiOperation({
     summary: 'Remove a juror from a project',
     description:
@@ -213,8 +239,8 @@ export class ProjectsController {
     return this.projectsService.removeJurorFromProject(dto);
   }
 
-  // TODO: Add platform permission guard - only admins/event managers can approve projects
   @Patch(':id/approve')
+  @RequirePermission('manage:events')
   @ApiOperation({
     summary: 'Approve a project',
     description:
@@ -245,8 +271,8 @@ export class ProjectsController {
     return this.projectsService.approveProject({ id, ...approveDto }, user.id);
   }
 
-  // TODO: Add platform permission guard - only admins/event managers can reject projects
   @Patch(':id/reject')
+  @RequirePermission('manage:events')
   @ApiOperation({
     summary: 'Reject a project',
     description:
@@ -282,6 +308,7 @@ export class ProjectsController {
   }
 
   @Patch(':id/request-changes')
+  @RequirePermission('manage:events')
   @ApiOperation({
     summary: 'Request changes of a project',
     description:
@@ -394,7 +421,9 @@ export class ProjectsController {
   @ApiOperation({
     summary: 'List projects assigned to a juror',
     description:
-      'Returns paginated projects assigned to a specific juror within an event.',
+      'Returns paginated projects assigned to a specific juror within an event. Each project carries its ' +
+      "`projectCode` when it has one, and the juror's own evaluation status: `evaluated` and `evaluation` " +
+      '(grade, comments and the level given to each criterion), null until the juror evaluates it.',
   })
   async listAssignedProjects(
     @Query() query: ListProjectsAssignedToJurorDto,
@@ -408,6 +437,44 @@ export class ProjectsController {
       Number(page ?? 1),
       Number(pageSize ?? 20),
     );
+  }
+
+  @Public()
+  @Get('tutor-candidates')
+  @ApiOperation({
+    summary: 'Search users who can be the tutor of a project',
+    description:
+      'Active users with the Tutor or Professor role; every word of `search` must appear in the first ' +
+      'or last name (at least 3 letters). Returns at most 10 results with id and name, no email. ' +
+      'Public, like the submission form that uses it.',
+  })
+  @ApiResponse({ status: 400, description: '`search` has fewer than 3 letters' })
+  async searchTutorCandidates(@Query() query: TutorCandidatesQueryDto) {
+    return this.projectsService.searchTutorCandidates(query.search);
+  }
+
+  @RequireAnyPermission('manage:events', 'manage:projects')
+  @Put(':id/tutors')
+  @ApiOperation({
+    summary: 'Replace the tutors of a project',
+    description:
+      'Replaces the whole list. Tutors left out are unlinked (they keep their roles). On an approved ' +
+      'project, linked tutors get the Tutor role and new tutors typed in by email are invited; ' +
+      'otherwise that happens when the project is approved. Returns the resulting tutors. ' +
+      'Requires manage:events or manage:projects. A replacement that changes the tutors is recorded in ' +
+      'the change log (TUTORS) with the linked and pending tutors before and after, and the optional reason.',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Project ID', example: 1 })
+  @ApiResponse({
+    status: 403,
+    description: 'The user has neither manage:events nor manage:projects',
+  })
+  async setProjectTutors(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: ProjectTutorsInputDto,
+    @GetUser() user: AppUser,
+  ) {
+    return this.projectsService.setProjectTutors(id, body, user.id);
   }
 
   @Get(':id/for-review')
@@ -431,14 +498,21 @@ export class ProjectsController {
     status: 404,
     description: 'Project not found',
   })
-  async getProjectForReview(@Param('id', ParseIntPipe) id: number) {
+  async getProjectForReview(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser('id') userId: number,
+  ) {
+    await this.projectsService.assertProjectAccess(userId, 'READ', {
+      projectId: id,
+    });
     return this.projectsService.getProjectForReview(id);
   }
 
   @Get(':id')
   @ApiOperation({
     summary: 'Get project by id',
-    description: 'Returns a single project for the given id.',
+    description:
+      'Returns a single project for the given id. Only its participants, its assigned jurors and users with read:events.',
   })
   @ApiParam({
     name: 'id',
@@ -446,7 +520,13 @@ export class ProjectsController {
     description: 'Project identifier',
     example: 1,
   })
-  async getProject(@Param('id', ParseIntPipe) id: number) {
+  async getProject(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser('id') userId: number,
+  ) {
+    await this.projectsService.assertProjectAccess(userId, 'READ', {
+      projectId: id,
+    });
     return this.projectsService.getProjectById(id);
   }
 
@@ -454,7 +534,10 @@ export class ProjectsController {
   @ApiOperation({
     summary: 'Update project document',
     description:
-      'Update the document file, type, or state of a project document.',
+      'Update the document file or type of a project document. ' +
+      'Only a participant of the project or a user with manage:events; checked before the file is uploaded. ' +
+      'The state is not editable here (403): it changes only through PATCH /projects/:id/admin/documents/:documentId/state, ' +
+      'which records it in the change log. A document withdrawn by an administrator (INACTIVE) cannot be edited here either (403).',
   })
   @ApiParam({
     name: 'id',
@@ -477,19 +560,23 @@ export class ProjectsController {
           enum: Object.values(TypedDocument),
           description: 'New document type (optional)',
         },
-        state: {
-          type: 'string',
-          enum: Object.values(DocumentStatusFilter),
-          description: 'Document state (optional)',
-        },
       },
     },
+  })
+  @ApiResponse({
+    status: 403,
+    description:
+      'No access to the project, a state was sent, or the document was withdrawn by an administrator',
   })
   async updateDocument(
     @Param('id', ParseIntPipe) id: number,
     @UploadedFile() file: Express.Multer.File,
     @Body() body: UpdateProjectDocumentDto,
+    @GetUser('id') userId: number,
   ) {
+    await this.projectsService.assertProjectAccess(userId, 'EDIT', {
+      documentId: id,
+    });
     const updated = await this.projectsService.updateProjectDocument(
       id,
       body,
@@ -501,7 +588,8 @@ export class ProjectsController {
   @Patch(':id/info')
   @ApiOperation({
     summary: 'Update project information',
-    description: 'Updates the name and/or description of a project.',
+    description:
+      'Updates the name and/or description of a project. Only a participant of the project or a user with manage:events.',
   })
   @ApiParam({
     name: 'id',
@@ -523,7 +611,11 @@ export class ProjectsController {
   async updateProjectInfo(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateProjectInfoDto: UpdateProjectInfoDto,
+    @GetUser('id') userId: number,
   ) {
+    await this.projectsService.assertProjectAccess(userId, 'EDIT', {
+      projectId: id,
+    });
     return this.projectsService.updateProjectInfo(
       id,
       updateProjectInfoDto.name,
@@ -548,7 +640,7 @@ export class ProjectsController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Project code updated successfully',
+    description: 'Código del proyecto actualizado correctamente',
   })
   @ApiResponse({
     status: 400,
@@ -572,10 +664,406 @@ export class ProjectsController {
       updateProjectCodeDto.projectCode,
       user.id,
     );
-    return { message: 'Project code updated successfully' };
+    return { message: 'Código del proyecto actualizado correctamente' };
+  }
+
+  @RequirePermission('manage:projects')
+  @Get(':id/change-log')
+  @ApiOperation({
+    summary: 'List the administrative changes of a project',
+    description:
+      'Corrections made by administrators (state, data, category, participants, tutors, documents), ' +
+      'most recent first: action, author, date, changed fields before and after, and reason.',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Project ID', example: 1 })
+  @ApiResponse({ status: 200, type: ProjectChangeLogResponseDto })
+  @ApiResponse({ status: 403, description: 'The user lacks manage:projects' })
+  @ApiResponse({ status: 404, description: 'Project not found' })
+  async listProjectChangeLog(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<ProjectChangeLogResponseDto> {
+    return this.projectsService.listProjectChangeLog(id);
+  }
+
+  @RequirePermission('manage:projects')
+  @Patch(':id/admin/state')
+  @ApiOperation({
+    summary: 'Change the state of a project (administrative correction)',
+    description:
+      'Moves the project from any state to any other with a mandatory reason, and records the change ' +
+      'in the change log. Becoming APPROVED has the effects of the normal approval (Tutor role and ' +
+      'invitations for the tutors). With notify the pending participants get the email of the new state ' +
+      '(none for UNDER_REVIEW). If the project has juror evaluations or the event has published results, ' +
+      'nothing changes and the answer is 409 with code PROJECT_STATE_CHANGE_BLOCKED and the cause in ' +
+      'details (hasEvaluations, evaluationCount, resultsPublished, leavesApproved); resend with force to apply it. ' +
+      'Leaving APPROVED takes the project out of the ranking and the juror import; evaluations are kept. ' +
+      'The project reason is set for REJECTED and REQUEST_CHANGES and cleared for the other states. ' +
+      'A 409 without code means another change was saved first: reload and retry.',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Project ID', example: 1 })
+  @ApiResponse({
+    status: 200,
+    description:
+      'State changed; returns { project, failedEffects, warning }. failedEffects lists what failed after the ' +
+      'change was saved (TUTOR_ACTIVATION, NOTIFICATION) and warning explains it in Spanish (null when nothing failed).',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Missing reason, unknown state or the project is already in that state',
+  })
+  @ApiResponse({ status: 403, description: 'The user lacks manage:projects' })
+  @ApiResponse({ status: 404, description: 'Project not found' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Not changed: the project has evaluations or the event has published results (send force: true)',
+    schema: {
+      example: {
+        statusCode: 409,
+        message:
+          'No se cambió el estado porque el proyecto ya tiene 2 evaluaciones de jurados. Si el proyecto deja de estar aprobado, sale del ranking y de la plantilla e importación de jurados; sus evaluaciones se conservan. Confirma el cambio para aplicarlo de todas formas.',
+        code: 'PROJECT_STATE_CHANGE_BLOCKED',
+        details: {
+          hasEvaluations: true,
+          evaluationCount: 2,
+          resultsPublished: false,
+          leavesApproved: true,
+        },
+        timestamp: '2026-11-21T15:00:00.000Z',
+      },
+    },
+  })
+  adminChangeProjectState(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AdminChangeProjectStateDto,
+    @GetUser() user: AppUser,
+  ) {
+    return this.projectsService.adminChangeProjectState(id, dto, user.id);
+  }
+
+  @RequirePermission('manage:projects')
+  @Patch(':id/admin')
+  @ApiOperation({
+    summary:
+      'Edit the basic data and the category of a project (administrative correction)',
+    description:
+      'Changes only the fields sent: name, description, projectCode, eventNumber and courseId (category); ' +
+      'null or an empty text clears description, projectCode and eventNumber. The state is not editable here ' +
+      '(PATCH /projects/:id/admin/state); a state field in the body is ignored. The changed fields are recorded ' +
+      'in the change log with their values before and after (INFO for the basic data, CATEGORY for courseId) ' +
+      'and the optional reason; an edit that changes nothing records nothing. The category must be an active ' +
+      "category of the project's event (400 otherwise). A 409 changes nothing and its code says why: " +
+      'PROJECT_NAME_TAKEN (another project of the event has the name; details.name) or ' +
+      'PROJECT_CATEGORY_CHANGE_BLOCKED (the project has juror evaluations, scored with the rubrics of its ' +
+      'category; details.evaluationCount; resend with force: true to change the category anyway) or ' +
+      'PROJECT_CHANGED_MEANWHILE (another edit changed the same fields first; reload and retry).',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Project ID', example: 1 })
+  @ApiResponse({ status: 200, description: 'The project with its new values' })
+  @ApiResponse({
+    status: 400,
+    description:
+      'No editable field, an invalid value, or a category that is not an active category of the event',
+  })
+  @ApiResponse({ status: 403, description: 'The user lacks manage:projects' })
+  @ApiResponse({ status: 404, description: 'Project not found' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Not changed: the name is taken in the event, the category change needs force because the project has evaluations, or another edit changed the same fields first',
+    schema: {
+      example: {
+        statusCode: 409,
+        message:
+          'No se cambió la categoría porque el proyecto ya tiene 2 evaluaciones de jurados, calificadas con las rúbricas de la categoría actual. Confirma el cambio para aplicarlo de todas formas.',
+        code: 'PROJECT_CATEGORY_CHANGE_BLOCKED',
+        details: { evaluationCount: 2 },
+        timestamp: '2026-11-21T15:00:00.000Z',
+      },
+    },
+  })
+  adminUpdateProject(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AdminUpdateProjectDto,
+    @GetUser() user: AppUser,
+  ) {
+    return this.projectsService.adminUpdateProject(id, dto, user.id);
+  }
+
+  @RequirePermission('manage:projects')
+  @Post(':id/admin/participants')
+  @ApiOperation({
+    summary: 'Add a participant to a project (administrative correction)',
+    description:
+      'With userId adds an enrolled participant (platform user) with its studentCode; without userId adds ' +
+      'a pending participant from firstName, lastName, email, studentCode, semester and career. On an ' +
+      'APPROVED project a pending participant gets the approval email, as the other participants got it, ' +
+      'and is INVITED; in other states it stays PENDING until the approval. If that email fails the ' +
+      'participant stays added (PENDING) and the answer carries failedEffects and a warning. Recorded in ' +
+      'the change log (PARTICIPANTS) with the participant data and the optional reason. A 409 changes ' +
+      'nothing and its code says why: PARTICIPANT_HAS_ACTIVE_PROJECT (the student is in another project ' +
+      'of the event that is not rejected; details.projectId) or PARTICIPANT_ALREADY_IN_PROJECT.',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Project ID', example: 1 })
+  @ApiResponse({
+    status: 201,
+    description:
+      '{ participant, pendingParticipant, failedEffects, warning }: one of participant (enrolled) or pendingParticipant is set',
+  })
+  @ApiResponse({ status: 400, description: 'Missing or invalid fields' })
+  @ApiResponse({ status: 403, description: 'The user lacks manage:projects' })
+  @ApiResponse({ status: 404, description: 'Project or user not found' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Not added: the student already takes part in this project or in another active project of the event',
+    schema: {
+      example: {
+        statusCode: 409,
+        message:
+          'El estudiante ana@uni.edu ya participa en otro proyecto activo de este evento (proyecto 12). Quítalo de ese proyecto antes de agregarlo aquí.',
+        code: 'PARTICIPANT_HAS_ACTIVE_PROJECT',
+        details: { email: 'ana@uni.edu', projectId: 12 },
+        timestamp: '2026-11-21T15:00:00.000Z',
+      },
+    },
+  })
+  adminAddParticipant(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AdminAddParticipantDto,
+    @GetUser() user: AppUser,
+  ) {
+    return this.projectsService.adminAddParticipant(id, dto, user.id);
+  }
+
+  // Declared before ':userId' so "pending" is not read as a user id
+  @RequirePermission('manage:projects')
+  @Delete(':id/admin/participants/pending/:pendingId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary:
+      'Remove a pending participant from a project (administrative correction)',
+    description:
+      'Removes a pending participant that has not joined (a joined one is removed as enrolled). The last ' +
+      'participant of a project cannot be removed (400, code LAST_PARTICIPANT). Recorded in the change log ' +
+      '(PARTICIPANTS) with the participant data and the optional reason. An invitation email already sent is not withdrawn.',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Project ID', example: 1 })
+  @ApiParam({
+    name: 'pendingId',
+    type: Number,
+    description: 'Pending participant ID',
+    example: 7,
+  })
+  @ApiResponse({ status: 204, description: 'Removed' })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Last participant of the project, or a pending participant that already joined',
+  })
+  @ApiResponse({ status: 403, description: 'The user lacks manage:projects' })
+  @ApiResponse({
+    status: 404,
+    description: 'Project or pending participant not found',
+  })
+  async adminRemovePendingParticipant(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('pendingId', ParseIntPipe) pendingId: number,
+    @Query() query: AdminRemoveParticipantQueryDto,
+    @GetUser() user: AppUser,
+  ): Promise<void> {
+    await this.projectsService.adminRemoveParticipant(
+      id,
+      { pendingId },
+      query.reason,
+      user.id,
+    );
+  }
+
+  @RequirePermission('manage:projects')
+  @Delete(':id/admin/participants/:userId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary:
+      'Remove an enrolled participant from a project (administrative correction)',
+    description:
+      'Removes the enrolled participant and their pending row in the project (same student code or email), ' +
+      'so they can join another project of the event. The last participant of a project cannot be removed ' +
+      '(400, code LAST_PARTICIPANT). Recorded in the change log (PARTICIPANTS) with the participant data and the optional reason.',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Project ID', example: 1 })
+  @ApiParam({
+    name: 'userId',
+    type: Number,
+    description: 'User ID of the participant',
+    example: 42,
+  })
+  @ApiResponse({ status: 204, description: 'Removed' })
+  @ApiResponse({
+    status: 400,
+    description: 'Last participant of the project',
+    schema: {
+      example: {
+        statusCode: 400,
+        message:
+          'No se puede quitar al único integrante del proyecto. Agrega otro integrante antes de quitar este.',
+        code: 'LAST_PARTICIPANT',
+        details: {},
+        timestamp: '2026-11-21T15:00:00.000Z',
+      },
+    },
+  })
+  @ApiResponse({ status: 403, description: 'The user lacks manage:projects' })
+  @ApiResponse({
+    status: 404,
+    description: 'Project not found or the user is not an enrolled participant',
+  })
+  async adminRemoveParticipant(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('userId', ParseIntPipe) userId: number,
+    @Query() query: AdminRemoveParticipantQueryDto,
+    @GetUser() user: AppUser,
+  ): Promise<void> {
+    await this.projectsService.adminRemoveParticipant(
+      id,
+      { userId },
+      query.reason,
+      user.id,
+    );
+  }
+
+  @RequirePermission('manage:projects')
+  @Get(':id/admin/documents')
+  @ApiOperation({
+    summary: 'List every document of a project (administrative correction)',
+    description:
+      'Logo, poster and supporting documents of the project, INACTIVE ones included, newest first, with a ' +
+      'signed read URL (valid for 1 hour). Every other read of the project leaves the INACTIVE documents out.',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Project ID', example: 1 })
+  @ApiResponse({ status: 200, description: '{ items: ProjectDocument[] }' })
+  @ApiResponse({ status: 403, description: 'The user lacks manage:projects' })
+  @ApiResponse({ status: 404, description: 'Project not found' })
+  async adminListProjectDocuments(@Param('id', ParseIntPipe) id: number) {
+    return {
+      items: await this.projectsService.adminListProjectDocuments(id),
+    };
+  }
+
+  @RequirePermission('manage:projects')
+  @Put(':id/admin/documents/:documentId')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: ADMIN_DOCUMENT_MAX_FILE_SIZE },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary:
+      'Replace the file of a project document (administrative correction)',
+    description:
+      'Uploads the new file to the platform storage (5 MB at most, the limit of POST /projects/:projectId/documents) ' +
+      'and points the document to it; the document keeps its id, type (LOGO, POSTER, SUPPORTING_DOCUMENT) and state. ' +
+      'Recorded in the change log (DOCUMENTS) with the document before and after (type, stored file name, state) and ' +
+      'the optional reason. The document is looked up in the project before the upload: a document of another ' +
+      'project is 404 and uploads nothing. The old file stays in the storage.',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Project ID', example: 1 })
+  @ApiParam({
+    name: 'documentId',
+    type: Number,
+    description: 'Project document ID',
+    example: 7,
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'New file of the document',
+        },
+        reason: {
+          type: 'string',
+          description: 'Why the file is replaced (optional)',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'The document with a signed read URL of its new file',
+  })
+  @ApiResponse({ status: 400, description: 'No file sent' })
+  @ApiResponse({ status: 403, description: 'The user lacks manage:projects' })
+  @ApiResponse({
+    status: 404,
+    description: 'Project not found, or the document is not one of the project',
+  })
+  @ApiResponse({ status: 413, description: 'File larger than 5 MB' })
+  async adminReplaceProjectDocument(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('documentId', ParseIntPipe) documentId: number,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() dto: AdminReplaceProjectDocumentDto,
+    @GetUser() user: AppUser,
+  ) {
+    return this.projectsService.adminReplaceProjectDocument(
+      id,
+      documentId,
+      file,
+      dto,
+      user.id,
+    );
+  }
+
+  @RequirePermission('manage:projects')
+  @Patch(':id/admin/documents/:documentId/state')
+  @ApiOperation({
+    summary:
+      'Activate or deactivate a project document (administrative correction)',
+    description:
+      'INACTIVE withdraws the document from every read of the project (public listings, detail, review, the ' +
+      "students' own project and the stable open link); only GET /projects/:id/admin/documents still lists it. " +
+      'ACTIVE shows it again. Recorded in the change log (DOCUMENTS) with the state before and after and the ' +
+      'optional reason. Setting the state the document already has is 400 and records nothing.',
+  })
+  @ApiParam({ name: 'id', type: Number, description: 'Project ID', example: 1 })
+  @ApiParam({
+    name: 'documentId',
+    type: Number,
+    description: 'Project document ID',
+    example: 7,
+  })
+  @ApiResponse({ status: 200, description: 'The document with its new state' })
+  @ApiResponse({
+    status: 400,
+    description: 'Unknown state, or the document already has it',
+  })
+  @ApiResponse({ status: 403, description: 'The user lacks manage:projects' })
+  @ApiResponse({
+    status: 404,
+    description: 'Project not found, or the document is not one of the project',
+  })
+  async adminChangeProjectDocumentState(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('documentId', ParseIntPipe) documentId: number,
+    @Body() dto: AdminChangeProjectDocumentStateDto,
+    @GetUser() user: AppUser,
+  ) {
+    return this.projectsService.adminChangeProjectDocumentState(
+      id,
+      documentId,
+      dto,
+      user.id,
+    );
   }
 
   @Get(':id/jurors')
+  @RequirePermission('read:event-members')
   @ApiOperation({
     summary: 'List jurors assigned to a project',
     description:
@@ -597,6 +1085,30 @@ export class ProjectsController {
   async listProjectJurors(@Param('id', ParseIntPipe) id: number) {
     const jurors = await this.projectsService.listJurorsByProjectId(id);
     return { jurors };
+  }
+
+  @Public()
+  @Get(':projectId/documents/:documentId/open')
+  @ApiOperation({
+    summary: 'Open a project document',
+    description:
+      'Stable link to a document: redirects (302) to a freshly signed read URL of its file (valid for 1 hour). ' +
+      'Use it wherever a link must keep working after the response that listed it (exported reports, open tabs). ' +
+      'Only files stored in the platform storage are served; anything else answers 404.',
+  })
+  @ApiParam({ name: 'projectId', type: Number, example: 1 })
+  @ApiParam({ name: 'documentId', type: Number, example: 1 })
+  async openDocument(
+    @Param('projectId', ParseIntPipe) projectId: number,
+    @Param('documentId', ParseIntPipe) documentId: number,
+    @Res() res: Response,
+  ) {
+    const url = await this.projectsService.getDocumentOpenUrl(
+      projectId,
+      documentId,
+    );
+    // Each click signs a new URL: never let a cache keep the redirect
+    res.set('Cache-Control', 'no-store').redirect(HttpStatus.FOUND, url);
   }
 
   @Public()

@@ -16,6 +16,9 @@ export interface IsPlatformStaffResponse {
   };
 }
 
+const ADMIN_ROLE_NAME = 'Admin';
+const PLATFORM_STAFF_PERMISSION = 'read:events';
+
 @Injectable()
 export class IsPlatformStaffUseCase {
   constructor(
@@ -32,7 +35,7 @@ export class IsPlatformStaffUseCase {
       if (!user) {
         throw new RpcException({
           code: status.NOT_FOUND,
-          message: `User with email '${dto.email}' not found`,
+          message: `No se encontró el usuario con el correo '${dto.email}'`,
         });
       }
       userId = user.id;
@@ -41,7 +44,7 @@ export class IsPlatformStaffUseCase {
     } else {
       throw new RpcException({
         code: status.INVALID_ARGUMENT,
-        message: 'Either userId or email must be provided',
+        message: 'Se debe indicar userId o email',
       });
     }
 
@@ -49,19 +52,24 @@ export class IsPlatformStaffUseCase {
     const data =
       await this.permissionRepository.findUserPlatformPermissions(userId);
 
-    const isAdminOrEventManager = data.roles.some((role: Role) =>
-      ['Admin', 'EventManager'].includes(role.name),
-    );
+    // Platform staff can see every event. It is decided by permission, not by role name,
+    // so every role that reads all events (Admin, FacultyAdmin, EventManager, Dean) counts.
+    const isStaff =
+      data.roles.some((role: Role) => role.name === ADMIN_ROLE_NAME) ||
+      data.permissions.some(
+        (permission) =>
+          `${permission.action}:${permission.resource}` === PLATFORM_STAFF_PERMISSION,
+      );
 
-    // Check if user has any platform roles
-    if (data.roles.length === 0 || !isAdminOrEventManager) {
+    if (!isStaff) {
       return {
         isPlatformStaff: false,
       };
     }
 
-    // User can only have one platform role so we get the first one
-    const platformRole = data.roles[0];
+    // A user can hold several platform roles; Admin wins, otherwise the first one
+    const platformRole =
+      data.roles.find((role: Role) => role.name === ADMIN_ROLE_NAME) ?? data.roles[0];
 
     return {
       isPlatformStaff: true,

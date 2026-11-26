@@ -47,6 +47,19 @@ export class CreateProjectWithParticipantsMultipartDto {
   courseId: string;
 
   @ApiProperty({
+    description:
+      'NRC of the course section of the project, looked up in the academic term of the event. ' +
+      'Required when the event requires a course section (requiresCourse); ignored otherwise',
+    example: '1001',
+    maxLength: 20,
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  nrc?: string;
+
+  @ApiProperty({
     description: 'Name of the project',
     example: 'Smart Home Automation System',
   })
@@ -92,6 +105,22 @@ export class CreateProjectWithParticipantsMultipartDto {
   @IsString()
   @IsOptional()
   participants?: string;
+
+  @ApiProperty({
+    description:
+      'JSON string with the project tutors: `userIds` (existing Tutor/Professor users) and `pending` ' +
+      '(name and email of tutors who are not registered; each one is invited). Optional.',
+    example: JSON.stringify({
+      userIds: [12],
+      pending: [
+        { firstName: 'Laura', lastName: 'Gómez', email: 'laura.gomez@university.edu' },
+      ],
+    }),
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  tutors?: string;
 
   @ApiProperty({
     description: 'JSON string array of document metadata (type)',

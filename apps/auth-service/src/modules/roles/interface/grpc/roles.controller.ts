@@ -4,8 +4,16 @@ import { AssignPlatformRolesPublicUseCase } from '../../application/use-cases/as
 import { GetRolesByIdsUseCase } from '../../application/use-cases/get-roles-by-ids.use-case';
 import { GetRolesUseCase } from "../../application/use-cases/get-roles.use-case";
 import { RemovePlatformRoleUseCase } from '../../application/use-cases/remove-platform-role.use-case';
+import { FindUsersByRolesUseCase } from '../../application/use-cases/find-users-by-roles.use-case';
+import { CheckPlatformRoleGrantUseCase } from '../../application/use-cases/check-platform-role-grant.use-case';
 import { AssignPlatformRolesDto } from '../../application/dto/assign-platform-roles.dto';
-import { AUTH_SERVICE_NAME } from '@app/common/generated/auth';
+import {
+  AUTH_SERVICE_NAME,
+  CheckPlatformRoleGrantRequest,
+  CheckPlatformRoleGrantResponse,
+  FindUsersByRolesRequest,
+  FindUsersByRolesResponse,
+} from '@app/common/generated/auth';
 
 @Controller()
 export class RolesController {
@@ -14,13 +22,40 @@ export class RolesController {
     private readonly getRolesByIdsUseCase: GetRolesByIdsUseCase,
     private readonly getRolesUseCase: GetRolesUseCase,
     private readonly removePlatformRoleUseCase: RemovePlatformRoleUseCase,
+    private readonly findUsersByRolesUseCase: FindUsersByRolesUseCase,
+    private readonly checkPlatformRoleGrantUseCase: CheckPlatformRoleGrantUseCase,
   ) {}
+
+  @GrpcMethod(AUTH_SERVICE_NAME, 'CheckPlatformRoleGrant')
+  async checkPlatformRoleGrant(
+    request: CheckPlatformRoleGrantRequest,
+  ): Promise<CheckPlatformRoleGrantResponse> {
+    await this.checkPlatformRoleGrantUseCase.execute({
+      actorUserId: request.actorUserId,
+      roleIds: request.roleIds ?? [],
+      targetUserId: request.targetUserId || undefined,
+    });
+    return { allowed: true };
+  }
 
   @GrpcMethod(AUTH_SERVICE_NAME, 'AssignPlatformRoles')
   async assignPlatformRoles(
     request: AssignPlatformRolesDto,
   ): Promise<{ success: boolean }> {
     return await this.assignPlatformRolesPublicUseCase.execute(request);
+  }
+
+  @GrpcMethod(AUTH_SERVICE_NAME, 'FindUsersByRoles')
+  async findUsersByRoles(
+    request: FindUsersByRolesRequest,
+  ): Promise<FindUsersByRolesResponse> {
+    const users = await this.findUsersByRolesUseCase.execute(request);
+    return {
+      users: users.map((user) => ({
+        ...user,
+        lastName: user.lastName ?? undefined,
+      })),
+    };
   }
 
   @GrpcMethod(AUTH_SERVICE_NAME, 'GetRolesByIds')
