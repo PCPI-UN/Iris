@@ -86,6 +86,10 @@ service ProjectsService {
   // Administrative addition of a participant: enrolled (userId and studentCode) or pending. A student already
   // in the project or in another active project of the event changes nothing and the answer carries `rejected`
   rpc AdminAddParticipant (AdminAddParticipantRequest) returns (AdminAddParticipantResponse);
+  // Creation of a project by an administrator, even after the inscription deadline or in an event that is not
+  // publicly joinable. A name taken in the event, a student in another project of the event or an event with
+  // published results change nothing and the answer carries `rejected`. The gateway uploads the documents after
+  rpc AdminCreateProject (AdminCreateProjectRequest) returns (AdminCreateProjectResponse);
   // Administrative removal of an enrolled (userId) or pending (pendingId) participant. Removing the last
   // participant changes nothing and the answer carries `rejected`
   rpc AdminRemoveParticipant (AdminRemoveParticipantRequest) returns (AdminRemoveParticipantResponse);
@@ -804,7 +808,7 @@ message ProjectChangeLogEntry {
   int32 projectId = 2;
   // auth-service user who made the change
   int32 actorUserId = 3;
-  // STATE, INFO, CATEGORY, PARTICIPANTS, TUTORS or DOCUMENTS
+  // STATE, INFO, CATEGORY, PARTICIPANTS, TUTORS, DOCUMENTS or CREATED (created by an administrator)
   string action = 4;
   // JSON object with the changed fields only, before and after the change
   string beforeJson = 5;
@@ -932,6 +936,57 @@ message AdminAddParticipantResponse {
   repeated string failedEffects = 4;
   // Spanish warning for failedEffects; empty when nothing failed
   string warning = 5;
+}
+
+message AdminCreateProjectRequest {
+  int32 eventId = 1;
+  int32 courseId = 2;
+  string name = 3;
+  optional string description = 4;
+  optional string projectCode = 5;
+  // Required when the event requires a course section; ignored otherwise
+  optional string nrc = 6;
+  // APPROVED (default) or UNDER_REVIEW
+  optional ProjectState state = 7;
+  // Students with an account join directly; the others stay pending
+  repeated PendingParticipantInput participants = 8;
+  repeated int32 tutorUserIds = 9;
+  repeated PendingTutorInput pendingTutors = 10;
+  // auth-service user making the change
+  int32 actingUserId = 11;
+  // ADMIN_FORM or ADMIN_BULK (with the file name and its row), kept in the CREATED change log entry
+  string originKind = 12;
+  optional string originFileName = 13;
+  optional int32 originRowNumber = 14;
+}
+
+// Why the project was not created
+message AdminCreateProjectRejection {
+  // PROJECT_NAME_TAKEN: another project of the event has that name
+  // PARTICIPANT_IN_OTHER_PROJECT: the students (emails) are in another project of the event that is not REJECTED
+  // EVENT_RESULTS_PUBLISHED: the event already published its results
+  string code = 1;
+  // Spanish message for the user
+  string message = 2;
+  repeated string emails = 3;
+}
+
+message AdminCreatedParticipant {
+  string email = 1;
+  // JOINED (has an account), PENDING or INVITED (pending, approval email sent)
+  string status = 2;
+}
+
+// Either project (created) or rejected (nothing changed) is set
+message AdminCreateProjectResponse {
+  optional Project project = 1;
+  repeated AdminCreatedParticipant participants = 2;
+  repeated ProjectTutor tutors = 3;
+  optional AdminCreateProjectRejection rejected = 4;
+  // Work in other services that failed after the project was saved: INVITATION, TUTOR_ACTIVATION, NOTIFICATION
+  repeated string failedEffects = 5;
+  // Spanish warning for failedEffects; empty when nothing failed
+  string warning = 6;
 }
 
 // Exactly one of userId or pendingId is set

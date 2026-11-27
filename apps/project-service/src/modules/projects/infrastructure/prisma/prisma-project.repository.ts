@@ -109,18 +109,30 @@ export class PrismaProjectRepository implements ProjectRepository {
   constructor(private readonly prisma: PrismaService) { }
 
   async create(data: CreateProjectInput): Promise<Project> {
-    return this.prisma.db.project.create({
-      data: {
-        eventId: data.eventId,
-        courseId: data.courseId,
-        name: data.name,
-        projectCode: data.projectCode ?? null,
-        description: data.description ?? null,
-        eventNumber: data.eventNumber ?? null,
-        state: data.state,
-        academicCourseId: data.academicCourseId,
-      },
-    }) as unknown as Project;
+    try {
+      return (await this.prisma.db.project.create({
+        data: {
+          eventId: data.eventId,
+          courseId: data.courseId,
+          name: data.name,
+          projectCode: data.projectCode ?? null,
+          description: data.description ?? null,
+          eventNumber: data.eventNumber ?? null,
+          state: data.state,
+          academicCourseId: data.academicCourseId,
+        },
+      })) as unknown as Project;
+    } catch (error) {
+      // Another project of the event took the name after it was checked (@@unique([eventId, name]))
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002' &&
+        uniqueTargetIncludes(error, 'name')
+      ) {
+        throw new ProjectNameTakenError(data.name);
+      }
+      throw error;
+    }
   }
 
   async findAcademicCourseId(termId: number, nrc: string): Promise<number | null> {
@@ -171,6 +183,12 @@ export class PrismaProjectRepository implements ProjectRepository {
   async findProject(eventId: number, courseId: number, name: string): Promise<Project | null> {
     return (await this.prisma.db.project.findFirst({
       where: { eventId, courseId, name },
+    })) as unknown as Project | null;
+  }
+
+  async findProjectByName(eventId: number, name: string): Promise<Project | null> {
+    return (await this.prisma.db.project.findFirst({
+      where: { eventId, name },
     })) as unknown as Project | null;
   }
 

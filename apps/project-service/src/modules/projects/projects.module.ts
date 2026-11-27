@@ -3,6 +3,7 @@ import { ProjectsController } from './interface/grpc/projects.controller';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { PrismaProjectRepository } from './infrastructure/prisma/prisma-project.repository';
 import { CreateProjectUC } from './application/use-cases/create-project.uc';
+import { CreateProjectWithPendingParticipantsUC } from './application/use-cases/create-project-with-pending-participants.uc';
 import { GetProjectUC } from './application/use-cases/get-project.uc';
 import { ListProjectsByIdsUC } from './application/use-cases/list-projects-by-ids.uc';
 import { ListProjectsByEventUC } from './application/use-cases/list-projects-by-event.uc';
@@ -15,6 +16,7 @@ import { GetStudentParticipationStatsUC } from './application/use-cases/get-stud
 import { UpdateProjectUC } from './application/use-cases/update-project.uc';
 import { AdminUpdateProjectUC } from './application/use-cases/admin-update-project.uc';
 import { AdminAddParticipantUC } from './application/use-cases/admin-add-participant.uc';
+import { AdminCreateProjectUC } from './application/use-cases/admin-create-project.uc';
 import { AdminRemoveParticipantUC } from './application/use-cases/admin-remove-participant.uc';
 import { ReplaceProjectTutorsUC } from './application/use-cases/replace-project-tutors.uc';
 import { AdminReplaceProjectDocumentUC } from './application/use-cases/admin-replace-project-document.uc';
@@ -71,6 +73,7 @@ import { UnitOfWork } from '@app/common/ports/unit-of-work.port';
 import { PrismaUnitOfWork } from './infrastructure/prisma/prisma-unit-of-work';
 import { AdminChangeProjectStateUC } from './application/use-cases/admin-change-project-state.uc';
 import { ProjectApprovalEffects } from './application/services/project-approval-effects.service';
+import { ProjectEnrollmentService } from './application/services/project-enrollment.service';
 import { EvaluationServiceModule } from './evaluation-service.module';
 import { EVALUATION_SERVICE_PORT } from './application/ports/evaluation-service.port';
 import { EvaluationServiceAdapter } from './infrastructure/grpc-client/evaluation-service.adapter';
@@ -96,12 +99,14 @@ import { EvaluationServiceAdapter } from './infrastructure/grpc-client/evaluatio
     ListProjectChangeLogUC,
     AdminChangeProjectStateUC,
     ProjectApprovalEffects,
+    ProjectEnrollmentService,
     {
       provide: EVALUATION_SERVICE_PORT,
       useExisting: EvaluationServiceAdapter,
     },
 
     CreateProjectUC,
+    CreateProjectWithPendingParticipantsUC,
     {
       provide: EVENT_SERVICE_PORT,
       useExisting: EventServiceAdapter,
@@ -118,6 +123,7 @@ import { EvaluationServiceAdapter } from './infrastructure/grpc-client/evaluatio
     UpdateProjectUC,
     AdminUpdateProjectUC,
     AdminAddParticipantUC,
+    AdminCreateProjectUC,
     AdminRemoveParticipantUC,
     ReplaceProjectTutorsUC,
     AdminReplaceProjectDocumentUC,

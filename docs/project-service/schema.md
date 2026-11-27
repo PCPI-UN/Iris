@@ -133,7 +133,7 @@ erDiagram
 | `ProjectState` | `UNDER_REVIEW`, `APPROVED`, `REJECTED`, `REQUEST_CHANGES` | Review state of a project. New projects start in `UNDER_REVIEW`. |
 | `TypedDocument` | `LOGO`, `POSTER`, `SUPPORTING_DOCUMENT` | Kind of project document. |
 | `Status` | `ACTIVE`, `INACTIVE` | Whether a document is in use. Default `ACTIVE`. |
-| `ProjectChangeAction` | `STATE`, `INFO`, `CATEGORY`, `PARTICIPANTS`, `TUTORS`, `DOCUMENTS` | What an administrative correction of a project changed: its state, its data (name, description, code...), its event category, its participants, its tutors or its documents. |
+| `ProjectChangeAction` | `STATE`, `INFO`, `CATEGORY`, `PARTICIPANTS`, `TUTORS`, `DOCUMENTS`, `CREATED` | What an administrative correction of a project changed: its state, its data (name, description, code...), its event category, its participants, its tutors or its documents. `CREATED` is the creation of the project by an administrator: `before` is empty and `after` holds the initial values. |
 | `PendingParticipantStatus` | `PENDING`, `INVITED`, `JOINED` | `PENDING`: captured at submission. `JOINED`: accepted the invitation and became a confirmed participant. `INVITED` is defined but not currently assigned. |
 
 ## Tables
@@ -241,7 +241,7 @@ Tutors typed in at submission who have no account yet; marked `JOINED` when thei
 
 ### `project_change_log` (`ProjectChangeLog`)
 
-Administrative corrections of a project (state, data, category, participants, tutors, documents): who made them, when, the values before and after, and why. Each row is inserted in the same transaction as the edit it describes; read through `GET /projects/:id/change-log`, most recent first.
+Administrative corrections of a project (state, data, category, participants, tutors, documents) and its creation by an administrator: who made them, when, the values before and after, and why. Each row is inserted in the same transaction as the edit it describes; read through `GET /projects/:id/change-log`, most recent first.
 
 | Column | Type | Null | Default / constraint |
 | --- | --- | --- | --- |

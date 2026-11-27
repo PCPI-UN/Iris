@@ -230,6 +230,7 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   },
   // modules/projects/projects.controller.ts
   'POST /projects': { access: 'public' },
+  'POST /projects/admin': { permission: ['manage:projects'] },
   'GET /projects/:id': {
     access: 'owner',
     why: 'project-service CheckProjectAccess READ: participants, assigned jurors or read:events',
