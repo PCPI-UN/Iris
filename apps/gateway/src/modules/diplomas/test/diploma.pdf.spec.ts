@@ -29,4 +29,27 @@ describe('DiplomaPdfRenderer', () => {
       }),
     ).rejects.toThrow(/ENOENT/);
   });
+
+  it('renders several diplomas in one PDF, one page each, embedding each design once', async () => {
+    const renderer = new DiplomaPdfRenderer(assetsDir);
+    const single = await renderer.render({
+      template: 'feria-proyectos-stem',
+      projectName: 'Riego IoT',
+    });
+
+    const pdf = await renderer.renderMany(
+      [
+        { template: 'feria-proyectos-stem', projectName: 'Riego IoT' },
+        { template: 'feria-proyectos-stem', projectName: 'Brazo robótico' },
+        { template: 'feria-proyectos-stem', projectName: 'Puente de papel' },
+      ],
+      'Diplomas - Feria',
+    );
+
+    expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
+    const pages = pdf.toString('latin1').match(/\/Type \/Page\s/g);
+    expect(pages).toHaveLength(3);
+    // The design is embedded once and reused by every page
+    expect(pdf.length).toBeLessThan(single.length * 1.5);
+  });
 });

@@ -88,6 +88,10 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
     access: 'owner',
     why: "DiplomasService (gateway): diploma of the caller's own project, only once the results are published and if it won an award",
   },
+  'GET /events/:eventId/diplomas': { permission: ['manage:events'] },
+  'GET /events/:eventId/projects/:projectId/diploma': {
+    permission: ['manage:events'],
+  },
   // modules/dashboard/student-dashboard.controller.ts
   'GET /students/me/dashboard': {
     access: 'session',
