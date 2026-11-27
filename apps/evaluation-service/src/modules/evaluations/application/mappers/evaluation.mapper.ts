@@ -11,9 +11,13 @@ import {
   GetProjectResultResponse,
   CriterionResultProto,
   GetEventCriteriaStatsResponse,
+  GroupCriteriaStatsProto,
   ComponentStatsProto,
 } from '@app/common/generated/evaluation';
-import { EventCriteriaStats } from '../use-cases/get-event-criteria-stats.use-case';
+import {
+  EventCriteriaStats,
+  ProjectSetStats,
+} from '../use-cases/get-event-criteria-stats.use-case';
 import { ComponentStats } from '@evaluations/domain/services/criteria-stats';
 import { ProjectResultWithScale } from '../use-cases/get-project-result.use-case';
 import { CriterionResult } from '@evaluations/domain/services/project-result';
@@ -145,7 +149,20 @@ export class EvaluationMapper {
   ): GetEventCriteriaStatsResponse {
     return {
       ...(stats.maxScore !== undefined && { maxScore: stats.maxScore }),
+      ...EvaluationMapper.toGroupCriteriaStatsProto(stats),
+      groups: stats.groups.map((group) =>
+        EvaluationMapper.toGroupCriteriaStatsProto(group),
+      ),
+    };
+  }
+
+  private static toGroupCriteriaStatsProto(
+    stats: ProjectSetStats,
+  ): GroupCriteriaStatsProto {
+    return {
+      evaluatedCount: stats.evaluatedCount,
       components: stats.components.map(EvaluationMapper.toComponentStatsProto),
+      distribution: stats.distribution,
     };
   }
 

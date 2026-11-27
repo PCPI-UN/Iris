@@ -88,3 +88,18 @@ export class GetAcademicGradesDto extends AcademicEventQueryDto {
   @IsEnum(AcademicGradesFormat)
   format?: AcademicGradesFormat = AcademicGradesFormat.JSON;
 }
+
+export enum AcademicStatsGroupBy {
+  DEPARTMENT = 'department',
+}
+
+export class GetAcademicStatsDto extends AcademicEventQueryDto {
+  @ApiPropertyOptional({
+    description:
+      'department adds one block per department of the course sections (NRC)',
+    enum: AcademicStatsGroupBy,
+  })
+  @IsOptional()
+  @IsEnum(AcademicStatsGroupBy)
+  groupBy?: AcademicStatsGroupBy;
+}

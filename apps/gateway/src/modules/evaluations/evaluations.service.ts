@@ -21,6 +21,8 @@ import {
   EvaluationProto,
   GetTopProjectsByCourseResponse,
   GetEventCriteriaStatsResponse,
+  GroupCriteriaStatsProto,
+  ScoreBucketProto,
   ComponentStatsProto,
 } from '@app/common/generated/evaluation';
 import {
@@ -196,7 +198,7 @@ export class EvaluationsService implements OnModuleInit {
   async getEventCriteriaStats(
     eventId: number,
     courseId?: number,
-  ): Promise<GetEventCriteriaStatsResponse> {
+  ): Promise<CriteriaStats> {
     const [, projects] = await Promise.all([
       lastValueFrom(this.eventsService.getEvent({ id: eventId })),
       this.listAllProjectsByEvent(eventId, courseId),
@@ -208,22 +210,57 @@ export class EvaluationsService implements OnModuleInit {
     );
   }
 
+  /**
+   * Criteria averages and grade distribution over projects the caller has already chosen
+   * and checked (an academic scope), and the same for each group of them (such as the
+   * projects of each department), in one call. Without projects maxScore still comes
+   * from the event's scale; without a scale the distributions are empty.
+   */
+  async getCriteriaStatsByGroups(
+    eventId: number,
+    projectIds: number[],
+    groups: number[][],
+  ): Promise<GroupedCriteriaStats> {
+    const response = await lastValueFrom(
+      this.evaluationService.getEventCriteriaStats({
+        eventId,
+        projectIds,
+        groups: groups.map((ids) => ({ projectIds: ids })),
+      }),
+    );
+
+    // proto3 omits empty lists and zero numbers
+    const set = (
+      stats: Partial<GroupCriteriaStatsProto>,
+    ): GroupCriteriaStats => ({
+      evaluatedCount: stats.evaluatedCount ?? 0,
+      components: withCriteria(stats.components),
+      distribution: stats.distribution ?? [],
+    });
+    return {
+      ...(response.maxScore !== undefined && { maxScore: response.maxScore }),
+      ...set(response),
+      groups: (response.groups ?? []).map(set),
+    };
+  }
+
   /** Called even without projects: maxScore comes from the event's scale. */
   private async fetchCriteriaStats(
     eventId: number,
     projectIds: number[],
-  ): Promise<GetEventCriteriaStatsResponse> {
+  ): Promise<CriteriaStats> {
     const response = await lastValueFrom(
-      this.evaluationService.getEventCriteriaStats({ eventId, projectIds }),
+      this.evaluationService.getEventCriteriaStats({
+        eventId,
+        projectIds,
+        groups: [],
+      }),
     );
 
     // proto3 omits empty lists
     return {
       ...(response.maxScore !== undefined && { maxScore: response.maxScore }),
-      components: (response.components ?? []).map((component) => ({
-        ...component,
-        criteria: component.criteria ?? [],
-      })),
+      components: withCriteria(response.components),
     };
   }
 
@@ -416,4 +453,33 @@ export class EvaluationsService implements OnModuleInit {
 
     return { items, courseId, eventId };
   }
+}
+
+/** What the admin stats endpoints send: maxScore and the components, without the distribution */
+export type CriteriaStats = Pick<
+  GetEventCriteriaStatsResponse,
+  'maxScore' | 'components'
+>;
+
+/** Criteria averages of a set of projects as evaluation-service gives them, lists filled */
+export interface GroupCriteriaStats {
+  evaluatedCount: number;
+  components: ComponentStatsProto[];
+  /** Empty when the event has no grading scale */
+  distribution: ScoreBucketProto[];
+}
+
+export interface GroupedCriteriaStats extends GroupCriteriaStats {
+  maxScore?: number;
+  groups: GroupCriteriaStats[];
+}
+
+/** proto3 omits empty lists: each component with its criteria list */
+function withCriteria(
+  components?: ComponentStatsProto[],
+): ComponentStatsProto[] {
+  return (components ?? []).map((component) => ({
+    ...component,
+    criteria: component.criteria ?? [],
+  }));
 }

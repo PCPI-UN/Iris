@@ -94,7 +94,7 @@ It never returns juror ids nor how many jurors evaluated, and it does not check 
 
 ## Statistics per component
 
-`GetEventCriteriaStats` returns the average score of each rubric component, and of each criterion inside it, over the projects the gateway sends: every project of an event, of one category, or a single project. It uses the effective weights stored with each score:
+`GetEventCriteriaStats` returns the average score of each rubric component, and of each criterion inside it, over the projects the gateway sends: every project of an event, of one category, a single project, or the projects of an academic scope. It uses the effective weights stored with each score:
 
 1. In each evaluation, the score of a component is Σ(score × weight) ÷ Σ(weight) of its criteria.
 2. The score of the component in a project is the average of its jurors.
@@ -103,6 +103,8 @@ It never returns juror ids nor how many jurors evaluated, and it does not check 
 Example: criteria scored 90 and 55 with weights 0.267 and 0.133 give their 0.4 component 78.33, not the plain average 72.5. Each component also returns its `weight`, the sum of its criteria's stored weights.
 
 It also returns `maxScore`, the highest level of the event's grading scale. The averages do not depend on the scale, so an event without one still gets them, only without `maxScore`.
+
+Besides the averages it returns `evaluatedCount` (projects with at least one evaluation) and `distribution`: how many final grades (the average of each project's jurors, rounded as `GetAverageGrades`) fall in each of 5 equal ranges from 0 to `maxScore`; a grade on a boundary goes to the upper range, and `maxScore` stays in the last one. Without a scale the distribution is empty. The request may also carry `groups`, lists of project ids (such as the projects of each department); each one gets the same block in `groups`, in the same order, from a single read of the evaluations.
 
 `GetProjectStats` stays light (average grade, evaluation count and jurors) because the ranking and project-service call it once per project.
 
