@@ -271,7 +271,10 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'GET /projects/:id/jurors': { permission: ['read:event-members'] },
   'PATCH /projects/:id/reject': { permission: ['manage:events'] },
   'PATCH /projects/:id/request-changes': { permission: ['manage:events'] },
-  'POST /projects/:projectId/documents': { access: 'public' },
+  'POST /projects/:projectId/documents': {
+    access: 'owner',
+    why: 'project-service CheckProjectAccess EDIT on the project, before the files are uploaded: participants or manage:events',
+  },
   'GET /projects/:projectId/documents/:documentId/open': { access: 'public' },
   'DELETE /projects/:projectId/jurors/:jurorId': { permission: ['manage:events'] },
   'POST /projects/add-update-participants': {

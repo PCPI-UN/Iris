@@ -86,6 +86,7 @@ import {
 } from '@app/common/generated/evaluation';
 import { ProjectForReviewResponseDto } from './dto/project-for-review-response.dto';
 import { AuthService } from '../auth/auth.service';
+import { AppUser } from '../auth/types/app-user.type';
 import { withoutOneofMarkers } from '@app/common/utils/grpc-oneof.util';
 import { pendingStatus } from '@app/common/utils/pending-status.util';
 import { AdminAddParticipantDto } from './dto/admin-participant.dto';
@@ -1297,8 +1298,12 @@ export class ProjectsService implements OnModuleInit {
     projectId: number,
     body: AddProjectDocumentsMultipartDto,
     files: any[],
+    user: AppUser,
   ) {
     this.logger.log(`Adding ${files.length} file(s) to project ${projectId}`);
+
+    // 0. Only participants of the project or manage:events (403), before anything is uploaded
+    await this.assertProjectAccess(user.id, 'EDIT', { projectId });
 
     // 1. Validar que haya docs
     let documentMetadata: ProjectDocumentInputDto[] = [];

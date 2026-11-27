@@ -1111,7 +1111,6 @@ export class ProjectsController {
     res.set('Cache-Control', 'no-store').redirect(HttpStatus.FOUND, url);
   }
 
-  @Public()
   @Post(':projectId/documents')
   @UseInterceptors(
     FileFieldsInterceptor(
@@ -1129,7 +1128,8 @@ export class ProjectsController {
   @ApiOperation({
     summary: 'Add documents/files to an existing project',
     description:
-      'Public endpoint to add document files to an existing project. ' +
+      'Add document files to an existing project. ' +
+      'Only a participant of the project or a user with manage:events; checked before the files are uploaded. ' +
       'Accepts up to 4 files per request: 1 logo, 1 poster, and 2 supporting documents. ' +
       'Maximum file size: 5MB per file. Files are uploaded to Azure Blob Storage.',
   })
@@ -1152,6 +1152,14 @@ export class ProjectsController {
     description: 'File size exceeds 5MB limit',
   })
   @ApiResponse({
+    status: 401,
+    description: 'No session',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No access to the project',
+  })
+  @ApiResponse({
     status: 404,
     description: 'Project not found',
   })
@@ -1159,11 +1167,13 @@ export class ProjectsController {
     @Param('projectId', ParseIntPipe) projectId: number,
     @Body() body: AddProjectDocumentsMultipartDto,
     @UploadedFiles() uploadedFiles: { files?: Express.Multer.File[] },
+    @GetUser() user: AppUser,
   ) {
     return this.projectsService.addFilesToExistingProject(
       projectId,
       body,
       uploadedFiles.files || [],
+      user,
     );
   }
 }
