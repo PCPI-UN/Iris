@@ -16,6 +16,7 @@ import { GetStudentParticipationStatsUC } from './application/use-cases/get-stud
 import { UpdateProjectUC } from './application/use-cases/update-project.uc';
 import { AdminUpdateProjectUC } from './application/use-cases/admin-update-project.uc';
 import { AdminAddParticipantUC } from './application/use-cases/admin-add-participant.uc';
+import { AdminCreateProjectUC } from './application/use-cases/admin-create-project.uc';
 import { AdminRemoveParticipantUC } from './application/use-cases/admin-remove-participant.uc';
 import { ReplaceProjectTutorsUC } from './application/use-cases/replace-project-tutors.uc';
 import { AdminReplaceProjectDocumentUC } from './application/use-cases/admin-replace-project-document.uc';
@@ -122,6 +123,7 @@ import { EvaluationServiceAdapter } from './infrastructure/grpc-client/evaluatio
     UpdateProjectUC,
     AdminUpdateProjectUC,
     AdminAddParticipantUC,
+    AdminCreateProjectUC,
     AdminRemoveParticipantUC,
     ReplaceProjectTutorsUC,
     AdminReplaceProjectDocumentUC,
