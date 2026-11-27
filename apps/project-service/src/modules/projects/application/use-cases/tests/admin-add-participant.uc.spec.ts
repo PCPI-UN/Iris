@@ -10,6 +10,7 @@ import { AddPendingParticipantUC } from '../add-pending-participant.us';
 import { CheckActiveSubmissionByEmailsUC } from '../check-active-submission-by-emails.uc';
 import { SetProjectTutorsUC } from '../set-project-tutors.uc';
 import { ProjectApprovalEffects } from '../../services/project-approval-effects.service';
+import { ProjectEnrollmentService } from '../../services/project-enrollment.service';
 import { AdminParticipantsError } from '../../../domain/admin-participants';
 import { NotFoundError, ValidationError } from '../../../domain/errors';
 import {
@@ -129,9 +130,12 @@ describe('AdminAddParticipantUC', () => {
     );
     const uc = new AdminAddParticipantUC(
       repo as any,
-      new AddParticipantUC(repo as any),
-      new AddPendingParticipantUC(repo as any),
-      activeSubmissions as unknown as CheckActiveSubmissionByEmailsUC,
+      new ProjectEnrollmentService(
+        repo as any,
+        new AddParticipantUC(repo as any),
+        new AddPendingParticipantUC(repo as any),
+        activeSubmissions as unknown as CheckActiveSubmissionByEmailsUC,
+      ),
       auth as any,
       events as any,
       effects,

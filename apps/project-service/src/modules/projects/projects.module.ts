@@ -72,6 +72,7 @@ import { UnitOfWork } from '@app/common/ports/unit-of-work.port';
 import { PrismaUnitOfWork } from './infrastructure/prisma/prisma-unit-of-work';
 import { AdminChangeProjectStateUC } from './application/use-cases/admin-change-project-state.uc';
 import { ProjectApprovalEffects } from './application/services/project-approval-effects.service';
+import { ProjectEnrollmentService } from './application/services/project-enrollment.service';
 import { EvaluationServiceModule } from './evaluation-service.module';
 import { EVALUATION_SERVICE_PORT } from './application/ports/evaluation-service.port';
 import { EvaluationServiceAdapter } from './infrastructure/grpc-client/evaluation-service.adapter';
@@ -97,6 +98,7 @@ import { EvaluationServiceAdapter } from './infrastructure/grpc-client/evaluatio
     ListProjectChangeLogUC,
     AdminChangeProjectStateUC,
     ProjectApprovalEffects,
+    ProjectEnrollmentService,
     {
       provide: EVALUATION_SERVICE_PORT,
       useExisting: EvaluationServiceAdapter,
