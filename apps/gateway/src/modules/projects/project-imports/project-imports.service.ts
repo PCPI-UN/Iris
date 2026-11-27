@@ -118,7 +118,8 @@ export class ProjectImportsService implements OnModuleInit {
       throw new BadRequestException({
         message:
           'No se puede ejecutar la carga: tiene errores o avisos. Revise la vista previa.',
-        preview,
+        // The exception filter passes only `code` and `details` on to the answer
+        details: { preview },
       });
     }
 

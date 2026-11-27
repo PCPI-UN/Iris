@@ -150,11 +150,15 @@ describe('ProjectImportsService', () => {
       expect(error).toBeInstanceOf(BadRequestException);
       const body = (error as BadRequestException).getResponse() as {
         message: string;
-        preview: { canConfirm: boolean; rows: { outcome: string }[] };
+        details: {
+          preview: { canConfirm: boolean; rows: { outcome: string }[] };
+        };
       };
       expect(body.message).toContain('Revise la vista previa');
-      expect(body.preview.canConfirm).toBe(false);
-      expect(body.preview.rows.map((row) => row.outcome)).toEqual(['ERROR']);
+      expect(body.details.preview.canConfirm).toBe(false);
+      expect(body.details.preview.rows.map((row) => row.outcome)).toEqual([
+        'ERROR',
+      ]);
       expect(executeProjectImport).not.toHaveBeenCalled();
     });
 

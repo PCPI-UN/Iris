@@ -100,7 +100,7 @@ export class ProjectImportsController {
     summary: 'Execute a project import after its preview',
     description:
       'Send the same file of the preview once the person confirms it. The file is validated again: ' +
-      'if the preview cannot be confirmed nothing is created and the answer is a 400 with the preview. ' +
+      'if the preview cannot be confirmed nothing is created and the answer is a 400 with the preview in details.preview. ' +
       'Otherwise the projects are created one row at a time, even after the inscription deadline; ' +
       'projects already in the event are skipped, so nothing is duplicated. A row that fails at creation ' +
       '(a student joined another project meanwhile) is reported as an error and the others are created anyway. ' +
@@ -119,7 +119,7 @@ export class ProjectImportsController {
   @ApiResponse({
     status: 400,
     description:
-      'Missing or invalid file, or a preview that cannot be confirmed (body: message and preview)',
+      'Missing or invalid file, or a preview that cannot be confirmed (body: message and details.preview)',
   })
   @ApiResponse({ status: 404, description: 'Event not found' })
   @ApiResponse({ status: 413, description: 'File larger than the limit' })
