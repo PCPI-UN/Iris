@@ -2,10 +2,8 @@ import { CreateProjectUC } from '../create-project.uc';
 import { ProjectRepository } from '../../../domain/repositories/project.repository';
 import { EventServicePort } from '../../ports/event-service.port';
 import { ValidationError } from '../../../domain/errors';
-import {
-  EventResultsPublishedError,
-  ProjectNameTakenError,
-} from '../../../domain/admin-project-creation';
+import { EventResultsPublishedError } from '../../../domain/admin-project-creation';
+import { ProjectNameTakenError } from '../../../domain/admin-project-edit';
 
 describe('CreateProjectUC: course section (NRC) of the project', () => {
   const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();

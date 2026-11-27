@@ -3,8 +3,8 @@ import { ProjectsController } from '../projects.controller';
 import {
   EventResultsPublishedError,
   ParticipantInOtherProjectError,
-  ProjectNameTakenError,
 } from '../../../domain/admin-project-creation';
+import { ProjectNameTakenError } from '../../../domain/admin-project-edit';
 import { studentCodeAlreadyInProject } from '../../../domain/admin-participants';
 import { ValidationError } from '../../../domain/errors';
 

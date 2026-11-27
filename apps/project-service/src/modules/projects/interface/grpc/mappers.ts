@@ -6,8 +6,8 @@ import { AdminParticipantsError } from '../../domain/admin-participants';
 import {
   EventResultsPublishedError,
   ParticipantInOtherProjectError,
-  ProjectNameTakenError,
 } from '../../domain/admin-project-creation';
+import { ProjectNameTakenError } from '../../domain/admin-project-edit';
 import {
   JurorImportOutcome as ProtoJurorImportOutcome,
   JurorImportUserStatus as ProtoJurorImportUserStatus,
@@ -340,10 +340,10 @@ export const adminCreateRejection = (
   if (error instanceof ParticipantInOtherProjectError) {
     return { code: error.code, message: error.message, emails: error.emails };
   }
-  if (
-    error instanceof ProjectNameTakenError ||
-    error instanceof EventResultsPublishedError
-  ) {
+  if (error instanceof ProjectNameTakenError) {
+    return { code: error.conflict.code, message: error.message, emails: [] };
+  }
+  if (error instanceof EventResultsPublishedError) {
     return { code: error.code, message: error.message, emails: [] };
   }
   if (error instanceof AdminParticipantsError) {

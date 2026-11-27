@@ -10,10 +10,8 @@ import {
 import { EventServicePort } from '../ports/event-service.port';
 import { EVENT_SERVICE_PORT } from '../ports/event-service.port';
 import { isInscriptionDeadlinePassed } from '@app/common/utils/bogota-date.util';
-import {
-  EventResultsPublishedError,
-  ProjectNameTakenError,
-} from '../../domain/admin-project-creation';
+import { EventResultsPublishedError } from '../../domain/admin-project-creation';
+import { ProjectNameTakenError } from '../../domain/admin-project-edit';
 
 export interface CreateProjectOptions {
   /**

@@ -11,15 +11,6 @@ export class EventResultsPublishedError extends ConflictError {
   }
 }
 
-/** The name is unique per event, in any category (the database constraint is on event and name). */
-export class ProjectNameTakenError extends ConflictError {
-  readonly code = 'PROJECT_NAME_TAKEN';
-
-  constructor(name: string) {
-    super(`Ya existe un proyecto llamado "${name}" en este evento`);
-  }
-}
-
 /** Students already in another project of the event that is not REJECTED. */
 export class ParticipantInOtherProjectError extends ConflictError {
   readonly code = 'PARTICIPANT_IN_OTHER_PROJECT';

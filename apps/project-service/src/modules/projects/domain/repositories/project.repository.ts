@@ -29,6 +29,7 @@ export interface ProjectInScope extends Project {
 }
 
 export interface ProjectRepository {
+  /** ProjectNameTakenError when another project of the event took the name meanwhile (unique index) */
   create(input: {
     eventId: number;
     courseId: number;              
