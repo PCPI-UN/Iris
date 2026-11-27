@@ -10,7 +10,10 @@ import {
 import { EventServicePort } from '../ports/event-service.port';
 import { EVENT_SERVICE_PORT } from '../ports/event-service.port';
 import { isInscriptionDeadlinePassed } from '@app/common/utils/bogota-date.util';
-import { EventResultsPublishedError } from '../../domain/admin-project-creation';
+import {
+  EventResultsPublishedError,
+  ProjectNameTakenError,
+} from '../../domain/admin-project-creation';
 
 export interface CreateProjectOptions {
   /**
@@ -60,16 +63,26 @@ export class CreateProjectUC {
     if (!input.courseId || input.courseId <= 0) {
       throw new ValidationError('courseId no es válido');
     }
-    // Ensure no other project with the same name exists for this event and course
-    const existing = await this.repo.findProject(
-      input.eventId,
-      input.courseId,
-      input.name.trim(),
-    );
-    if (existing) {
-      throw new ValidationError(
-        'Ya existe un proyecto con el mismo nombre en este evento y categoría',
+    // The administrative check matches the database constraint (event and name); the public
+    // one keeps its check per event and category
+    if (opts.administrative) {
+      const taken = await this.repo.findProjectByName(
+        input.eventId,
+        input.name.trim(),
       );
+      if (taken) throw new ProjectNameTakenError(input.name.trim());
+    } else {
+      // Ensure no other project with the same name exists for this event and course
+      const existing = await this.repo.findProject(
+        input.eventId,
+        input.courseId,
+        input.name.trim(),
+      );
+      if (existing) {
+        throw new ValidationError(
+          'Ya existe un proyecto con el mismo nombre en este evento y categoría',
+        );
+      }
     }
 
     // Every project belongs to a course section. An event that is not course work gives

@@ -51,6 +51,8 @@ export interface ProjectRepository {
   findAcademicCourseOfProject(projectId: number): Promise<AcademicCourseView | null>;
   findManyByIds(ids: number[]): Promise<Project[]>;
   findProject(eventId: number, courseId: number, name: string): Promise<Project | null>;
+  /** Project of the event with that exact name, in any category: the name is unique per event in the database */
+  findProjectByName(eventId: number, name: string): Promise<Project | null>;
 
   countAll(): Promise<number>;
 

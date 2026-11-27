@@ -174,6 +174,12 @@ export class PrismaProjectRepository implements ProjectRepository {
     })) as unknown as Project | null;
   }
 
+  async findProjectByName(eventId: number, name: string): Promise<Project | null> {
+    return (await this.prisma.db.project.findFirst({
+      where: { eventId, name },
+    })) as unknown as Project | null;
+  }
+
   async findProjectWithEvent(projectId: number): Promise<Project | null> {
     return this.prisma.db.project.findUnique({
       where: { id: projectId },

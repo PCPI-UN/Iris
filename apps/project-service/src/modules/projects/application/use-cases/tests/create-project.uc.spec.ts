@@ -2,7 +2,10 @@ import { CreateProjectUC } from '../create-project.uc';
 import { ProjectRepository } from '../../../domain/repositories/project.repository';
 import { EventServicePort } from '../../ports/event-service.port';
 import { ValidationError } from '../../../domain/errors';
-import { EventResultsPublishedError } from '../../../domain/admin-project-creation';
+import {
+  EventResultsPublishedError,
+  ProjectNameTakenError,
+} from '../../../domain/admin-project-creation';
 
 describe('CreateProjectUC: course section (NRC) of the project', () => {
   const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -181,9 +184,14 @@ describe('CreateProjectUC: administrative creation', () => {
     resultsPublished: false,
   };
 
-  const build = (eventChange: Record<string, unknown> = {}, nrcId = 12) => {
+  const build = (
+    eventChange: Record<string, unknown> = {},
+    nrcId = 12,
+    nameTakenBy: Record<string, unknown> | null = null,
+  ) => {
     const repo = {
       findProject: jest.fn().mockResolvedValue(null),
+      findProjectByName: jest.fn().mockResolvedValue(nameTakenBy),
       findAcademicCourseId: jest.fn().mockResolvedValue(nrcId),
       create: jest.fn((data: Record<string, unknown>) =>
         Promise.resolve({ id: 1, ...data }),
@@ -258,6 +266,20 @@ describe('CreateProjectUC: administrative creation', () => {
     await expect(uc.execute(input, { administrative: true })).rejects.toThrow(
       'El evento está inactivo',
     );
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects the administrative creation with a name taken in another category of the event', async () => {
+    const { uc, repo } = build({}, 12, {
+      id: 7,
+      courseId: 5,
+      name: 'EcoVision',
+    });
+
+    await expect(
+      uc.execute(input, { administrative: true }),
+    ).rejects.toBeInstanceOf(ProjectNameTakenError);
+    expect(repo.findProjectByName).toHaveBeenCalledWith(4, 'EcoVision');
     expect(repo.create).not.toHaveBeenCalled();
   });
 });
