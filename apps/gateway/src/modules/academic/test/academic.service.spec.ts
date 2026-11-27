@@ -62,6 +62,7 @@ describe('AcademicService', () => {
   let eventsService: any;
   let evaluationsService: any;
   let authService: any;
+  let diplomasService: any;
   let service: AcademicService;
 
   beforeEach(() => {
@@ -139,11 +140,19 @@ describe('AcademicService', () => {
         lastName: names[id][1],
       })),
     };
+    diplomasService = {
+      isAvailable: jest.fn().mockResolvedValue(true),
+      getProjectDiploma: jest.fn().mockResolvedValue({
+        buffer: Buffer.from('%PDF'),
+        fileName: 'diploma_P1.pdf',
+      }),
+    };
     service = new AcademicService(
       projectsService,
       eventsService,
       evaluationsService,
       authService,
+      diplomasService,
     );
   });
 
@@ -797,6 +806,113 @@ describe('AcademicService', () => {
     );
     expect(one.academicCourse).toMatchObject({ termId: 3, term: '202610' });
   });
+  describe('getDiploma', () => {
+    const DIRECTOR = user(['DepartmentDirector'], ['read:academic_projects']);
+
+    it('a director gets the diploma of a project of their department', async () => {
+      const file = await service.getDiploma(
+        DIRECTOR,
+        1,
+        AcademicProfile.DIRECTOR,
+      );
+
+      expect(projectsService.getProjectInScope).toHaveBeenCalledWith(
+        5,
+        1,
+        AcademicScope.ACADEMIC_SCOPE_DEPARTMENT,
+      );
+      expect(diplomasService.getProjectDiploma).toHaveBeenCalledWith(
+        project(1),
+      );
+      expect(file.fileName).toBe('diploma_P1.pdf');
+    });
+
+    it('the dean reads it with the scope of every project', async () => {
+      await service.getDiploma(DEAN, 1, AS_DEAN);
+
+      expect(projectsService.getProjectInScope).toHaveBeenCalledWith(
+        5,
+        1,
+        AcademicScope.ACADEMIC_SCOPE_ALL,
+      );
+    });
+
+    it('a professor or a tutor is a 403 even for a project of their scope', async () => {
+      const TUTOR = user(['Tutor'], ['read:academic_projects']);
+
+      await expect(
+        service.getDiploma(PROFESSOR, 1, AS_PROFESSOR),
+      ).rejects.toThrow(
+        new ForbiddenException(
+          'El perfil académico PROFESSOR no descarga diplomas',
+        ),
+      );
+      await expect(
+        service.getDiploma(TUTOR, 1, AcademicProfile.TUTOR),
+      ).rejects.toThrow(
+        new ForbiddenException(
+          'El perfil académico TUTOR no descarga diplomas',
+        ),
+      );
+      expect(projectsService.getProjectInScope).not.toHaveBeenCalled();
+      expect(diplomasService.getProjectDiploma).not.toHaveBeenCalled();
+    });
+
+    it('a project outside the scope is a 404 and no diploma is generated', async () => {
+      projectsService.getProjectInScope.mockRejectedValue(
+        new NotFoundException('Proyecto no encontrado'),
+      );
+
+      await expect(
+        service.getDiploma(DIRECTOR, 99, AcademicProfile.DIRECTOR),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(diplomasService.getProjectDiploma).not.toHaveBeenCalled();
+    });
+
+    it('a profile whose role the caller lacks is a 403', async () => {
+      await expect(
+        service.getDiploma(PROFESSOR, 1, AcademicProfile.DIRECTOR),
+      ).rejects.toThrow(
+        new ForbiddenException(
+          'El usuario no tiene el perfil académico DIRECTOR',
+        ),
+      );
+    });
+
+    it('the detail tells a director whether the diploma can be downloaded', async () => {
+      const detail = await service.getProject(
+        DIRECTOR,
+        1,
+        AcademicProfile.DIRECTOR,
+      );
+
+      expect(diplomasService.isAvailable).toHaveBeenCalledWith(project(1));
+      expect(detail.diplomaAvailable).toBe(true);
+    });
+
+    it('the detail of a professor never offers it, without checking', async () => {
+      const detail = await service.getProject(PROFESSOR, 1, AS_PROFESSOR);
+
+      expect(detail.diplomaAvailable).toBe(false);
+      expect(diplomasService.isAvailable).not.toHaveBeenCalled();
+    });
+
+    it('a failure of the check leaves the diploma out, not the detail', async () => {
+      diplomasService.isAvailable.mockRejectedValue(
+        new Error('event-service down'),
+      );
+
+      const detail = await service.getProject(
+        DIRECTOR,
+        1,
+        AcademicProfile.DIRECTOR,
+      );
+
+      expect(detail.diplomaAvailable).toBe(false);
+      expect(detail.id).toBe(1);
+    });
+  });
+
   describe('profile', () => {
     // Ana: Professor of NRC 10234 and Tutor of a project of NRC 9876
     const ANA = user(['Professor', 'Tutor'], ['read:academic_projects']);

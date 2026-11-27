@@ -173,4 +173,9 @@ export interface AcademicProjectEvaluation {
 export type AcademicProjectDetail = ProjectComplete & {
   /** null when event-service or evaluation-service could not give it; the project is still sent */
   evaluation: AcademicProjectEvaluation | null;
+  /**
+   * Whether GET /academic/projects/:id/diploma gives its diploma to this profile: always
+   * false for PROFESSOR and TUTOR, and when it cannot be checked
+   */
+  diplomaAvailable: boolean;
 };
