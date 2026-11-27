@@ -74,8 +74,8 @@ export class DiplomasController {
     summary: 'Download the award diploma of a project of the event',
     description:
       'Same PDF the students of the project download, for the staff that manages the ' +
-      'event and its awards. Only once the results are published and if the project won ' +
-      'at least one award of the event.',
+      'event and its awards. It does not wait for the results to be published; the ' +
+      'project must have won at least one award of the event.',
   })
   @ApiProduces('application/pdf')
   @ApiResponse({ status: 200, description: 'The PDF file' })
@@ -85,8 +85,7 @@ export class DiplomasController {
   })
   @ApiResponse({
     status: 403,
-    description:
-      'Missing manage:events permission, or the results of the event are not published yet',
+    description: 'Missing manage:events permission',
   })
   @ApiResponse({
     status: 404,
@@ -113,8 +112,8 @@ export class DiplomasController {
     summary: 'Download the award diplomas of every winner of the event',
     description:
       'One PDF with one page per winning project, ordered by category and award ' +
-      'position, for the staff that manages the event. Only once the results are ' +
-      'published.',
+      'position, for the staff that manages the event. It does not wait for the results ' +
+      'to be published.',
   })
   @ApiProduces('application/pdf')
   @ApiResponse({ status: 200, description: 'The PDF file' })
@@ -124,8 +123,7 @@ export class DiplomasController {
   })
   @ApiResponse({
     status: 403,
-    description:
-      'Missing manage:events permission, or the results of the event are not published yet',
+    description: 'Missing manage:events permission',
   })
   @ApiResponse({
     status: 404,

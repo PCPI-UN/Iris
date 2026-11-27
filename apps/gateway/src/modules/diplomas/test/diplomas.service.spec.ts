@@ -301,12 +301,26 @@ describe('DiplomasService', () => {
       expect(renderer.render).not.toHaveBeenCalled();
     });
 
-    it('keeps the rules of the student one: published results and an award', async () => {
-      await expect(
-        build({
-          event: { id: 10, resultsPublished: false },
-        }).service.getEventProjectDiploma(10, 5),
-      ).rejects.toThrow(ForbiddenException);
+    it('does not wait for the results to be published', async () => {
+      const { service, renderer } = build({
+        event: { id: 10, name: 'Feria 2026', resultsPublished: false },
+        awards: [
+          {
+            projectId: 5,
+            eventId: 10,
+            title: 'Primer puesto',
+            resultsPublished: false,
+          },
+        ],
+      });
+
+      const file = await service.getEventProjectDiploma(10, 5);
+
+      expect(renderer.render).toHaveBeenCalled();
+      expect(file.fileName).toBe('diploma_riego_inteligente_iot.pdf');
+    });
+
+    it('still needs an award of the event', async () => {
       await expect(
         build({ awards: [] }).service.getEventProjectDiploma(10, 5),
       ).rejects.toThrow(
@@ -345,9 +359,30 @@ describe('DiplomasService', () => {
       });
     });
 
-    it('leaves out the projects whose award is not published', async () => {
+    it('does not wait for the results to be published', async () => {
+      const unpublished = (projectId: number) => ({
+        ...published(projectId),
+        resultsPublished: false,
+      });
       const { service, renderer } = build({
-        awards: [published(5), { ...published(7), resultsPublished: false }],
+        event: { id: 10, name: 'Feria 2026', resultsPublished: false },
+        awards: [unpublished(5), unpublished(7), unpublished(8)],
+      });
+
+      await service.getEventDiplomas(10);
+
+      expect(renderer.renderMany).toHaveBeenCalledWith(
+        [5, 7, 8].map((id) => ({
+          template: 'feria-proyectos-stem',
+          projectName: `Proyecto ${id}`,
+        })),
+        expect.any(String),
+      );
+    });
+
+    it('leaves out the projects whose award is of another event', async () => {
+      const { service, renderer } = build({
+        awards: [published(5), { ...published(7), eventId: 99 }],
       });
 
       await service.getEventDiplomas(10);
@@ -358,12 +393,7 @@ describe('DiplomasService', () => {
       );
     });
 
-    it('keeps the rules: published results, a design and at least one winner', async () => {
-      await expect(
-        build({
-          event: { id: 10, name: 'Feria 2026', resultsPublished: false },
-        }).service.getEventDiplomas(10),
-      ).rejects.toThrow(ForbiddenException);
+    it('still needs a design and at least one winner', async () => {
       await expect(
         build({
           event: { id: 12, name: 'Otra', resultsPublished: true },
