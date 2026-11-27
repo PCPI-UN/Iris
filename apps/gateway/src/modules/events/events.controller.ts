@@ -417,66 +417,6 @@ export class EventsController {
     return response;
   }
 
-  @RequirePermission('read:events')
-  @Get(':id')
-  @ApiOperation({ summary: 'Get event by ID' })
-  @ApiParam({ name: 'id', description: 'Event ID', type: Number })
-  @ApiResponse({ status: 200, description: 'Returns event details' })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - Missing read:events permission',
-  })
-  @ApiResponse({ status: 404, description: 'Event not found' })
-  async getEvent(@Param('id', ParseIntPipe) id: number) {
-    return this.eventsService.get({ id });
-  }
-
-  /**
-   * Update event
-   * Requires manage:events permission
-   */
-  @RequirePermission('manage:events')
-  @Patch(':id')
-  @InvalidateCache({
-    endpoints: ['/events', '/events/public', '/events/my-events'],
-  })
-  @ApiOperation({ summary: 'Update event details' })
-  @ApiParam({ name: 'id', description: 'Event ID', type: Number })
-  @ApiResponse({ status: 200, description: 'Event updated successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid input data' })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - Missing manage:events permission',
-  })
-  @ApiResponse({ status: 404, description: 'Event not found' })
-  async updateEvent(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() updateEventDTO: UpdateEventDTO,
-  ) {
-    return this.eventsService.update({ ...updateEventDTO, id });
-  }
-
-  /**
-   * Delete event
-   * Requires manage:events permission
-   */
-  @RequirePermission('manage:events')
-  @Delete(':id')
-  @InvalidateCache({
-    endpoints: ['/events', '/events/public', '/events/my-events'],
-  })
-  @ApiOperation({ summary: 'Delete an event' })
-  @ApiParam({ name: 'id', description: 'Event ID', type: Number })
-  @ApiResponse({ status: 200, description: 'Event deleted successfully' })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - Missing manage:events permission',
-  })
-  @ApiResponse({ status: 404, description: 'Event not found' })
-  async deleteEvent(@Param('id', ParseIntPipe) id: number) {
-    return this.eventsService.delete({ id });
-  }
-
   // =====================
   // EVENT MEMBERS ENDPOINTS
   // =====================
@@ -1192,5 +1132,72 @@ export class EventsController {
     @GetUser('id') userId: number,
   ) {
     return this.eventsService.getMyProjectForEvent(userId, eventId);
+  }
+
+  // =====================
+  // EVENT BY ID ENDPOINTS
+  // =====================
+  // Keep these last: Nest matches routes in declaration order, so a
+  // single-segment `:id` route declared earlier would swallow literal
+  // paths such as `/events/category-awards` (ParseIntPipe -> 400).
+
+  @RequirePermission('read:events')
+  @Get(':id')
+  @ApiOperation({ summary: 'Get event by ID' })
+  @ApiParam({ name: 'id', description: 'Event ID', type: Number })
+  @ApiResponse({ status: 200, description: 'Returns event details' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Missing read:events permission',
+  })
+  @ApiResponse({ status: 404, description: 'Event not found' })
+  async getEvent(@Param('id', ParseIntPipe) id: number) {
+    return this.eventsService.get({ id });
+  }
+
+  /**
+   * Update event
+   * Requires manage:events permission
+   */
+  @RequirePermission('manage:events')
+  @Patch(':id')
+  @InvalidateCache({
+    endpoints: ['/events', '/events/public', '/events/my-events'],
+  })
+  @ApiOperation({ summary: 'Update event details' })
+  @ApiParam({ name: 'id', description: 'Event ID', type: Number })
+  @ApiResponse({ status: 200, description: 'Event updated successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid input data' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Missing manage:events permission',
+  })
+  @ApiResponse({ status: 404, description: 'Event not found' })
+  async updateEvent(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateEventDTO: UpdateEventDTO,
+  ) {
+    return this.eventsService.update({ ...updateEventDTO, id });
+  }
+
+  /**
+   * Delete event
+   * Requires manage:events permission
+   */
+  @RequirePermission('manage:events')
+  @Delete(':id')
+  @InvalidateCache({
+    endpoints: ['/events', '/events/public', '/events/my-events'],
+  })
+  @ApiOperation({ summary: 'Delete an event' })
+  @ApiParam({ name: 'id', description: 'Event ID', type: Number })
+  @ApiResponse({ status: 200, description: 'Event deleted successfully' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Missing manage:events permission',
+  })
+  @ApiResponse({ status: 404, description: 'Event not found' })
+  async deleteEvent(@Param('id', ParseIntPipe) id: number) {
+    return this.eventsService.delete({ id });
   }
 }
