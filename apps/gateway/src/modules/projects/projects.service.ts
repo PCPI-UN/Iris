@@ -529,7 +529,7 @@ export class ProjectsService implements OnModuleInit {
         courseId: project.courseId,
       },
       participants: response.participants ?? [],
-      tutors: response.tutors ?? [],
+      tutors: toProjectTutorsResponse(response.tutors),
       failedEffects,
       warning,
     };

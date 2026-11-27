@@ -105,6 +105,29 @@ describe('ProjectsService.adminCreateProject (POST /projects/admin)', () => {
     );
   });
 
+  it('answers the tutors without the keys the gRPC client adds for optional fields', async () => {
+    const tutor = {
+      userId: 5,
+      firstName: 'Luz',
+      lastName: 'Rey',
+      pending: false,
+    };
+    const { service } = setup({
+      response: {
+        ...created,
+        tutors: [{ ...tutor, _userId: 'userId', _lastName: 'lastName' }],
+      },
+    });
+
+    const result = await service.adminCreateProject(
+      body({ documents: undefined }),
+      [],
+      5,
+    );
+
+    expect(result.tutors).toEqual([{ ...tutor, email: undefined }]);
+  });
+
   it('keeps the created project when the upload fails and reports DOCUMENTS', async () => {
     const { service, grpc } = setup({
       uploadFails: true,
