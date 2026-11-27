@@ -1,14 +1,9 @@
 import * as ExcelJS from 'exceljs';
+import { normalizeText } from '@app/common/utils/text.util';
 
 /** "Número*" -> "numero" */
 export const normalizeHeader = (value: string): string =>
-  value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\*/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
+  normalizeText(value.replace(/\*/g, ''));
 
 /** Plain text of a cell, whatever Excel stored: number, hyperlink, rich text or formula */
 export const cellText = (value: ExcelJS.CellValue): string => {
