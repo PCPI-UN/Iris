@@ -29,6 +29,7 @@ export interface ProjectInScope extends Project {
 }
 
 export interface ProjectRepository {
+  /** ProjectNameTakenError when another project of the event took the name meanwhile (unique index) */
   create(input: {
     eventId: number;
     courseId: number;              
@@ -51,6 +52,8 @@ export interface ProjectRepository {
   findAcademicCourseOfProject(projectId: number): Promise<AcademicCourseView | null>;
   findManyByIds(ids: number[]): Promise<Project[]>;
   findProject(eventId: number, courseId: number, name: string): Promise<Project | null>;
+  /** Project of the event with that exact name, in any category: the name is unique per event in the database */
+  findProjectByName(eventId: number, name: string): Promise<Project | null>;
 
   countAll(): Promise<number>;
 

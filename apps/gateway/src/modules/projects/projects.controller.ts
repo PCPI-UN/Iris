@@ -61,6 +61,7 @@ import {
   AdminAddParticipantDto,
   AdminRemoveParticipantQueryDto,
 } from './dto/admin-participant.dto';
+import { AdminCreateProjectMultipartDto } from './dto/admin-create-project-multipart.dto';
 import { RequireAnyPermission } from '../../common/decorators/require-any-permission.decorator';
 import {
   ADMIN_DOCUMENT_MAX_FILE_SIZE,
@@ -131,6 +132,87 @@ export class ProjectsController {
     return this.projectsService.createProjectWithParticipantsAndFiles(
       body,
       uploadedFiles.files || [],
+    );
+  }
+
+  // Declared before the ':id' routes, so "admin" is never read as a project id
+  @RequirePermission('manage:projects')
+  @Post('admin')
+  @UseInterceptors(
+    FileFieldsInterceptor([{ name: 'files', maxCount: 4 }], {
+      limits: { fileSize: 25 * 1024 * 1024 },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Create a project as an administrator, with file uploads',
+    description:
+      'Creates a project in an event even after its inscription deadline or when it is not publicly joinable; an ' +
+      'event with published results is closed. The fields and files are those of POST /projects without eventType, ' +
+      'plus the initial state (APPROVED by default, or UNDER_REVIEW). Students with an account join directly ' +
+      '(JOINED); the others stay pending and are invited to the project. Created APPROVED, the tutors are ' +
+      'activated and the pending participants also get the approval email (INVITED); created UNDER_REVIEW, both ' +
+      'happen at the approval. Recorded in the change log (CREATED) with the initial values. Work after the ' +
+      'project is saved (DOCUMENTS, INVITATION, TUTOR_ACTIVATION, ' +
+      'NOTIFICATION) does not undo it: it is listed in failedEffects with a warning; repeating the request would ' +
+      'answer PROJECT_NAME_TAKEN.',
+  })
+  @ApiBody({ type: AdminCreateProjectMultipartDto })
+  @ApiResponse({
+    status: 201,
+    description: '{ project, participants, tutors, failedEffects, warning }',
+    schema: {
+      example: {
+        project: {
+          id: 812,
+          name: 'Robot recolector',
+          state: 'APPROVED',
+          eventId: 41,
+          courseId: 9,
+        },
+        participants: [
+          { email: 'ana@uninorte.edu.co', status: 'JOINED' },
+          { email: 'luis@uninorte.edu.co', status: 'INVITED' },
+        ],
+        tutors: [
+          { userId: 7, email: 'tutor@uninorte.edu.co', firstName: 'Laura' },
+        ],
+        failedEffects: [],
+        warning: null,
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Missing or invalid fields or files',
+  })
+  @ApiResponse({ status: 403, description: 'The user lacks manage:projects' })
+  @ApiResponse({ status: 404, description: 'Event or category not found' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Not created; code says why: PROJECT_NAME_TAKEN (details.name), PARTICIPANT_IN_OTHER_PROJECT (details.emails: ' +
+      'students in another project of the event that is not rejected) or EVENT_RESULTS_PUBLISHED',
+    schema: {
+      example: {
+        statusCode: 409,
+        message:
+          'Estos integrantes ya están en otro proyecto del evento: ana@uninorte.edu.co',
+        code: 'PARTICIPANT_IN_OTHER_PROJECT',
+        details: { emails: ['ana@uninorte.edu.co'] },
+        timestamp: '2026-11-26T15:00:00.000Z',
+      },
+    },
+  })
+  adminCreateProject(
+    @Body() body: AdminCreateProjectMultipartDto,
+    @UploadedFiles() uploadedFiles: { files?: Express.Multer.File[] },
+    @GetUser() user: AppUser,
+  ) {
+    return this.projectsService.adminCreateProject(
+      body,
+      uploadedFiles.files || [],
+      user.id,
     );
   }
 

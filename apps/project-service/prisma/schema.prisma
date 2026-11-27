@@ -39,6 +39,7 @@ enum ProjectChangeAction {
   PARTICIPANTS
   TUTORS
   DOCUMENTS
+  CREATED
 }
 
 /**

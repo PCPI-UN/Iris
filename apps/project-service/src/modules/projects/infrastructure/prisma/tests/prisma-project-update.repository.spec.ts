@@ -11,6 +11,7 @@ describe('PrismaProjectRepository.updateProject', () => {
       update: jest.fn().mockResolvedValue({ id: 4, name: 'Dron' }),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       findUnique: jest.fn().mockResolvedValue({ id: 4, name: 'Dron' }),
+      create: jest.fn().mockResolvedValue({ id: 9, name: 'Robot' }),
     },
   });
   let db: ReturnType<typeof buildDb>;
@@ -86,5 +87,30 @@ describe('PrismaProjectRepository.updateProject', () => {
     await expect(repo.updateProject({ id: 4, name: 'Dron' })).rejects.toBe(
       error,
     );
+  });
+
+  describe('create', () => {
+    const input = {
+      eventId: 1,
+      courseId: 2,
+      name: 'Robot',
+      state: 'APPROVED' as const,
+      academicCourseId: 3,
+    };
+
+    it('answers ProjectNameTakenError when another project took the name meanwhile', async () => {
+      db.project.create.mockRejectedValue(uniqueError(['eventId', 'name']));
+
+      await expect(repo.create(input as never)).rejects.toBeInstanceOf(
+        ProjectNameTakenError,
+      );
+    });
+
+    it('lets any other unique violation through', async () => {
+      const error = uniqueError(['id']);
+      db.project.create.mockRejectedValue(error);
+
+      await expect(repo.create(input as never)).rejects.toBe(error);
+    });
   });
 });

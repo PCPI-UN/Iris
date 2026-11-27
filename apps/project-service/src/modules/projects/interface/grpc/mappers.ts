@@ -2,6 +2,12 @@ import { TypedDocument ,ProjectState, ProjectDocument, Project, JurorKey, Status
 import { AcademicCourseView } from '../../domain/repositories/project.repository';
 import { RequestedReadScope } from '../../domain/read-scope';
 import { ProjectChangeLogEntry } from '../../domain/entities/project-change-log.entity';
+import { AdminParticipantsError } from '../../domain/admin-participants';
+import {
+  EventResultsPublishedError,
+  ParticipantInOtherProjectError,
+} from '../../domain/admin-project-creation';
+import { ProjectNameTakenError } from '../../domain/admin-project-edit';
 import {
   JurorImportOutcome as ProtoJurorImportOutcome,
   JurorImportUserStatus as ProtoJurorImportUserStatus,
@@ -9,7 +15,23 @@ import {
   ExecuteJurorImportResponse,
   GetJurorImportTemplateResponse,
   JurorImportRowResult as ProtoJurorImportRowResult,
+  ProjectImportOutcome as ProtoProjectImportOutcome,
+  ProjectImportParticipantStatus as ProtoProjectImportParticipantStatus,
+  ProjectImportRow as ProtoProjectImportRow,
+  ProjectImportRowResult as ProtoProjectImportRowResult,
+  PreviewProjectImportResponse,
+  ExecuteProjectImportResponse,
+  GetProjectImportTemplateResponse,
 } from '@app/common/generated/project';
+import {
+  ProjectImportOutcome,
+  ProjectImportParticipantStatus,
+  ProjectImportPreview,
+  ProjectImportRowInput,
+  ProjectImportRowResult,
+} from '../../application/use-cases/preview-project-import.uc';
+import { ProjectImportExecution } from '../../application/use-cases/execute-project-import.uc';
+import { ProjectImportTemplate } from '../../application/use-cases/get-project-import-template.uc';
 import {
   JurorImportOutcome,
   JurorImportPreview,
@@ -254,6 +276,80 @@ export const toGetJurorImportTemplateResponse = (
   projects: template.projects,
 });
 
+/** A row read by the gateway; an unset state is left to the use case (APPROVED) */
+export const protoToProjectImportRow = (
+  row: ProtoProjectImportRow,
+): ProjectImportRowInput => ({
+  rowNumber: row.rowNumber,
+  categoryName: row.categoryName ?? '',
+  nrc: row.nrc,
+  name: row.name ?? '',
+  description: row.description,
+  projectCode: row.projectCode,
+  state: row.state ? protoToState(row.state) : undefined,
+  participants: (row.participants ?? []).map((p) => ({
+    ...p,
+    slot: p.slot || undefined,
+  })),
+  tutorEmails: row.tutorEmails ?? [],
+  formatErrors: row.formatErrors ?? [],
+});
+
+const projectImportOutcomeToProto: Record<
+  ProjectImportOutcome,
+  ProtoProjectImportOutcome
+> = {
+  CREATE: ProtoProjectImportOutcome.PROJECT_IMPORT_CREATE,
+  SKIP: ProtoProjectImportOutcome.PROJECT_IMPORT_SKIP,
+  ERROR: ProtoProjectImportOutcome.PROJECT_IMPORT_ERROR,
+  CREATED: ProtoProjectImportOutcome.PROJECT_IMPORT_CREATED,
+};
+
+const projectImportParticipantStatusToProto: Record<
+  ProjectImportParticipantStatus,
+  ProtoProjectImportParticipantStatus
+> = {
+  HAS_ACCOUNT: ProtoProjectImportParticipantStatus.PROJECT_IMPORT_HAS_ACCOUNT,
+  NO_ACCOUNT: ProtoProjectImportParticipantStatus.PROJECT_IMPORT_NO_ACCOUNT,
+};
+
+const toProtoProjectImportRow = (
+  row: ProjectImportRowResult,
+): ProtoProjectImportRowResult => ({
+  rowNumber: row.rowNumber,
+  outcome: projectImportOutcomeToProto[row.outcome],
+  message: row.message,
+  projectName: row.projectName,
+  categoryName: row.categoryName,
+  state: stateToProto(row.state),
+  participants: row.participants.map((p) => ({
+    email: p.email,
+    status: projectImportParticipantStatusToProto[p.status],
+  })),
+  projectId: row.projectId,
+  failedEffects: row.failedEffects ?? [],
+});
+
+export const toPreviewProjectImportResponse = (
+  preview: ProjectImportPreview,
+): PreviewProjectImportResponse => ({
+  rows: preview.rows.map(toProtoProjectImportRow),
+  totals: preview.totals,
+  eventWarnings: preview.eventWarnings,
+  canConfirm: preview.canConfirm,
+});
+
+export const toExecuteProjectImportResponse = (
+  execution: ProjectImportExecution,
+): ExecuteProjectImportResponse => ({
+  rows: execution.rows.map(toProtoProjectImportRow),
+  totals: execution.totals,
+});
+
+export const toGetProjectImportTemplateResponse = (
+  template: ProjectImportTemplate,
+): GetProjectImportTemplateResponse => template;
+
 /** Maps the student dashboard statistics to GetStudentParticipationStatsResponse */
 export const toProtoStudentParticipationStats = (stats: StudentDashboardData) => ({
   totalEvents: stats.totalEvents,
@@ -323,3 +419,26 @@ export function toProtoProjectChangeLogEntry(entry: ProjectChangeLogEntry) {
     createdAt: entry.createdAt.toISOString(),
   };
 }
+
+/**
+ * Coded rejection of an administrative creation, or null for any other error. A student
+ * rejection from the shared enrollment checks keeps its own code and email.
+ */
+export const adminCreateRejection = (
+  error: unknown,
+): { code: string; message: string; emails: string[] } | null => {
+  if (error instanceof ParticipantInOtherProjectError) {
+    return { code: error.code, message: error.message, emails: error.emails };
+  }
+  if (error instanceof ProjectNameTakenError) {
+    return { code: error.conflict.code, message: error.message, emails: [] };
+  }
+  if (error instanceof EventResultsPublishedError) {
+    return { code: error.code, message: error.message, emails: [] };
+  }
+  if (error instanceof AdminParticipantsError) {
+    const { code, message, email } = error.rejection;
+    return { code, message, emails: email ? [email] : [] };
+  }
+  return null;
+};

@@ -1,5 +1,6 @@
 import { fileNamePart, xlsxFile, XLSX_CONTENT_TYPE } from './xlsx-file';
 import { solidFill, thinBorder } from './excel-styles';
+import { cellText, normalizeHeader } from './excel-cells';
 
 describe('fileNamePart', () => {
   it.each([
@@ -41,5 +42,26 @@ describe('excel styles', () => {
       bottom: side,
       right: side,
     });
+  });
+});
+
+describe('normalizeHeader', () => {
+  it.each([
+    ['Número*', 'numero'],
+    ['  Nombre(s)   jurado 1 ', 'nombre(s) jurado 1'],
+    ['Categoría*', 'categoria'],
+  ])('%j -> %j', (input, expected) => {
+    expect(normalizeHeader(input)).toBe(expected);
+  });
+});
+
+describe('cellText', () => {
+  it('reads strings, numbers, rich text, hyperlinks and formulas', () => {
+    expect(cellText('  a ')).toBe('a');
+    expect(cellText(5)).toBe('5');
+    expect(cellText(null)).toBe('');
+    expect(cellText({ richText: [{ text: 'a' }, { text: 'b ' }] })).toBe('ab');
+    expect(cellText({ text: '', hyperlink: 'mailto:a@b.co' })).toBe('a@b.co');
+    expect(cellText({ formula: 'A1', result: 'x' })).toBe('x');
   });
 });

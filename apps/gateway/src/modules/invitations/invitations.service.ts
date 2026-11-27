@@ -1,6 +1,7 @@
 import { Injectable, Inject, OnModuleInit } from '@nestjs/common';
 import { ClientGrpc, RpcException } from '@nestjs/microservices';
 import { firstValueFrom } from 'rxjs';
+import { mapWithConcurrency } from '@app/common/utils/concurrency.util';
 import { status } from '@grpc/grpc-js';
 import {
   INVITATION_SERVICE_NAME,
@@ -55,20 +56,6 @@ const grpcErrorMessage = (error: unknown): string => {
     'error inesperado'
   );
 };
-
-async function forEachWithConcurrency<T>(
-  items: T[],
-  limit: number,
-  fn: (item: T) => Promise<void>,
-): Promise<void> {
-  let next = 0;
-  const worker = async () => {
-    while (next < items.length) await fn(items[next++]);
-  };
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, worker),
-  );
-}
 
 @Injectable()
 export class InvitationsService implements OnModuleInit {
@@ -243,7 +230,7 @@ export class InvitationsService implements OnModuleInit {
     const jurorRole = await this.findJurorRole();
     const targetType = InvitationTargetType[InvitationTargetType.EVENT];
 
-    await forEachWithConcurrency(
+    await mapWithConcurrency(
       jurors,
       JUROR_INVITATION_CONCURRENCY,
       async (juror) => {

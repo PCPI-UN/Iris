@@ -1,6 +1,7 @@
 import { Controller, Inject, Injectable } from '@nestjs/common';
 import { GrpcMethod, RpcException } from '@nestjs/microservices';
 import { CreateProjectUC } from '../../application/use-cases/create-project.uc';
+import { CreateProjectWithPendingParticipantsUC } from '../../application/use-cases/create-project-with-pending-participants.uc';
 import { ListProjectsByEventUC } from '../../application/use-cases/list-projects-by-event.uc';
 import { GetProjectUC } from '../../application/use-cases/get-project.uc';
 import { ListProjectsByIdsUC } from '../../application/use-cases/list-projects-by-ids.uc';
@@ -15,6 +16,7 @@ import {
   toProtoParticipant,
   protoToStatus,
   toProtoPendingParticipant,
+  adminCreateRejection,
   protoToTypedDocument,
   toProtoProjectComplete,
   toProtoTutor,
@@ -22,6 +24,10 @@ import {
   toPreviewJurorImportResponse,
   toExecuteJurorImportResponse,
   toGetJurorImportTemplateResponse,
+  protoToProjectImportRow,
+  toPreviewProjectImportResponse,
+  toExecuteProjectImportResponse,
+  toGetProjectImportTemplateResponse,
   toProtoStudentParticipationStats,
   toProtoProjectInScope,
   protoToReadScope,
@@ -61,20 +67,26 @@ import { ListUserParticipationsUC } from '../../application/use-cases/list-user-
 import { GetStudentParticipationStatsUC } from '../../application/use-cases/get-student-participation-stats.uc';
 import { GetStudentParticipationStatsDTO } from '../../application/dto/get-student-participation-stats.dto';
 import { CheckActiveSubmissionByEmailsUC } from '../../application/use-cases/check-active-submission-by-emails.uc';
-import { ClientGrpc } from '@nestjs/microservices';
-import { INVITATION_SERVICE_NAME } from '@app/common/generated/invitation';
-import { lastValueFrom } from 'rxjs';
 import { status } from '@grpc/grpc-js';
 import {
+  AdminCreateProjectRequest,
+  AdminCreateProjectResponse,
   CheckProjectAccessRequest,
+  CreateProjectWithParticipantsRequest,
   ExecuteJurorImportRequest,
   GetJurorImportTemplateRequest,
   PreviewJurorImportRequest,
+  PreviewProjectImportRequest,
+  ExecuteProjectImportRequest,
+  GetProjectImportTemplateRequest,
   ProjectAccessAction,
 } from '@app/common/generated/project';
 import { GetJurorImportTemplateUC } from '../../application/use-cases/get-juror-import-template.uc';
 import { PreviewJurorImportUC } from '../../application/use-cases/preview-juror-import.uc';
 import { ExecuteJurorImportUC } from '../../application/use-cases/execute-juror-import.uc';
+import { PreviewProjectImportUC } from '../../application/use-cases/preview-project-import.uc';
+import { ExecuteProjectImportUC } from '../../application/use-cases/execute-project-import.uc';
+import { GetProjectImportTemplateUC } from '../../application/use-cases/get-project-import-template.uc';
 import { ListProjectChangeLogUC } from '../../application/use-cases/list-project-change-log.uc';
 import { AdminChangeProjectStateUC } from '../../application/use-cases/admin-change-project-state.uc';
 import { ProjectApprovalEffects } from '../../application/services/project-approval-effects.service';
@@ -82,6 +94,10 @@ import { ProjectStateChangeBlockedError } from '../../domain/admin-state-change'
 import { AdminUpdateProjectUC } from '../../application/use-cases/admin-update-project.uc';
 import { AdminProjectEditConflictError } from '../../domain/admin-project-edit';
 import { AdminAddParticipantUC } from '../../application/use-cases/admin-add-participant.uc';
+import {
+  AdminCreateProjectUC,
+  AdminCreateState,
+} from '../../application/use-cases/admin-create-project.uc';
 import { AdminRemoveParticipantUC } from '../../application/use-cases/admin-remove-participant.uc';
 import { ReplaceProjectTutorsUC } from '../../application/use-cases/replace-project-tutors.uc';
 import { AdminParticipantsError } from '../../domain/admin-participants';
@@ -89,24 +105,9 @@ import { Status } from '../../domain/entities/project.entity';
 import { AdminReplaceProjectDocumentUC } from '../../application/use-cases/admin-replace-project-document.uc';
 import { AdminChangeProjectDocumentStateUC } from '../../application/use-cases/admin-change-project-document-state.uc';
 
-interface InvitationGrpcService {
-  CreateInvitation(data: {
-    email: string;
-    eventType: string;
-    targetType: string;
-    targetId: number;
-    invitedByUserId: number;
-    roleIds: number[];
-    firstName?: string;
-    lastName?: string;
-  }): any;
-}
-
 @Injectable()
 @Controller()
 export class ProjectsController {
-  private invitationService: InvitationGrpcService;
-
   constructor(
     private readonly createProject: CreateProjectUC,
     private readonly getProject: GetProjectUC,
@@ -159,13 +160,12 @@ export class ProjectsController {
     private readonly replaceProjectTutorsUC: ReplaceProjectTutorsUC,
     private readonly adminReplaceProjectDocumentUC: AdminReplaceProjectDocumentUC,
     private readonly adminChangeProjectDocumentStateUC: AdminChangeProjectDocumentStateUC,
-    @Inject(INVITATION_SERVICE_NAME) private readonly client: ClientGrpc,
+    private readonly createProjectWithPendingParticipantsUC: CreateProjectWithPendingParticipantsUC,
+    private readonly adminCreateProjectUC: AdminCreateProjectUC,
+    private readonly previewProjectImportUC: PreviewProjectImportUC,
+    private readonly executeProjectImportUC: ExecuteProjectImportUC,
+    private readonly getProjectImportTemplateUC: GetProjectImportTemplateUC,
   ) {}
-
-  onModuleInit() {
-    this.invitationService =
-      this.client.getService<InvitationGrpcService>('InvitationService');
-  }
 
   private async tutorsOf(projectId: number) {
     return (await this.listProjectTutorsUC.execute([projectId])).get(projectId) ?? [];
@@ -466,121 +466,33 @@ export class ProjectsController {
   }
 
   @GrpcMethod('ProjectsService', 'CreateProjectWithPendingParticipants')
-  async createProjectWithPendingParticipantsRpc(req: any) {
-    // Validated before anything is created, so a bad tutor selection leaves no project behind
-    const tutors = await this.setProjectTutorsUC.resolve({
-      tutorUserIds: req.tutorUserIds ?? [],
-      pendingTutors: req.pendingTutors ?? [],
-    });
-
-    if (req.participants && req.participants.length > 0) {
-      const emails = req.participants.map((p: any) => p.email);
-      const { hasConflict, conflictEmails } =
-        await this.checkActiveSubmissionByEmailsUC.execute({
-          eventId: req.eventId,
-          emails,
-        });
-      if (hasConflict) {
-        throw new RpcException({
-          code: status.ALREADY_EXISTS,
-          message: `Estos correos ya tienen un proyecto activo en conflicto: ${conflictEmails.join(', ')}`,
-        });
-      }
-    }
-
-    try {
-      const project = await this.createProject.execute({
+  async createProjectWithPendingParticipantsRpc(
+    req: CreateProjectWithParticipantsRequest,
+  ) {
+    const { project, participants, documents } =
+      await this.createProjectWithPendingParticipantsUC.execute({
         eventId: req.eventId,
         courseId: req.courseId,
         name: req.name,
         projectCode: req.projectCode,
         description: req.description,
-        eventNumber: req.eventNumber, // Optional - set during confirmation
-        state: 'UNDER_REVIEW',
+        eventNumber: req.eventNumber,
         nrc: req.nrc,
+        eventType: req.eventType,
+        tutorUserIds: req.tutorUserIds,
+        pendingTutors: req.pendingTutors,
+        participants: req.participants,
+        documents: (req.documents ?? []).map((d) => ({
+          url: d.url,
+          type: protoToTypedDocument(d.type),
+        })),
       });
-      console.log('Project created with ID:', project.id);
-      try {
-        // The submission is public: tutors get their role and invitation when the project is approved
-        await this.setProjectTutorsUC.store(project.id, tutors);
-      } catch (error) {
-        console.error('❌ Error saving project tutors, deleting project:', error);
-        await this.deleteProjectUC.execute({ id: project.id });
-        throw error;
-      }
-      const pendingParticipants = [];
-
-      if (req.participants && req.participants.length > 0) {
-        try {
-          for (const p of req.participants) {
-            const pendingParticipant =
-              await this.addPendingParticipantUC.execute({
-                projectId: project.id,
-                firstName: p.firstName,
-                lastName: p.lastName ?? undefined,
-                email: p.email,
-                studentCode: p.studentCode,
-                semester: p.semester,
-                career: p.career,
-                status: 'PENDING',
-              });
-            pendingParticipants.push(
-              toProtoPendingParticipant(pendingParticipant),
-            );
-          }
-        } catch (error) {
-          // Si hay un error al agregar participantes, eliminamos el proyecto creado
-          console.error(
-            '❌ Error adding pending participants, deleting project:',
-            error,
-          );
-          await this.deleteProjectUC.execute({ id: project.id });
-          throw error;
-        }
-        console.log('eventType=', req.eventType, JSON.stringify(req));
-        for (const pending of pendingParticipants) {
-          const obs$ = this.invitationService.CreateInvitation({
-            email: pending.email, // ajusta al nombre real
-            eventType: req.eventType,
-            targetType: 'PROJECT',
-            targetId: project.id,
-            invitedByUserId: 1, // AJUSTA: quién envía la invitación
-            roleIds: [5], // AJUSTA: roles si es necesario
-            firstName: pending.firstName,
-            lastName: pending.lastName ?? '',
-          });
-          //console.log('Sending invitation to:', pending.email);
-          //console.log('Invitation observable:', obs$);
-
-          await lastValueFrom(obs$);
-        }
-      }
-
-      // Manejo de documentos del proyecto
-      const projectDocuments = [];
-      if (req.documents && req.documents.length > 0) {
-        for (const d of req.documents) {
-          const document = await this.addDoc.execute({
-            projectId: project.id,
-            url: d.url,
-            type: protoToTypedDocument(d.type),
-          });
-          projectDocuments.push(toProtoDocument(document));
-        }
-      }
-      return {
-        project: toProtoProject(project),
-        participants: pendingParticipants,
-        documents: projectDocuments,
-        tutors: await this.tutorsOf(project.id),
-      };
-    } catch (err) {
-      console.error(
-        '❌ Error creating project with pending participants and documents:',
-        err,
-      );
-      throw err; // vuelve a lanzar el error original (para que NestJS lo registre bien)
-    }
+    return {
+      project: toProtoProject(project),
+      participants: participants.map(toProtoPendingParticipant),
+      documents: documents.map(toProtoDocument),
+      tutors: await this.tutorsOf(project.id),
+    };
   }
 
   @GrpcMethod('ProjectsService', 'ListAssignedProjects')
@@ -710,6 +622,34 @@ export class ProjectsController {
       eventId: req.eventId,
     });
     return toGetJurorImportTemplateResponse(template);
+  }
+
+  @GrpcMethod('ProjectsService', 'PreviewProjectImport')
+  async previewProjectImportRpc(req: PreviewProjectImportRequest) {
+    const preview = await this.previewProjectImportUC.execute({
+      eventId: req.eventId,
+      rows: (req.rows ?? []).map(protoToProjectImportRow),
+    });
+    return toPreviewProjectImportResponse(preview);
+  }
+
+  @GrpcMethod('ProjectsService', 'ExecuteProjectImport')
+  async executeProjectImportRpc(req: ExecuteProjectImportRequest) {
+    const execution = await this.executeProjectImportUC.execute({
+      eventId: req.eventId,
+      rows: (req.rows ?? []).map(protoToProjectImportRow),
+      actingUserId: req.actingUserId,
+      fileName: req.fileName ?? '',
+    });
+    return toExecuteProjectImportResponse(execution);
+  }
+
+  @GrpcMethod('ProjectsService', 'GetProjectImportTemplate')
+  async getProjectImportTemplateRpc(req: GetProjectImportTemplateRequest) {
+    const template = await this.getProjectImportTemplateUC.execute({
+      eventId: req.eventId,
+    });
+    return toGetProjectImportTemplateResponse(template);
   }
 
   @GrpcMethod('ProjectsService', 'ListUserParticipations')
@@ -908,6 +848,57 @@ export class ProjectsController {
       // Nothing changed: the gateway answers 409 (or 400) with the cause
       if (error instanceof AdminParticipantsError) {
         return { rejected: error.rejection, failedEffects: [], warning: '' };
+      }
+      throw error;
+    }
+  }
+
+  @GrpcMethod('ProjectsService', 'AdminCreateProject')
+  async adminCreateProjectRpc(
+    req: AdminCreateProjectRequest,
+  ): Promise<AdminCreateProjectResponse> {
+    try {
+      const result = await this.adminCreateProjectUC.execute({
+        eventId: req.eventId,
+        courseId: req.courseId,
+        name: req.name,
+        description: req.description,
+        projectCode: req.projectCode,
+        nrc: req.nrc,
+        // Unset is APPROVED; REJECTED or REQUEST_CHANGES reach the use case and get a 400
+        state: req.state
+          ? (protoToState(req.state) as AdminCreateState)
+          : undefined,
+        participants: req.participants ?? [],
+        tutorUserIds: req.tutorUserIds,
+        pendingTutors: req.pendingTutors,
+        actingUserId: req.actingUserId,
+        origin:
+          req.originKind === 'ADMIN_BULK'
+            ? {
+                kind: 'ADMIN_BULK',
+                fileName: req.originFileName ?? '',
+                rowNumber: req.originRowNumber ?? 0,
+              }
+            : { kind: 'ADMIN_FORM' },
+      });
+      return {
+        project: toProtoProject(result.project),
+        participants: result.participants,
+        tutors: (await this.tutorsOf(result.project.id)).map(toProtoTutor),
+        failedEffects: result.failedEffects,
+        warning: result.warning ?? '',
+      };
+    } catch (error) {
+      const rejected = adminCreateRejection(error);
+      if (rejected) {
+        return {
+          participants: [],
+          tutors: [],
+          rejected,
+          failedEffects: [],
+          warning: '',
+        };
       }
       throw error;
     }

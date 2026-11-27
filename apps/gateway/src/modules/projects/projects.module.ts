@@ -19,6 +19,8 @@ import { RemoveJurorFromProjectUseCase } from './use-cases/remove-juror-from-pro
 import { UpdateProjectCodeUseCase } from './use-cases/update-project-code.use-case';
 import { JurorImportsController } from './juror-imports/juror-imports.controller';
 import { JurorImportsService } from './juror-imports/juror-imports.service';
+import { ProjectImportsController } from './project-imports/project-imports.controller';
+import { ProjectImportsService } from './project-imports/project-imports.service';
 
 import {
   EVENT_SERVICE_NAME,
@@ -112,7 +114,11 @@ import { InvitationsModule } from '../invitations/invitations.module';
       },
     ]),
   ],
-  controllers: [ProjectsController, JurorImportsController],
+  controllers: [
+    ProjectsController,
+    JurorImportsController,
+    ProjectImportsController,
+  ],
   providers: [
     ProjectsService,
     AzureBlobUploadService,
@@ -123,6 +129,7 @@ import { InvitationsModule } from '../invitations/invitations.module';
     RemoveJurorFromProjectUseCase,
     UpdateProjectCodeUseCase,
     JurorImportsService,
+    ProjectImportsService,
     { provide: APP_INTERCEPTOR, useClass: SignBlobUrlsInterceptor },
   ],
   exports: [ProjectsService],

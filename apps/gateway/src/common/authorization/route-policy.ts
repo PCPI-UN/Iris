@@ -228,8 +228,19 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'GET /events/:eventId/juror-imports/template': {
     permission: ['manage:events'],
   },
+  // modules/projects/project-imports/project-imports.controller.ts
+  'POST /events/:eventId/project-imports/preview': {
+    permission: ['manage:projects'],
+  },
+  'POST /events/:eventId/project-imports/execute': {
+    permission: ['manage:projects'],
+  },
+  'GET /events/:eventId/project-imports/template': {
+    permission: ['manage:projects'],
+  },
   // modules/projects/projects.controller.ts
   'POST /projects': { access: 'public' },
+  'POST /projects/admin': { permission: ['manage:projects'] },
   'GET /projects/:id': {
     access: 'owner',
     why: 'project-service CheckProjectAccess READ: participants, assigned jurors or read:events',

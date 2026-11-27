@@ -1,6 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { isEmail } from 'class-validator';
 import { normalizeEmail } from '@app/common/utils/email.util';
+import { mapWithConcurrency } from '@app/common/utils/concurrency.util';
+import { normalizeText } from '@app/common/utils/text.util';
 import { ProjectRepository } from '../../domain/repositories/project.repository';
 import {
   JUROR_ROLE_ID,
@@ -105,15 +107,6 @@ const requiredFields = (
   { key: 'email', label: `Correo del jurado ${slot}` },
 ];
 
-/** Trimmed, single-spaced, lowercase and without accents: "Dpt.  Ingeniería" -> "dpt. ingenieria" */
-const normalizeText = (value: string): string =>
-  value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
-
 /** "05" and "5" are the same project number; other codes compare as text */
 const normalizeCode = (value: string): string => {
   const code = value.trim();
@@ -129,25 +122,6 @@ const formatDate = (iso: string): string => {
   const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
   return `${dd}/${mm}/${date.getUTCFullYear()}`;
 };
-
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results: R[] = new Array<R>(items.length);
-  let next = 0;
-  const worker = async () => {
-    while (next < items.length) {
-      const index = next++;
-      results[index] = await fn(items[index]);
-    }
-  };
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, worker),
-  );
-  return results;
-}
 
 /**
  * Validates the rows of a juror import against the event and reports, row by row,
