@@ -48,25 +48,68 @@ export class DiplomaPdfRenderer {
   constructor(private readonly assetsDir = DIPLOMA_ASSETS_DIR) {}
 
   async render({ template, projectName }: DiplomaData): Promise<Buffer> {
+    return this.renderPages(
+      [{ template, projectName }],
+      `Diploma - ${projectName}`,
+    );
+  }
+
+  /**
+   * Several diplomas in one PDF, one page each in the given order: the admin prints the
+   * diplomas of every winner of an event at once.
+   */
+  async renderMany(diplomas: DiplomaData[], title: string): Promise<Buffer> {
+    return this.renderPages(diplomas, title);
+  }
+
+  private async renderPages(
+    diplomas: DiplomaData[],
+    title: string,
+  ): Promise<Buffer> {
     // Read first: a missing asset rejects before any PDF is started
-    const design = this.asset(`${template}.png`);
+    const designs = new Map(
+      [...new Set(diplomas.map((d) => d.template))].map((template) => [
+        template,
+        this.asset(`${template}.png`),
+      ]),
+    );
     const font = this.asset(FONT_FILE);
 
     const doc = new PDFDocument({
       size: 'A4',
       layout: 'landscape',
       margin: 0,
+      autoFirstPage: false,
       info: {
-        Title: `Diploma - ${projectName}`,
+        Title: title,
         Author: 'Universidad del Norte - División de Ingenierías',
         Creator: 'Iris',
       },
     });
     const done = collect(doc);
+    doc.registerFont(FONT_NAME, font);
+    // Opened once: every page of the same design reuses one embedded image
+    const images = new Map(
+      [...designs].map(([template, png]) => [template, openImage(doc, png)]),
+    );
 
+    for (const { template, projectName } of diplomas) {
+      doc.addPage({ size: 'A4', layout: 'landscape', margin: 0 });
+      this.drawPage(doc, images.get(template)!, projectName);
+    }
+
+    doc.end();
+    return await done;
+  }
+
+  /** The event design with the project name centered in the blank space */
+  private drawPage(
+    doc: PDFKit.PDFDocument,
+    design: Buffer,
+    projectName: string,
+  ): void {
     doc.image(design, 0, 0, { width: PAGE.width, height: PAGE.height });
 
-    doc.registerFont(FONT_NAME, font);
     doc.font(FONT_NAME).fillColor(NAME_COLOR);
     const { lines, fontSize } = fitProjectName(
       projectName,
@@ -87,9 +130,6 @@ export class DiplomaPdfRenderer {
       doc.text(line, NAME_BOX.x, y, { width: NAME_BOX.width, align: 'center' });
       y += lineHeight;
     }
-
-    doc.end();
-    return await done;
   }
 
   /** Two PNG of ~400 KB and one font of ~340 KB, kept in memory once read */
@@ -101,6 +141,15 @@ export class DiplomaPdfRenderer {
     }
     return content;
   }
+}
+
+/**
+ * pdfkit embeds an image once per `image()` call when it gets a Buffer; the object of
+ * `openImage()` is embedded once and reused by every page. `image()` accepts that object at
+ * runtime, but @types/pdfkit declares neither, so it is typed as the Buffer it wraps.
+ */
+function openImage(doc: PDFKit.PDFDocument, png: Buffer): Buffer {
+  return (doc as unknown as { openImage(src: Buffer): Buffer }).openImage(png);
 }
 
 function collect(doc: PDFKit.PDFDocument): Promise<Buffer> {

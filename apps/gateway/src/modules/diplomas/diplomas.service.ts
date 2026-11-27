@@ -22,7 +22,8 @@ export interface DiplomaFile {
  *
  * - A student gets the diploma of their own project in the event (project-service answers
  *   404 when they have none): the user comes from the session. The academic profiles
- *   DIRECTOR and DEAN get the one of any project of their scope (AcademicService).
+ *   DIRECTOR and DEAN get the one of any project of their scope (AcademicService), and
+ *   the staff with `manage:events` the one of any project of the event.
  * - Only once the admin publishes the event results, and only when the project won at
  *   least one award of the event. Co-winners each get their own diploma.
  * - One diploma per project: the design carries the event title, signature and date, and
@@ -93,6 +94,108 @@ export class DiplomasService {
   }
 
   /**
+   * Diploma of any project of the event, for the staff that manages the event and its
+   * awards (`manage:events`). Same rules as the student one; a project of another event
+   * answers 404 like a missing one.
+   */
+  async getEventProjectDiploma(
+    eventId: number,
+    projectId: number,
+  ): Promise<DiplomaFile> {
+    // NOT_FOUND (404) when the project does not exist
+    const project = await this.projectsService.getProjectById(projectId);
+    if (project.eventId !== eventId) {
+      throw new NotFoundException(
+        `El proyecto ${projectId} no pertenece al evento ${eventId}`,
+      );
+    }
+    return this.getProjectDiploma(project);
+  }
+
+  /**
+   * The diplomas of every winner of the event in one PDF, one page per project ordered by
+   * category and award position, for the staff with `manage:events`. Same rules as the
+   * single one: published results, a published award of the event and a design.
+   */
+  async getEventDiplomas(eventId: number): Promise<DiplomaFile> {
+    const event = await this.eventsService.getEventById(eventId);
+    if (!event) {
+      throw new NotFoundException(`No se encontró el evento con ID ${eventId}`);
+    }
+    if (!event.resultsPublished) {
+      throw new ForbiddenException(
+        'Los resultados del evento aún no se han publicado',
+      );
+    }
+    const template = this.templates.get(eventId);
+    if (!template) {
+      throw new NotFoundException(
+        'Este evento no tiene un diploma configurado',
+      );
+    }
+
+    const winnerIds = await this.winnerProjectIds(eventId);
+    const { awards = [] } = winnerIds.length
+      ? await this.eventsService.listAwardsByProjects(winnerIds)
+      : { awards: [] };
+    const awarded = new Set(
+      awards
+        .filter((a) => a.eventId === eventId && a.resultsPublished)
+        .map((a) => a.projectId),
+    );
+    const projectIds = winnerIds.filter((id) => awarded.has(id));
+    if (!projectIds.length) {
+      throw new NotFoundException(
+        'El evento no tiene proyectos ganadores, así que no tiene diplomas',
+      );
+    }
+
+    const names = await this.projectsService.getProjectNamesByIds(projectIds);
+    const buffer = await this.renderer.renderMany(
+      projectIds.map((id) => ({
+        template,
+        projectName: names.get(id) ?? `Proyecto ${id}`,
+      })),
+      `Diplomas - ${event.name}`,
+    );
+    return {
+      buffer,
+      fileName: `diplomas_${fileNamePart(event.name)}.pdf`,
+    };
+  }
+
+  /** Projects that won an award of the event, once each, by category and award position */
+  private async winnerProjectIds(eventId: number): Promise<number[]> {
+    const categories = await allPages((page) =>
+      this.eventsService
+        .listCategoriesByEvent(eventId, { page, limit: PAGE_SIZE })
+        .then((r) => ({ items: r.categories ?? [], meta: r.meta })),
+    );
+    const ids: number[] = [];
+    for (const category of categories) {
+      const awards = await allPages((page) =>
+        this.eventsService
+          .listCategoryAwards({
+            categoryId: category.id,
+            page,
+            limit: PAGE_SIZE,
+          })
+          .then((r) => ({ items: r.awards ?? [], meta: r.meta })),
+      );
+      awards.sort((a, b) => a.position - b.position);
+      for (const award of awards) {
+        const winners = await allPages((page) =>
+          this.eventsService
+            .listAwardWinners({ awardId: award.id, page, limit: PAGE_SIZE })
+            .then((r) => ({ items: r.winners ?? [], meta: r.meta })),
+        );
+        ids.push(...winners.map((w) => w.projectId));
+      }
+    }
+    return [...new Set(ids)];
+  }
+
+  /**
    * Whether getProjectDiploma gives this project its diploma, without rendering it: a
    * design for the event, published results and a published award of the event.
    */
@@ -150,5 +253,21 @@ export class DiplomasService {
       buffer,
       fileName: `diploma_${fileNamePart(project.name)}.pdf`,
     };
+  }
+}
+
+const PAGE_SIZE = 100;
+
+/** Every item of a paginated list of event-service */
+async function allPages<T>(
+  fetchPage: (
+    page: number,
+  ) => Promise<{ items: T[]; meta?: { totalPages?: number } }>,
+): Promise<T[]> {
+  const items: T[] = [];
+  for (let page = 1; ; page++) {
+    const { items: pageItems, meta } = await fetchPage(page);
+    items.push(...pageItems);
+    if (!pageItems.length || page >= (meta?.totalPages ?? 1)) return items;
   }
 }
