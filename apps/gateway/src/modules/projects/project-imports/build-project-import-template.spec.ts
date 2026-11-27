@@ -89,6 +89,12 @@ describe('buildProjectImportTemplate', () => {
     );
     expect(headersOf(without.getWorksheet('Proyectos')!).get('B')).toBe('NRC');
     expect(headersOf(ws).get('B')).toBe('NRC*');
+    const guide = without.getWorksheet('Instrucciones')!;
+    const text = Array.from(
+      { length: guide.rowCount },
+      (_, i) => guide.getCell(i + 1, 1).text,
+    ).join('\n');
+    expect(text).toContain('Este evento no usa NRC: la columna se ignora.');
   });
 
   it('writes the lists in the hidden sheet', () => {

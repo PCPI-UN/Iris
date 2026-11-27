@@ -186,7 +186,12 @@ describe('PreviewProjectImportUC', () => {
     });
 
     expect(plans).toEqual([
-      { courseId: SISTEMAS.id, state: 'APPROVED', tutorUserIds: [PROFE.id] },
+      {
+        courseId: SISTEMAS.id,
+        nrc: '1001',
+        state: 'APPROVED',
+        tutorUserIds: [PROFE.id],
+      },
     ]);
   });
 
@@ -326,6 +331,28 @@ describe('PreviewProjectImportUC', () => {
 
       expect(res.rows[0].outcome).toBe('CREATE');
       expect(createProject.resolveAcademicCourse).not.toHaveBeenCalled();
+    });
+
+    it('drops a written NRC when the event does not use one', async () => {
+      event.requiresCourse = false;
+
+      const { preview: res, plans } = await uc.evaluate({
+        eventId: EVENT_ID,
+        rows: [row(2, { nrc: '9999' })],
+      });
+
+      expect(res.rows[0].outcome).toBe('CREATE');
+      expect(plans[0]?.nrc).toBeUndefined();
+      expect(createProject.resolveAcademicCourse).not.toHaveBeenCalled();
+    });
+
+    it('keeps the NRC in the plan when the event uses one', async () => {
+      const { plans } = await uc.evaluate({
+        eventId: EVENT_ID,
+        rows: [row(2, { nrc: ' 1001 ' })],
+      });
+
+      expect(plans[0]?.nrc).toBe('1001');
     });
   });
 

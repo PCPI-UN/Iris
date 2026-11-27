@@ -151,7 +151,7 @@ function instructions(data: ProjectImportTemplateData): string[] {
     '2. Las columnas con * son obligatorias. Categoría, Estado, Semestre y Carrera se eligen de la lista desplegable.',
     data.requiresCourse
       ? '3. Este evento exige NRC: debe existir en el periodo académico del evento.'
-      : '3. El NRC es opcional en este evento; si se escribe, debe existir en el periodo académico del evento.',
+      : '3. Este evento no usa NRC: la columna se ignora.',
     `4. El integrante 1 es obligatorio; hay hasta ${PROJECT_IMPORT_MAX_PARTICIPANTS} integrantes. Si se llena una celda de un integrante, se llenan todas las de ese integrante.`,
     `5. Los tutores son opcionales (hasta ${PROJECT_IMPORT_MAX_TUTORS}): se escribe el correo de cada uno.`,
     '6. Estado vacío equivale a Aprobado. «En revisión» deja el proyecto pendiente de revisión.',

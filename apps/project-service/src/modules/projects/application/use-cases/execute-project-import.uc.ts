@@ -147,7 +147,7 @@ export class ExecuteProjectImportUC {
         name: row.name.trim(),
         description: optional(row.description),
         projectCode: optional(row.projectCode),
-        nrc: optional(row.nrc),
+        nrc: plan.nrc,
         state: plan.state,
         participants: row.participants.map((p) => ({
           firstName: p.firstName,

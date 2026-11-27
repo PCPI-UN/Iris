@@ -108,6 +108,8 @@ export interface ProjectImportPreview {
 /** What a CREATE row needs to be created, resolved by the preview */
 export interface ProjectImportCreatePlan {
   courseId: number;
+  /** The NRC of the row; undefined when the event does not use one, where it is ignored */
+  nrc?: string;
   state: AdminCreateState;
   tutorUserIds: number[];
 }
@@ -496,7 +498,12 @@ export class PreviewProjectImportUC {
         outcome: 'CREATE',
         message: `Se creará con ${participantsSummary(participants)}.`,
       },
-      plan: { courseId: category.id, state, tutorUserIds },
+      plan: {
+        courseId: category.id,
+        nrc: eventRequiresCourse(ctx.event) ? text(row.nrc) : undefined,
+        state,
+        tutorUserIds,
+      },
     };
   }
 
