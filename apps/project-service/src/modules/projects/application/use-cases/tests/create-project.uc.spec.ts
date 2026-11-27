@@ -1,5 +1,8 @@
 import { CreateProjectUC } from '../create-project.uc';
+import { ProjectRepository } from '../../../domain/repositories/project.repository';
+import { EventServicePort } from '../../ports/event-service.port';
 import { ValidationError } from '../../../domain/errors';
+import { EventResultsPublishedError } from '../../../domain/admin-project-creation';
 
 describe('CreateProjectUC: course section (NRC) of the project', () => {
   const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -159,6 +162,101 @@ describe('CreateProjectUC: inscription deadline in Bogotá time', () => {
 
     await expect(register()).rejects.toThrow(
       'La fecha límite de inscripción del evento ya pasó',
+    );
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('CreateProjectUC: administrative creation', () => {
+  const yesterday = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const input = { eventId: 4, courseId: 2, name: 'EcoVision', nrc: '1001' };
+  const openEvent = {
+    id: 4,
+    active: true,
+    isPubliclyJoinable: true,
+    inscriptionDeadline: tomorrow,
+    termId: 3,
+    requiresCourse: true,
+    resultsPublished: false,
+  };
+
+  const build = (eventChange: Record<string, unknown> = {}, nrcId = 12) => {
+    const repo = {
+      findProject: jest.fn().mockResolvedValue(null),
+      findAcademicCourseId: jest.fn().mockResolvedValue(nrcId),
+      create: jest.fn((data: Record<string, unknown>) =>
+        Promise.resolve({ id: 1, ...data }),
+      ),
+    };
+    const events = {
+      getEventById: jest
+        .fn()
+        .mockResolvedValue({ ...openEvent, ...eventChange }),
+      getCourseById: jest.fn().mockResolvedValue({ id: 2, eventId: 4 }),
+    };
+    return {
+      uc: new CreateProjectUC(
+        repo as unknown as ProjectRepository,
+        events as unknown as EventServicePort,
+      ),
+      repo,
+    };
+  };
+
+  it.each([
+    [
+      'the inscription deadline passed',
+      { inscriptionDeadline: yesterday },
+      'La fecha límite de inscripción del evento ya pasó',
+    ],
+    [
+      'the event is not publicly joinable',
+      { isPubliclyJoinable: false },
+      'El evento no permite inscripción pública',
+    ],
+  ])(
+    'when %s, rejects the public submission and creates the administrative one',
+    async (_case, eventChange, message) => {
+      const pub = build(eventChange);
+      await expect(pub.uc.execute(input)).rejects.toThrow(message);
+      expect(pub.repo.create).not.toHaveBeenCalled();
+
+      const admin = build(eventChange);
+      await expect(
+        admin.uc.execute(input, { administrative: true }),
+      ).resolves.toEqual(
+        expect.objectContaining({ id: 1, academicCourseId: 12 }),
+      );
+    },
+  );
+
+  it('rejects the administrative creation in an event with published results', async () => {
+    const { uc, repo } = build({ resultsPublished: true });
+
+    await expect(
+      uc.execute(input, { administrative: true }),
+    ).rejects.toBeInstanceOf(EventResultsPublishedError);
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['public', {}],
+    ['administrative', { administrative: true }],
+  ])('rejects an NRC that is not in the term (%s)', async (_case, opts) => {
+    const { uc, repo } = build({}, null as unknown as number);
+
+    await expect(uc.execute(input, opts)).rejects.toThrow(
+      'El NRC 1001 no existe en el periodo del evento',
+    );
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects the administrative creation in an inactive event', async () => {
+    const { uc, repo } = build({ active: false });
+
+    await expect(uc.execute(input, { administrative: true })).rejects.toThrow(
+      'El evento está inactivo',
     );
     expect(repo.create).not.toHaveBeenCalled();
   });

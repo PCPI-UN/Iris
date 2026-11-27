@@ -10,6 +10,16 @@ import {
 import { EventServicePort } from '../ports/event-service.port';
 import { EVENT_SERVICE_PORT } from '../ports/event-service.port';
 import { isInscriptionDeadlinePassed } from '@app/common/utils/bogota-date.util';
+import { EventResultsPublishedError } from '../../domain/admin-project-creation';
+
+export interface CreateProjectOptions {
+  /**
+   * An administrator creates the project (manage:projects): the inscription deadline and
+   * isPubliclyJoinable do not apply, but an event with published results is closed. Set only
+   * by the use cases behind the administrative routes, never from a request field.
+   */
+  administrative?: boolean;
+}
 
 @Injectable()
 export class CreateProjectUC {
@@ -19,7 +29,7 @@ export class CreateProjectUC {
     private readonly eventService: EventServicePort,
   ) {}
 
-  async execute(input: CreateProjectDTO) {
+  async execute(input: CreateProjectDTO, opts: CreateProjectOptions = {}) {
     // 1. Validate event
     const event = await this.eventService.getEventById(input.eventId);
     if (!event) {
@@ -27,6 +37,9 @@ export class CreateProjectUC {
     }
     if (event.active === false) {
       throw new ValidationError('El evento está inactivo');
+    }
+    if (opts.administrative && event.resultsPublished === true) {
+      throw new EventResultsPublishedError();
     }
 
     // 2. If courseId is provided, validate it exists and belongs to the event
@@ -69,17 +82,19 @@ export class CreateProjectUC {
         ? NOT_APPLICABLE_ACADEMIC_COURSE_ID
         : await this.resolveAcademicCourse(event.termId, input.nrc);
 
-    // 3. Validate that the event registration deadline has not passed
-    // The deadline day counts in full, in Bogotá time (the container runs in UTC)
-    if (isInscriptionDeadlinePassed(event.inscriptionDeadline)) {
-      throw new ValidationError(
-        'La fecha límite de inscripción del evento ya pasó',
-      );
-    }
+    if (!opts.administrative) {
+      // 3. Validate that the event registration deadline has not passed
+      // The deadline day counts in full, in Bogotá time (the container runs in UTC)
+      if (isInscriptionDeadlinePassed(event.inscriptionDeadline)) {
+        throw new ValidationError(
+          'La fecha límite de inscripción del evento ya pasó',
+        );
+      }
 
-    // 4. Verify that the event is publicly joinable
-    if (!event.isPubliclyJoinable) {
-      throw new ValidationError('El evento no permite inscripción pública');
+      // 4. Verify that the event is publicly joinable
+      if (!event.isPubliclyJoinable) {
+        throw new ValidationError('El evento no permite inscripción pública');
+      }
     }
 
     const state = input.state ?? 'UNDER_REVIEW';
