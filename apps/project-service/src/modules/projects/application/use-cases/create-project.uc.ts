@@ -121,7 +121,11 @@ export class CreateProjectUC {
     });
   }
 
-  private async resolveAcademicCourse(
+  /**
+   * The course section of the NRC in the term of the event; a ValidationError when the NRC is
+   * missing, the event has no term or the NRC is not in it. Also used by the project import preview
+   */
+  async resolveAcademicCourse(
     termId: number | undefined,
     nrc: string | undefined,
   ): Promise<number> {

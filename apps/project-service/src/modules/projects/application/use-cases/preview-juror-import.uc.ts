@@ -106,7 +106,7 @@ const requiredFields = (
 ];
 
 /** Trimmed, single-spaced, lowercase and without accents: "Dpt.  Ingeniería" -> "dpt. ingenieria" */
-const normalizeText = (value: string): string =>
+export const normalizeText = (value: string): string =>
   value
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -130,7 +130,8 @@ const formatDate = (iso: string): string => {
   return `${dd}/${mm}/${date.getUTCFullYear()}`;
 };
 
-async function mapWithConcurrency<T, R>(
+/** Runs fn over the items, at most `limit` at a time; results keep the order of the items */
+export async function mapWithConcurrency<T, R>(
   items: T[],
   limit: number,
   fn: (item: T) => Promise<R>,
