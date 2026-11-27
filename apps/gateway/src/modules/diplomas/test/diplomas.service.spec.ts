@@ -22,14 +22,44 @@ describe('DiplomasService', () => {
           project: { id: 5, eventId: 10, name: 'Riego Inteligente IoT' },
         }),
       ),
+      getProjectById: jest.fn(() =>
+        Promise.resolve({ id: 5, eventId: 10, name: 'Riego Inteligente IoT' }),
+      ),
+      getProjectNamesByIds: jest.fn((ids: number[]) =>
+        Promise.resolve(new Map(ids.map((id) => [id, `Proyecto ${id}`]))),
+      ),
     };
     const eventsService = {
       getEventById: jest.fn(() =>
         Promise.resolve(
           'event' in overrides
             ? overrides.event
-            : { id: 10, resultsPublished: true },
+            : { id: 10, name: 'Feria 2026', resultsPublished: true },
         ),
+      ),
+      // Two categories; the second lists its awards out of order and shares project 5
+      listCategoriesByEvent: jest.fn(() =>
+        Promise.resolve({ categories: [{ id: 1 }, { id: 2 }], meta: {} }),
+      ),
+      listCategoryAwards: jest.fn(({ categoryId }: { categoryId: number }) =>
+        Promise.resolve({
+          awards:
+            categoryId === 1
+              ? [{ id: 11, position: 1 }]
+              : [
+                  { id: 22, position: 2 },
+                  { id: 21, position: 1 },
+                ],
+          meta: {},
+        }),
+      ),
+      listAwardWinners: jest.fn(({ awardId }: { awardId: number }) =>
+        Promise.resolve({
+          winners: (
+            { 11: [5], 21: [7, 8], 22: [5] } as Record<number, number[]>
+          )[awardId].map((projectId) => ({ projectId })),
+          meta: {},
+        }),
       ),
       listAwardsByProjects: jest.fn(() =>
         Promise.resolve({
@@ -44,7 +74,10 @@ describe('DiplomasService', () => {
         }),
       ),
     };
-    const renderer = { render: jest.fn(() => Promise.resolve(PDF)) };
+    const renderer = {
+      render: jest.fn(() => Promise.resolve(PDF)),
+      renderMany: jest.fn(() => Promise.resolve(PDF)),
+    };
     const config = {
       get: jest.fn(() =>
         'templates' in overrides
@@ -239,6 +272,140 @@ describe('DiplomasService', () => {
       ).rejects.toThrow(
         new NotFoundException(
           'El proyecto no tiene premios en este evento, así que no tiene diploma',
+        ),
+      );
+    });
+  });
+
+  describe('getEventProjectDiploma (staff with manage:events)', () => {
+    it('renders the diploma of a project of the event', async () => {
+      const { service, projectsService, renderer } = build();
+
+      const file = await service.getEventProjectDiploma(10, 5);
+
+      expect(projectsService.getProjectById).toHaveBeenCalledWith(5);
+      expect(projectsService.getMyProjectByEvent).not.toHaveBeenCalled();
+      expect(renderer.render).toHaveBeenCalledWith({
+        template: 'feria-proyectos-stem',
+        projectName: 'Riego Inteligente IoT',
+      });
+      expect(file.fileName).toBe('diploma_riego_inteligente_iot.pdf');
+    });
+
+    it('answers 404 for a project of another event', async () => {
+      const { service, renderer } = build();
+
+      await expect(service.getEventProjectDiploma(11, 5)).rejects.toThrow(
+        new NotFoundException('El proyecto 5 no pertenece al evento 11'),
+      );
+      expect(renderer.render).not.toHaveBeenCalled();
+    });
+
+    it('does not wait for the results to be published', async () => {
+      const { service, renderer } = build({
+        event: { id: 10, name: 'Feria 2026', resultsPublished: false },
+        awards: [
+          {
+            projectId: 5,
+            eventId: 10,
+            title: 'Primer puesto',
+            resultsPublished: false,
+          },
+        ],
+      });
+
+      const file = await service.getEventProjectDiploma(10, 5);
+
+      expect(renderer.render).toHaveBeenCalled();
+      expect(file.fileName).toBe('diploma_riego_inteligente_iot.pdf');
+    });
+
+    it('still needs an award of the event', async () => {
+      await expect(
+        build({ awards: [] }).service.getEventProjectDiploma(10, 5),
+      ).rejects.toThrow(
+        new NotFoundException(
+          'El proyecto no tiene premios en este evento, así que no tiene diploma',
+        ),
+      );
+    });
+  });
+
+  describe('getEventDiplomas (every winner of the event)', () => {
+    const published = (projectId: number) => ({
+      projectId,
+      eventId: 10,
+      title: 'Premio',
+      resultsPublished: true,
+    });
+
+    it('renders one page per winner, by category and award position, once each', async () => {
+      const { service, renderer } = build({
+        awards: [published(5), published(7), published(8)],
+      });
+
+      const file = await service.getEventDiplomas(10);
+
+      expect(renderer.renderMany).toHaveBeenCalledWith(
+        [5, 7, 8].map((id) => ({
+          template: 'feria-proyectos-stem',
+          projectName: `Proyecto ${id}`,
+        })),
+        'Diplomas - Feria 2026',
+      );
+      expect(file).toEqual({
+        buffer: PDF,
+        fileName: 'diplomas_feria_2026.pdf',
+      });
+    });
+
+    it('does not wait for the results to be published', async () => {
+      const unpublished = (projectId: number) => ({
+        ...published(projectId),
+        resultsPublished: false,
+      });
+      const { service, renderer } = build({
+        event: { id: 10, name: 'Feria 2026', resultsPublished: false },
+        awards: [unpublished(5), unpublished(7), unpublished(8)],
+      });
+
+      await service.getEventDiplomas(10);
+
+      expect(renderer.renderMany).toHaveBeenCalledWith(
+        [5, 7, 8].map((id) => ({
+          template: 'feria-proyectos-stem',
+          projectName: `Proyecto ${id}`,
+        })),
+        expect.any(String),
+      );
+    });
+
+    it('leaves out the projects whose award is of another event', async () => {
+      const { service, renderer } = build({
+        awards: [published(5), { ...published(7), eventId: 99 }],
+      });
+
+      await service.getEventDiplomas(10);
+
+      expect(renderer.renderMany).toHaveBeenCalledWith(
+        [expect.objectContaining({ projectName: 'Proyecto 5' })],
+        expect.any(String),
+      );
+    });
+
+    it('still needs a design and at least one winner', async () => {
+      await expect(
+        build({
+          event: { id: 12, name: 'Otra', resultsPublished: true },
+        }).service.getEventDiplomas(12),
+      ).rejects.toThrow(
+        new NotFoundException('Este evento no tiene un diploma configurado'),
+      );
+      await expect(
+        build({ awards: [] }).service.getEventDiplomas(10),
+      ).rejects.toThrow(
+        new NotFoundException(
+          'El evento no tiene proyectos ganadores, así que no tiene diplomas',
         ),
       );
     });

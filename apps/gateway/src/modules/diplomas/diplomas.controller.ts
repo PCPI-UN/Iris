@@ -14,11 +14,13 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { GetUser } from '../../common/decorators/get-user.decorator';
+import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { DiplomasService } from './diplomas.service';
 
 /**
- * Award diplomas (CU-86e3wzr68). Only a session in the guard: DiplomasService checks that
- * the project is the caller's, that the results are published and that it won an award.
+ * Award diplomas (CU-86e3wzr68). The student one only needs a session: DiplomasService
+ * checks that the project is the caller's, that the results are published and that it won
+ * an award. The staff one needs `manage:events` and follows the same rules.
  */
 @ApiTags('diplomas')
 @ApiSecurity('JWT-auth')
@@ -58,6 +60,81 @@ export class DiplomasController {
       userId,
       eventId,
     );
+    return new StreamableFile(buffer, {
+      type: 'application/pdf',
+      disposition: `attachment; filename="${fileName}"`,
+      length: buffer.length,
+    });
+  }
+
+  @Get(':eventId/projects/:projectId/diploma')
+  @RequirePermission('manage:events')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Download the award diploma of a project of the event',
+    description:
+      'Same PDF the students of the project download, for the staff that manages the ' +
+      'event and its awards. It does not wait for the results to be published; the ' +
+      'project must have won at least one award of the event.',
+  })
+  @ApiProduces('application/pdf')
+  @ApiResponse({ status: 200, description: 'The PDF file' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Authentication required',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Missing manage:events permission',
+  })
+  @ApiResponse({
+    status: 404,
+    description:
+      'The project does not exist or belongs to another event, it won no award, or the event has no diploma design',
+  })
+  async getProjectDiploma(
+    @Param('eventId', ParseIntPipe) eventId: number,
+    @Param('projectId', ParseIntPipe) projectId: number,
+  ): Promise<StreamableFile> {
+    const { buffer, fileName } =
+      await this.diplomasService.getEventProjectDiploma(eventId, projectId);
+    return new StreamableFile(buffer, {
+      type: 'application/pdf',
+      disposition: `attachment; filename="${fileName}"`,
+      length: buffer.length,
+    });
+  }
+
+  @Get(':eventId/diplomas')
+  @RequirePermission('manage:events')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Download the award diplomas of every winner of the event',
+    description:
+      'One PDF with one page per winning project, ordered by category and award ' +
+      'position, for the staff that manages the event. It does not wait for the results ' +
+      'to be published.',
+  })
+  @ApiProduces('application/pdf')
+  @ApiResponse({ status: 200, description: 'The PDF file' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Authentication required',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Missing manage:events permission',
+  })
+  @ApiResponse({
+    status: 404,
+    description:
+      'The event does not exist, has no diploma design or has no winners',
+  })
+  async getEventDiplomas(
+    @Param('eventId', ParseIntPipe) eventId: number,
+  ): Promise<StreamableFile> {
+    const { buffer, fileName } =
+      await this.diplomasService.getEventDiplomas(eventId);
     return new StreamableFile(buffer, {
       type: 'application/pdf',
       disposition: `attachment; filename="${fileName}"`,
