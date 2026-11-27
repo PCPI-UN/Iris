@@ -3,6 +3,7 @@ import { ProjectsController } from './interface/grpc/projects.controller';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { PrismaProjectRepository } from './infrastructure/prisma/prisma-project.repository';
 import { CreateProjectUC } from './application/use-cases/create-project.uc';
+import { CreateProjectWithPendingParticipantsUC } from './application/use-cases/create-project-with-pending-participants.uc';
 import { GetProjectUC } from './application/use-cases/get-project.uc';
 import { ListProjectsByIdsUC } from './application/use-cases/list-projects-by-ids.uc';
 import { ListProjectsByEventUC } from './application/use-cases/list-projects-by-event.uc';
@@ -102,6 +103,7 @@ import { EvaluationServiceAdapter } from './infrastructure/grpc-client/evaluatio
     },
 
     CreateProjectUC,
+    CreateProjectWithPendingParticipantsUC,
     {
       provide: EVENT_SERVICE_PORT,
       useExisting: EventServiceAdapter,

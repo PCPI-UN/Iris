@@ -1,7 +1,14 @@
-import { of, throwError } from 'rxjs';
-import { status } from '@grpc/grpc-js';
+import { CreateProjectWithParticipantsRequest } from '@app/common/generated/project';
 import { ProjectsController } from '../projects.controller';
-import { ValidationError } from '../../../domain/errors';
+import { CreateProjectWithPendingParticipantsUC } from '../../../application/use-cases/create-project-with-pending-participants.uc';
+import { CreateProjectUC } from '../../../application/use-cases/create-project.uc';
+import { SetProjectTutorsUC } from '../../../application/use-cases/set-project-tutors.uc';
+import { CheckActiveSubmissionByEmailsUC } from '../../../application/use-cases/check-active-submission-by-emails.uc';
+import { DeleteProjectUC } from '../../../application/use-cases/delete-project.uc';
+import { AddPendingParticipantUC } from '../../../application/use-cases/add-pending-participant.us';
+import { AddProjectDocumentUC } from '../../../application/use-cases/add-document.uc';
+import { InvitationCommandPort } from '../../../application/ports/invitation.command-port';
+import { ConflictError, ValidationError } from '../../../domain/errors';
 
 interface CreateInput {
   eventId: number;
@@ -128,8 +135,8 @@ describe('ProjectsService.CreateProjectWithPendingParticipants', () => {
       createInvitation: jest.fn(
         track('createInvitation', (input: InvitationInput) =>
           options.invitationFails
-            ? throwError(() => new Error('invitation down'))
-            : of({ id: 'inv-1', email: input.email }),
+            ? fail('invitation down')
+            : Promise.resolve({ created: true, invitationId: input.email }),
         ),
       ),
       addDocument: jest.fn(
@@ -148,25 +155,34 @@ describe('ProjectsService.CreateProjectWithPendingParticipants', () => {
       ),
     };
 
+    const useCase = new CreateProjectWithPendingParticipantsUC(
+      { execute: doubles.createProject } as unknown as CreateProjectUC,
+      {
+        resolve: doubles.resolveTutors,
+        store: doubles.storeTutors,
+      } as unknown as SetProjectTutorsUC,
+      {
+        execute: doubles.checkConflicts,
+      } as unknown as CheckActiveSubmissionByEmailsUC,
+      { execute: doubles.deleteProject } as unknown as DeleteProjectUC,
+      { execute: doubles.addPending } as unknown as AddPendingParticipantUC,
+      { execute: doubles.addDocument } as unknown as AddProjectDocumentUC,
+      {
+        createInvitation: doubles.createInvitation,
+      } as unknown as InvitationCommandPort,
+    );
     const controller = Object.create(
       ProjectsController.prototype,
     ) as ProjectsController;
     Object.assign(controller, {
-      setProjectTutorsUC: {
-        resolve: doubles.resolveTutors,
-        store: doubles.storeTutors,
-      },
-      checkActiveSubmissionByEmailsUC: { execute: doubles.checkConflicts },
-      createProject: { execute: doubles.createProject },
-      deleteProjectUC: { execute: doubles.deleteProject },
-      addPendingParticipantUC: { execute: doubles.addPending },
-      invitationService: { CreateInvitation: doubles.createInvitation },
-      addDoc: { execute: doubles.addDocument },
+      createProjectWithPendingParticipantsUC: useCase,
       listProjectTutorsUC: { execute: doubles.listTutors },
     });
 
     const run = (req: Record<string, unknown>) =>
-      controller.createProjectWithPendingParticipantsRpc(req);
+      controller.createProjectWithPendingParticipantsRpc(
+        req as unknown as CreateProjectWithParticipantsRequest,
+      );
 
     // What each invitation carries, independent of how it reaches invitation-service
     const invitationsSent = () =>
@@ -194,15 +210,13 @@ describe('ProjectsService.CreateProjectWithPendingParticipants', () => {
     expect(doubles.createProject).not.toHaveBeenCalled();
   });
 
-  it('rejects with ALREADY_EXISTS when a participant has an active project, and creates nothing', async () => {
+  it('rejects with a conflict when a participant has an active project, and creates nothing', async () => {
     const { run, doubles } = setup({ conflictEmails: ['ana@uni.edu'] });
 
-    await expect(run(request())).rejects.toMatchObject({
-      error: {
-        code: status.ALREADY_EXISTS,
-        message: expect.stringContaining('ana@uni.edu') as unknown,
-      },
-    });
+    // The gRPC error filter answers a ConflictError with ALREADY_EXISTS
+    const error = await run(request()).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ConflictError);
+    expect((error as ConflictError).message).toContain('ana@uni.edu');
     expect(doubles.checkConflicts).toHaveBeenCalledWith({
       eventId: 9,
       emails: ['ana@uni.edu', 'luis@uni.edu'],
