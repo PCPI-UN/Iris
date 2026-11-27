@@ -7,8 +7,8 @@ import {
   JUROR_IMPORT_SHEET,
   JUROR_IMPORT_SLOT_COLUMNS,
   JurorImportSheetRow,
-  normalizeHeader,
 } from './juror-import-format';
+import { cellText, normalizeHeader } from '../../../common/excel/excel-cells';
 
 type SlotField = (typeof JUROR_IMPORT_SLOT_COLUMNS)[number]['field'];
 type SlotColumns = Partial<Record<SlotField, number>>;
@@ -21,31 +21,6 @@ const SLOT_PREFIXES = JUROR_IMPORT_SLOT_COLUMNS.map((column) => ({
   ...column,
   prefix: normalizeHeader(column.label),
 }));
-
-/** Plain text of a cell, whatever Excel stored: number, hyperlink, rich text or formula */
-export const cellText = (value: ExcelJS.CellValue): string => {
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'string') return value.trim();
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-  if (value instanceof Date) return value.toISOString();
-  if ('richText' in value) {
-    return value.richText
-      .map((part) => part.text)
-      .join('')
-      .trim();
-  }
-  if ('hyperlink' in value) {
-    const text = cellText(value.text);
-    return text || value.hyperlink.replace(/^mailto:/i, '').trim();
-  }
-  if ('formula' in value || 'sharedFormula' in value) {
-    return cellText(value.result);
-  }
-  // { error: '#N/A' } and anything else
-  return '';
-};
 
 /** Header of a juror column -> its field and N ("nombre(s) jurado 2" -> firstName, 2) */
 const matchSlotHeader = (header: string) => {
