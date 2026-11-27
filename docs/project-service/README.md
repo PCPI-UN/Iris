@@ -24,7 +24,7 @@ The service has a single module, `projects`, following the layering described in
 
 | Area | Responsibility |
 | --- | --- |
-| Projects | Creation, update, listing by event, project detail, dashboard count, student participation statistics, projects by ids (`ListProjectsByIds`) |
+| Projects | Creation (public submission and by an administrator, `AdminCreateProject`), update, listing by event, project detail, dashboard count, student participation statistics, projects by ids (`ListProjectsByIds`) |
 | Review | Approve, reject, request changes, send back to review |
 | Documents | Logo, poster and supporting documents, stored as the blob name of their file. An administrator (`manage:projects`) replaces the file or sets the state ACTIVE/INACTIVE (`AdminReplaceProjectDocument`, `AdminChangeProjectDocumentState`), recorded in the change log as DOCUMENTS. INACTIVE documents are left out of every read (listings, detail, review, the student's own project, the open link); only `ListProjectDocuments` with `includeInactive` (`GET /projects/:id/admin/documents`) lists them. `UpdateProjectDocument` (`PATCH /projects/documents/:id`) changes the file or type only: never the state, and never an INACTIVE document |
 | Participants | Pending participants and confirmed participants |
@@ -80,6 +80,18 @@ sequenceDiagram
 
 - Approved and rejected are final states. A project in `REQUEST_CHANGES` goes back to `UNDER_REVIEW` when a confirmed participant resubmits it.
 - A juror is identified by the same composite key as an event member in `event-service`: user, event and role.
+
+## Creation by an administrator
+
+An administrator (`manage:projects`) creates a project with `POST /projects/admin`, which calls `AdminCreateProject`. It is meant for teams that register after the inscription closed, so the inscription deadline and `isPubliclyJoinable` do not apply. The other rules of a submission do: an active event, a category of the event and an NRC of its term. An event that published its results is closed.
+
+- **Name**: unique in the event, in any category, as the database constraint (`eventId`, `name`). A taken name answers `PROJECT_NAME_TAKEN`.
+- **Participants**: a student with an account joins directly (JOINED); one without an account stays pending. A student in another project of the event that is not REJECTED is rejected (`PARTICIPANT_IN_OTHER_PROJECT`, with every such email), with the same locks as `AdminAddParticipant`, so two concurrent creations cannot take the same student.
+- **Initial state**: APPROVED by default, or UNDER_REVIEW. Created APPROVED, the tutors get their role and the pending participants get the approval email and become INVITED. Created UNDER_REVIEW, both happen when the project is approved.
+- **Writes**: the project, its tutors, its participants and a `CREATED` change log entry are saved in one transaction. The entry has an empty `before`, the initial values in `after` and where the creation came from (`origin`: the form or a row of a bulk file).
+- **After saving**: the gateway uploads and attaches the files. A failure there, in the tutor activation or in the emails does not undo the creation: the answer lists it in `failedEffects` (`DOCUMENTS`, `TUTOR_ACTIVATION`, `NOTIFICATION`) with a warning, because repeating the request would hit the taken name.
+
+Rejections come back in `rejected` with a code (`PROJECT_NAME_TAKEN`, `PARTICIPANT_IN_OTHER_PROJECT`, `EVENT_RESULTS_PUBLISHED`), and the gateway answers them with 409.
 
 ## Student participation statistics
 

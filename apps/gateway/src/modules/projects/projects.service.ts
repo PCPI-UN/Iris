@@ -557,10 +557,10 @@ export class ProjectsService implements OnModuleInit {
         ),
       );
       return true;
-    } catch (error: any) {
+    } catch (error) {
       this.logger.error(
-        `Documents of project ${projectId} could not be saved after its administrative creation: ${error?.message}`,
-        error?.stack,
+        `Documents of project ${projectId} could not be saved after its administrative creation: ${error instanceof Error ? error.message : String(error)}`,
+        error instanceof Error ? error.stack : undefined,
       );
       return false;
     }
