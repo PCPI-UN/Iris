@@ -116,6 +116,7 @@ describe('AcademicService.getStats', () => {
       eventsService,
       evaluationsService,
       { getUser: jest.fn() } as any,
+      {} as any,
     );
   });
 
