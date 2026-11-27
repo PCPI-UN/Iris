@@ -804,7 +804,7 @@ message ProjectChangeLogEntry {
   int32 projectId = 2;
   // auth-service user who made the change
   int32 actorUserId = 3;
-  // STATE, INFO, CATEGORY, PARTICIPANTS, TUTORS or DOCUMENTS
+  // STATE, INFO, CATEGORY, PARTICIPANTS, TUTORS, DOCUMENTS or CREATED (created by an administrator)
   string action = 4;
   // JSON object with the changed fields only, before and after the change
   string beforeJson = 5;

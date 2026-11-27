@@ -1,4 +1,4 @@
-/** What an administrative correction of a project changed. */
+/** What an administrative correction of a project changed, or CREATED for its creation by an administrator. */
 export const PROJECT_CHANGE_ACTIONS = [
   'STATE',
   'INFO',
@@ -6,6 +6,7 @@ export const PROJECT_CHANGE_ACTIONS = [
   'PARTICIPANTS',
   'TUTORS',
   'DOCUMENTS',
+  'CREATED',
 ] as const;
 
 export type ProjectChangeAction = (typeof PROJECT_CHANGE_ACTIONS)[number];
