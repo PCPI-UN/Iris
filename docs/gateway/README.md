@@ -4,7 +4,7 @@ Single HTTP entry point of the platform. It authenticates the browser session, c
 
 - **Transport**: HTTP (NestJS + Express) towards the frontend; gRPC clients towards the services, generated from `libs/common/src/protos`.
 - **Database**: none. It does not own domain data, so it has no `schema.md`.
-- **API docs**: Swagger UI at `/api/docs`. Health check at `/health`.
+- **API docs**: Swagger UI at `/api/docs`, published only outside production, or with `NODE_ENV=production` when `SWAGGER_ENABLED=true`. Health check at `/health`.
 
 ## Boundaries
 

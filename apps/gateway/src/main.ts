@@ -1,13 +1,14 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as cookieParser from 'cookie-parser';
-import { BadRequestException, ValidationPipe } from '@nestjs/common';
+import { BadRequestException, Logger, ValidationPipe } from '@nestjs/common';
 import { ValidationError } from 'class-validator';
 import { validationErrorMessages } from '@app/common/i18n/validation-messages';
 import { GrpcExceptionFilter } from './common/filters/grpc-exception.filter';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { HttpCacheInterceptor } from './common/cache/http-cache.interceptor';
 import { CacheInvalidationInterceptor } from './common/cache/cache-invalidation.interceptor';
+import { shouldEnableSwagger } from './common/swagger/should-enable-swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -38,31 +39,43 @@ async function bootstrap() {
   //   app.get(CacheInvalidationInterceptor),
   // );
 
-  const config = new DocumentBuilder()
-    .setTitle('Iris API')
-    .setDescription('The Iris platform API documentation - Event and Project Management System')
-    .setVersion('1.0')
-    .addTag('auth', 'Authentication and authorization endpoints')
-    .addTag('users', 'User management endpoints')
-    .addTag('events', 'Event management endpoints')
+  // Swagger exposes the full API map: off in production unless SWAGGER_ENABLED=true.
+  if (shouldEnableSwagger(process.env)) {
+    if (process.env.NODE_ENV === 'production') {
+      new Logger('Swagger').warn(
+        'SWAGGER_ENABLED=true: Swagger UI is published at /api/docs in production',
+      );
+    }
 
-    .addBearerAuth(
-      {
-        type: 'apiKey',
-        name: 'access_token',
-        in: 'cookie',
-        description: 'JWT access token stored in HTTP-only cookie. Set automatically after login.',
-      },
-      'JWT-auth',
-    )
-    .build();
+    const config = new DocumentBuilder()
+      .setTitle('Iris API')
+      .setDescription(
+        'The Iris platform API documentation - Event and Project Management System',
+      )
+      .setVersion('1.0')
+      .addTag('auth', 'Authentication and authorization endpoints')
+      .addTag('users', 'User management endpoints')
+      .addTag('events', 'Event management endpoints')
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document, {
-    customSiteTitle: 'Iris API Documentation',
-    customfavIcon: 'https://nestjs.com/img/logo-small.svg',
-    customCss: '.swagger-ui .topbar { display: none }',
-  });
+      .addBearerAuth(
+        {
+          type: 'apiKey',
+          name: 'access_token',
+          in: 'cookie',
+          description:
+            'JWT access token stored in HTTP-only cookie. Set automatically after login.',
+        },
+        'JWT-auth',
+      )
+      .build();
+
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, document, {
+      customSiteTitle: 'Iris API Documentation',
+      customfavIcon: 'https://nestjs.com/img/logo-small.svg',
+      customCss: '.swagger-ui .topbar { display: none }',
+    });
+  }
 
   await app.listen(3000);
 }

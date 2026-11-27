@@ -38,7 +38,7 @@ El backend de IRIS está diseñado bajo una arquitectura orientada a microservic
 
 ### 📚 Documentación de API y Contratos
 
-- **Swagger / OpenAPI (Gateway):** Disponible en entorno local en [http://localhost:3000/api/docs](http://localhost:3000/api/docs).
+- **Swagger / OpenAPI (Gateway):** Disponible fuera de producción (por ejemplo en local, en [http://localhost:3000/api/docs](http://localhost:3000/api/docs)). Con `NODE_ENV=production` solo se publica si `SWAGGER_ENABLED=true`.
 - **Contratos gRPC:** Los contratos de comunicación entre servicios están definidos en archivos Protocol Buffers bajo el directorio `libs/common/src/protos/`.
 - **Código generado TypeScript:** Los archivos TypeScript resultantes se generan automáticamente en `libs/common/src/generated/`.
 
