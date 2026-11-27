@@ -128,6 +128,8 @@ message GetProjectStatsResponse {
 
 message GetProjectResultRequest {
   int32 projectId = 1;
+  // Adds each juror's evaluation without the juror (for the academic roles, never for participants)
+  bool withEvaluations = 2;
 }
 
 message CriterionResultProto {
@@ -136,8 +138,17 @@ message CriterionResultProto {
   string component = 3;
   // Effective weight of the criterion in the grade (fraction, 0-1)
   double weight = 4;
-  // Average of the jurors' stored scores
+  // Average of the jurors' stored scores; in JurorEvaluationProto, that juror's score
   double score = 5;
+}
+
+// One juror's evaluation of the project, without the juror
+message JurorEvaluationProto {
+  // The juror's grade, rounded as the ranking does
+  double grade = 1;
+  repeated CriterionResultProto criteria = 2;
+  // Empty when the juror left no comment
+  string comments = 3;
 }
 
 message GetProjectResultResponse {
@@ -150,6 +161,8 @@ message GetProjectResultResponse {
   repeated CriterionResultProto criteria = 4;
   // The jurors' comments in one text, without saying who wrote each one
   string consolidatedFeedback = 5;
+  // Only with withEvaluations: one per juror, the oldest first; empty otherwise
+  repeated JurorEvaluationProto evaluations = 6;
 }
 
 message GetEventCriteriaStatsRequest {

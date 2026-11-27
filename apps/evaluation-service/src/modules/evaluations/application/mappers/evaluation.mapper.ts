@@ -9,6 +9,7 @@ import {
   GetTopProjectsByCourseResponse,
   TopProjectProto,
   GetProjectResultResponse,
+  CriterionResultProto,
   GetEventCriteriaStatsResponse,
   GroupCriteriaStatsProto,
   ComponentStatsProto,
@@ -19,6 +20,7 @@ import {
 } from '../use-cases/get-event-criteria-stats.use-case';
 import { ComponentStats } from '@evaluations/domain/services/criteria-stats';
 import { ProjectResultWithScale } from '../use-cases/get-project-result.use-case';
+import { CriterionResult } from '@evaluations/domain/services/project-result';
 import { Evaluation } from '@evaluations/domain/entities/evaluation.entity';
 import { EvaluationDetail } from '@evaluations/domain/entities/evaluation-detail.entity';
 import { ProjectStats, ProjectEvaluationStatus as DomainProjectEvaluationStatus, TopProject } from '@evaluations/domain/repositories/evaluation.repository.port';
@@ -116,14 +118,29 @@ export class EvaluationMapper {
       evaluated: result.evaluated,
       finalScore: result.finalScore,
       maxScore: result.maxScore,
-      criteria: result.criteria.map((c) => ({
-        criterionId: c.criterionId,
-        criterion: c.criterion,
-        component: c.component,
-        weight: c.weight,
-        score: c.score,
-      })),
+      criteria: result.criteria.map((c) =>
+        EvaluationMapper.toCriterionResultProto(c),
+      ),
       consolidatedFeedback: result.consolidatedFeedback,
+      evaluations: result.evaluations.map((evaluation) => ({
+        grade: evaluation.grade,
+        criteria: evaluation.criteria.map((c) =>
+          EvaluationMapper.toCriterionResultProto(c),
+        ),
+        comments: evaluation.comments,
+      })),
+    };
+  }
+
+  private static toCriterionResultProto(
+    criterion: CriterionResult,
+  ): CriterionResultProto {
+    return {
+      criterionId: criterion.criterionId,
+      criterion: criterion.criterion,
+      component: criterion.component,
+      weight: criterion.weight,
+      score: criterion.score,
     };
   }
 
