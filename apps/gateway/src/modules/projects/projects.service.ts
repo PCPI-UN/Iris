@@ -42,8 +42,10 @@ import {
   ListProjectsInScopeRequest,
   AcademicScope,
   AdminParticipantsRejection,
+  AdminCreateProjectRejection,
 } from '@app/common/generated/project';
 import { CreateProjectWithParticipantsDto } from './dto/create-project-with-participants.dto';
+import { AdminCreateProjectMultipartDto } from './dto/admin-create-project-multipart.dto';
 import { CreateProjectWithParticipantsMultipartDto } from './dto/create-project-with-participants-multipart.dto';
 import { AssignJurorToProjectsDto } from './dto/assign-juror-to-projects.dto';
 import { ReassignProjectJurorDto } from './dto/reassign-project-juror.dto';
@@ -143,6 +145,27 @@ export function participantsRejection(rejected: AdminParticipantsRejection) {
     ? new BadRequestException(body)
     : new ConflictException(body);
 }
+/**
+ * HTTP error of a rejected administrative creation: 409 with `code`, and in `details` the
+ * students in another project of the event (emails) or the taken name.
+ */
+export function adminCreateRejection(
+  rejected: AdminCreateProjectRejection,
+  name: string,
+) {
+  const details =
+    rejected.code === PROJECT_NAME_TAKEN
+      ? { name }
+      : rejected.emails?.length
+        ? { emails: rejected.emails }
+        : {};
+  return new ConflictException({
+    message: rejected.message,
+    code: rejected.code,
+    details,
+  });
+}
+
 /** 403 of PATCH /projects/documents/:id when it is asked to change the state */
 export const DOCUMENT_STATE_ADMIN_ONLY =
   'El estado de un documento solo lo cambia un administrador de proyectos (PATCH /projects/:id/admin/documents/:documentId/state)';
@@ -206,38 +229,19 @@ export class ProjectsService implements OnModuleInit {
   /**
    * Creates a project with participants and file uploads
    */
-  async createProjectWithParticipantsAndFiles(
-    body: CreateProjectWithParticipantsMultipartDto,
+  /**
+   * Document metadata of a multipart submission, checked against its files: up to 4 (1 logo,
+   * 1 poster, 2 supporting documents), 25 MB each, one metadata entry per file. Shared by
+   * POST /projects and POST /projects/admin.
+   */
+  private validateProjectSubmissionFiles(
+    documents: string | undefined,
     files: any[],
-  ) {
-    this.logger.log(
-      `Creating project with ${files.length} files: ${body.name}`,
-    );
-
-    const eventType = body.eventType;
-    if (eventType !== 'Competition' && eventType !== 'Exposition') {
-      throw new BadRequestException(
-        'Tipo de evento no válido. Debe ser "Competition" o "Exposition".',
-      );
-    }
-
-    let participants: PendingParticipantInputDto[] = [];
-    if (body.participants) {
-      try {
-        participants = JSON.parse(body.participants);
-      } catch (error: any) {
-        throw new BadRequestException(
-          'El formato de los participantes no es válido. Debe ser un arreglo JSON válido.',
-        );
-      }
-    }
-
-    const tutors = parseProjectTutors(body.tutors);
-
+  ): ProjectDocumentInputDto[] {
     let documentMetadata: ProjectDocumentInputDto[] = [];
-    if (body.documents) {
+    if (documents) {
       try {
-        documentMetadata = JSON.parse(body.documents);
+        documentMetadata = JSON.parse(documents);
       } catch (error: any) {
         throw new BadRequestException(
           'El formato de los documentos no es válido. Debe ser un arreglo JSON válido.',
@@ -302,6 +306,42 @@ export class ProjectsService implements OnModuleInit {
         'Se permiten máximo 2 documentos de soporte',
       );
     }
+
+    return documentMetadata;
+  }
+
+  async createProjectWithParticipantsAndFiles(
+    body: CreateProjectWithParticipantsMultipartDto,
+    files: any[],
+  ) {
+    this.logger.log(
+      `Creating project with ${files.length} files: ${body.name}`,
+    );
+
+    const eventType = body.eventType;
+    if (eventType !== 'Competition' && eventType !== 'Exposition') {
+      throw new BadRequestException(
+        'Tipo de evento no válido. Debe ser "Competition" o "Exposition".',
+      );
+    }
+
+    let participants: PendingParticipantInputDto[] = [];
+    if (body.participants) {
+      try {
+        participants = JSON.parse(body.participants);
+      } catch (error: any) {
+        throw new BadRequestException(
+          'El formato de los participantes no es válido. Debe ser un arreglo JSON válido.',
+        );
+      }
+    }
+
+    const tutors = parseProjectTutors(body.tutors);
+
+    const documentMetadata = this.validateProjectSubmissionFiles(
+      body.documents,
+      files,
+    );
 
     const eventId = parseInt(body.eventId, 10);
     const courseId = parseInt(body.courseId, 10);
@@ -403,6 +443,142 @@ export class ProjectsService implements OnModuleInit {
 
     // Return the created project
     return { message: 'Proyecto enviado correctamente', success: true };
+  }
+
+  /**
+   * POST /projects/admin. Creates the project in project-service (deadline and public
+   * inscription do not apply), then uploads its files and attaches them. A failure there does
+   * not undo the creation: it is reported as DOCUMENTS in failedEffects, since repeating the
+   * request would hit PROJECT_NAME_TAKEN. A rejection answers 409 with its code.
+   */
+  async adminCreateProject(
+    body: AdminCreateProjectMultipartDto,
+    files: any[],
+    actingUserId: number,
+    origin: { fileName: string; rowNumber: number } | null = null,
+  ) {
+    const participants = this.parseSubmissionParticipants(body.participants);
+    const tutors = parseProjectTutors(body.tutors);
+    const documentMetadata = this.validateProjectSubmissionFiles(
+      body.documents,
+      files,
+    );
+    const eventId = parseInt(body.eventId, 10);
+    const courseId = parseInt(body.courseId, 10);
+    if (isNaN(eventId) || isNaN(courseId)) {
+      throw new BadRequestException(
+        'eventId y courseId deben ser números válidos',
+      );
+    }
+
+    const response = await firstValueFrom(
+      this.projectsService.adminCreateProject({
+        eventId,
+        courseId,
+        nrc: body.nrc,
+        name: body.name,
+        description: body.description,
+        projectCode: body.projectCode,
+        state:
+          body.state === 'UNDER_REVIEW'
+            ? ProjectState.UNDER_REVIEW
+            : body.state === 'APPROVED'
+              ? ProjectState.APPROVED
+              : undefined,
+        participants: participants.map((p) => ({
+          firstName: p.firstName,
+          lastName: p.lastName,
+          email: p.email,
+          studentCode: p.studentCode,
+          semester: p.semester,
+          career: p.career,
+        })),
+        tutorUserIds: tutors.userIds,
+        pendingTutors: tutors.pending,
+        actingUserId,
+        originKind: origin ? 'ADMIN_BULK' : 'ADMIN_FORM',
+        originFileName: origin?.fileName,
+        originRowNumber: origin?.rowNumber,
+      }),
+    );
+    if (response.rejected)
+      throw adminCreateRejection(response.rejected, body.name);
+    const project = response.project!;
+
+    const failedEffects = [...(response.failedEffects ?? [])];
+    let warning = response.warning || null;
+    if (
+      files.length &&
+      !(await this.attachSubmissionFiles(project.id, files, documentMetadata))
+    ) {
+      failedEffects.unshift('DOCUMENTS');
+      const documentsWarning =
+        'El proyecto se creó, pero no se pudieron guardar los documentos; súbelos desde la edición del proyecto.';
+      warning = warning ? `${documentsWarning} ${warning}` : documentsWarning;
+    }
+    return {
+      project: {
+        id: project.id,
+        name: project.name,
+        // The gRPC loader may hand the enum as its number or its name
+        state:
+          typeof project.state === 'number'
+            ? ProjectState[project.state]
+            : String(project.state),
+        eventId: project.eventId,
+        courseId: project.courseId,
+      },
+      participants: response.participants ?? [],
+      tutors: response.tutors ?? [],
+      failedEffects,
+      warning,
+    };
+  }
+
+  /** Uploads the files and attaches them to the project; false when any step fails */
+  private async attachSubmissionFiles(
+    projectId: number,
+    files: any[],
+    documentMetadata: ProjectDocumentInputDto[],
+  ): Promise<boolean> {
+    try {
+      const uploads = await Promise.all(
+        files.map((file) => this.azureBlobUploadService.uploadFile(file)),
+      );
+      await Promise.all(
+        uploads.map((upload, index) =>
+          firstValueFrom(
+            this.projectsService.addProjectDocumentFromUrl({
+              projectId,
+              url: upload.blobName,
+              type: this.mapDocumentTypeToProto(documentMetadata[index].type),
+            }),
+          ),
+        ),
+      );
+      return true;
+    } catch (error: any) {
+      this.logger.error(
+        `Documents of project ${projectId} could not be saved after its administrative creation: ${error?.message}`,
+        error?.stack,
+      );
+      return false;
+    }
+  }
+
+  private parseSubmissionParticipants(
+    raw: string | undefined,
+  ): PendingParticipantInputDto[] {
+    if (!raw) return [];
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (!Array.isArray(parsed)) throw new Error('not an array');
+      return parsed as PendingParticipantInputDto[];
+    } catch {
+      throw new BadRequestException(
+        'El formato de los participantes no es válido. Debe ser un arreglo JSON válido.',
+      );
+    }
   }
 
   async createProjectWithParticipants(dto: CreateProjectWithParticipantsDto) {
