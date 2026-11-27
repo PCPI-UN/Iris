@@ -55,6 +55,36 @@ describe('GetProjectResultUseCase', () => {
     });
   });
 
+  it('leaves the jurors out unless asked', async () => {
+    const { uc } = build();
+
+    const result = await uc.execute({ projectId: 5 });
+
+    expect(result.evaluations).toEqual([]);
+  });
+
+  it('adds each juror evaluation, without the juror, with withEvaluations', async () => {
+    const { uc } = build();
+
+    const result = await uc.execute({ projectId: 5, withEvaluations: true });
+
+    expect(result.evaluations).toEqual([
+      {
+        grade: 80,
+        criteria: [
+          {
+            criterionId: 1,
+            criterion: 'Problema',
+            component: 'Fundamentación',
+            weight: 0.4,
+            score: 75,
+          },
+        ],
+        comments: 'Bien',
+      },
+    ]);
+  });
+
   it.each<[string, number, number]>([
     ['Proyectos finales', 1, 90],
     ['Cero a cinco', 2, 5],

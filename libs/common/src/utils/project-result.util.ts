@@ -14,7 +14,7 @@ export interface ResultCriterion {
   criterion: string;
   /** Effective weight the criterion had in the grade (fraction, 0-1) */
   weight: number;
-  /** Average of the jurors' scores for the criterion */
+  /** Average of the jurors' scores for the criterion; in a juror's evaluation, that juror's score */
   score: number;
 }
 

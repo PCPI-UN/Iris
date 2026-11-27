@@ -36,6 +36,16 @@ export interface ProjectResult {
   consolidatedFeedback: string;
 }
 
+/** One juror's evaluation as the academic roles see it: no juror id nor name */
+export interface JurorEvaluation {
+  /** The juror's grade, rounded as the ranking does */
+  grade: number;
+  /** The juror's own score per criterion, in the order of the consolidated result */
+  criteria: CriterionResult[];
+  /** Empty when the juror left no comment */
+  comments: string;
+}
+
 const FEEDBACK_SEPARATOR = '\n\n';
 
 /**
@@ -76,18 +86,11 @@ export function buildProjectResult(
     }
   }
 
-  const criteria = [...byCriterion.values()]
-    .map(({ detail, total, count }) => ({
-      criterionId: detail.criterionId,
-      criterion: detail.criterionName,
-      component: detail.componentName ?? '',
-      weight: detail.weight,
-      score: roundGrade(total / count),
-    }))
-    .sort(
-      (a, b) =>
-        a.component.localeCompare(b.component) || a.criterionId - b.criterionId,
-    );
+  const criteria = sortCriteria(
+    [...byCriterion.values()].map(({ detail, total, count }) =>
+      toCriterionResult(detail, roundGrade(total / count)),
+    ),
+  );
 
   const consolidatedFeedback = evaluations
     .map((e) => e.comments?.trim() ?? '')
@@ -95,4 +98,44 @@ export function buildProjectResult(
     .join(FEEDBACK_SEPARATOR);
 
   return { evaluated: true, finalScore, criteria, consolidatedFeedback };
+}
+
+/**
+ * Each juror's evaluation of the project, in the order received (the repository gives
+ * them oldest first), without who evaluated. Only for the academic roles: the result of
+ * the participants (buildProjectResult) stays consolidated.
+ */
+export function buildJurorEvaluations(
+  evaluations: ResultEvaluation[],
+): JurorEvaluation[] {
+  return evaluations.map((evaluation) => ({
+    grade: roundGrade(evaluation.grade),
+    criteria: sortCriteria(
+      evaluation.details.map((detail) =>
+        toCriterionResult(detail, detail.score),
+      ),
+    ),
+    comments: evaluation.comments?.trim() ?? '',
+  }));
+}
+
+function toCriterionResult(
+  detail: ResultDetail,
+  score: number,
+): CriterionResult {
+  return {
+    criterionId: detail.criterionId,
+    criterion: detail.criterionName,
+    component: detail.componentName ?? '',
+    weight: detail.weight,
+    score,
+  };
+}
+
+/** By component name, then criterion id: the order the gateway groups them in */
+function sortCriteria(criteria: CriterionResult[]): CriterionResult[] {
+  return criteria.sort(
+    (a, b) =>
+      a.component.localeCompare(b.component) || a.criterionId - b.criterionId,
+  );
 }

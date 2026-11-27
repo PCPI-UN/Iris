@@ -31,6 +31,7 @@ describe('buildCriteriaStats', () => {
   };
 
   const evaluation = (scores: Record<number, number>): StatsEvaluation => ({
+    grade: 0,
     details: Object.entries(scores).map(([id, score]) => {
       const criterion = rubric[Number(id) as keyof typeof rubric];
       return {
@@ -115,6 +116,7 @@ describe('buildCriteriaStats', () => {
 
   it('groups the criteria without component in one row at the end', () => {
     const legacy: StatsEvaluation = {
+      grade: 0,
       details: [
         {
           criterionId: 7,

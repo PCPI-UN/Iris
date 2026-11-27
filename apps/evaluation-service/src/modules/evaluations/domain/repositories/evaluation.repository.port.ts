@@ -48,8 +48,8 @@ export abstract class EvaluationRepositoryPort {
     abstract getProjectStats(projectId: number): Promise<ProjectStats>;
     /** Every evaluation of the project with its scores, criteria and components, oldest first */
     abstract findProjectEvaluationsForResult(projectId: number): Promise<ResultEvaluation[]>;
-    /** The evaluations of each project that has any, with each score's criterion and component */
-    abstract findEvaluationsForStats(projectIds: number[]): Promise<StatsEvaluation[][]>;
+    /** The evaluations of each project that has any, by project id, with the grade and each score's criterion and component */
+    abstract findEvaluationsForStats(projectIds: number[]): Promise<Map<number, StatsEvaluation[]>>;
     abstract countAll(): Promise<number>;
     abstract findByProjectIdsAndEvaluator(
         projectIds: number[],
