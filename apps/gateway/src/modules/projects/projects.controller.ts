@@ -150,9 +150,10 @@ export class ProjectsController {
       'Creates a project in an event even after its inscription deadline or when it is not publicly joinable; an ' +
       'event with published results is closed. The fields and files are those of POST /projects without eventType, ' +
       'plus the initial state (APPROVED by default, or UNDER_REVIEW). Students with an account join directly ' +
-      '(JOINED); the others stay pending. Created APPROVED, the tutors are activated and the pending participants ' +
-      'get the approval email (INVITED); created UNDER_REVIEW, both happen at the approval. Recorded in the ' +
-      'change log (CREATED) with the initial values. Work after the project is saved (DOCUMENTS, TUTOR_ACTIVATION, ' +
+      '(JOINED); the others stay pending and are invited to the project. Created APPROVED, the tutors are ' +
+      'activated and the pending participants also get the approval email (INVITED); created UNDER_REVIEW, both ' +
+      'happen at the approval. Recorded in the change log (CREATED) with the initial values. Work after the ' +
+      'project is saved (DOCUMENTS, INVITATION, TUTOR_ACTIVATION, ' +
       'NOTIFICATION) does not undo it: it is listed in failedEffects with a warning; repeating the request would ' +
       'answer PROJECT_NAME_TAKEN.',
   })

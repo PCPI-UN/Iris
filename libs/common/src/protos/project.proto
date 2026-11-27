@@ -983,7 +983,7 @@ message AdminCreateProjectResponse {
   repeated AdminCreatedParticipant participants = 2;
   repeated ProjectTutor tutors = 3;
   optional AdminCreateProjectRejection rejected = 4;
-  // Work in other services that failed after the project was saved: TUTOR_ACTIVATION, NOTIFICATION
+  // Work in other services that failed after the project was saved: INVITATION, TUTOR_ACTIVATION, NOTIFICATION
   repeated string failedEffects = 5;
   // Spanish warning for failedEffects; empty when nothing failed
   string warning = 6;

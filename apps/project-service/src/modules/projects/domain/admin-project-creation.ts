@@ -40,8 +40,9 @@ export type AdminCreateOrigin =
  * Work done after the project is saved. Its failure does not undo the creation: the answer
  * lists it so the user knows what to retry.
  * - DOCUMENTS: upload and association of the files (gateway)
+ * - INVITATION: invitation to the project of the pending participants
  * - TUTOR_ACTIVATION: Tutor role and invitations of the tutors (created APPROVED)
  * - NOTIFICATION: approval email to the pending participants (created APPROVED)
  */
 export type AdminCreateEffect =
-  'DOCUMENTS' | 'TUTOR_ACTIVATION' | 'NOTIFICATION';
+  'DOCUMENTS' | 'INVITATION' | 'TUTOR_ACTIVATION' | 'NOTIFICATION';

@@ -10,6 +10,7 @@ import { ProjectEnrollmentService } from '../../services/project-enrollment.serv
 import { ProjectApprovalEffects } from '../../services/project-approval-effects.service';
 import { AuthServicePort } from '../../ports/auth-service.port';
 import { EventServicePort } from '../../ports/event-service.port';
+import { InvitationCommandPort } from '../../ports/invitation.command-port';
 import { ProjectRepository } from '../../../domain/repositories/project.repository';
 import { ProjectChangeLogRepository } from '../../../domain/repositories/project-change-log.repository';
 import { participantHasActiveProject } from '../../../domain/admin-participants';
@@ -53,6 +54,7 @@ describe('AdminCreateProjectUC', () => {
       emailFails?: boolean;
       activationFails?: boolean;
       lockedConflict?: boolean;
+      invitationFails?: boolean;
     } = {},
   ) => {
     // Records which writes ran inside UnitOfWork.run
@@ -164,6 +166,14 @@ describe('AdminCreateProjectUC', () => {
       }),
     };
 
+    const invitations = {
+      createInvitation: jest.fn(() =>
+        options.invitationFails
+          ? Promise.reject(new Error('invitation-service down'))
+          : Promise.resolve({ created: true }),
+      ),
+    };
+
     const uc = new AdminCreateProjectUC(
       repo as unknown as ProjectRepository,
       createProject as unknown as CreateProjectUC,
@@ -175,8 +185,10 @@ describe('AdminCreateProjectUC', () => {
       effects as unknown as ProjectApprovalEffects,
       changeLog as unknown as ProjectChangeLogRepository,
       uow as unknown as UnitOfWork,
+      invitations as unknown as InvitationCommandPort,
     );
     return {
+      invitations,
       uc,
       uow,
       inTransaction,
@@ -211,6 +223,16 @@ describe('AdminCreateProjectUC', () => {
       studentCode: '2021123456',
       email: 'ana@uni.edu',
     });
+    expect(t.invitations.createInvitation).toHaveBeenCalledTimes(1);
+    expect(t.invitations.createInvitation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: 'luis@uni.edu',
+        targetType: 'PROJECT',
+        targetId: 40,
+        roleIds: [5],
+        eventType: 'Exposition',
+      }),
+    );
     expect(t.effects.activateTutors).toHaveBeenCalledWith(40, 'Exposition');
     expect(t.effects.notifyPendingParticipant).toHaveBeenCalledTimes(1);
     expect(t.repo.markPendingsInvited).toHaveBeenCalledWith(
@@ -232,11 +254,14 @@ describe('AdminCreateProjectUC', () => {
     });
   });
 
-  it('created UNDER_REVIEW, neither activates the tutors nor sends emails', async () => {
+  it('created UNDER_REVIEW, invites the pending participants but neither activates the tutors nor sends the approval email', async () => {
     const t = setup();
 
     const res = await t.uc.execute(input({ state: 'UNDER_REVIEW' }));
 
+    expect(t.invitations.createInvitation).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'luis@uni.edu', targetId: 40 }),
+    );
     expect(t.effects.activateTutors).not.toHaveBeenCalled();
     expect(t.effects.notifyPendingParticipant).not.toHaveBeenCalled();
     expect(res.participants).toEqual([
@@ -288,6 +313,19 @@ describe('AdminCreateProjectUC', () => {
       email: 'luis@uni.edu',
       status: 'PENDING',
     });
+  });
+
+  it('keeps the project when an invitation fails and reports INVITATION', async () => {
+    const t = setup({ invitationFails: true });
+
+    const res = await t.uc.execute(input({ actingUserId: 5 }));
+
+    expect(t.invitations.createInvitation).toHaveBeenCalledWith(
+      expect.objectContaining({ requestedByUserId: 5 }),
+    );
+    expect(t.changeLog.create).toHaveBeenCalled();
+    expect(res.failedEffects).toEqual(['INVITATION']);
+    expect(res.warning).toContain('invitar');
   });
 
   it('reports TUTOR_ACTIVATION when the activation fails', async () => {

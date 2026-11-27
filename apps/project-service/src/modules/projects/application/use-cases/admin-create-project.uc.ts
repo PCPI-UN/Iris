@@ -34,6 +34,13 @@ import { CreateProjectUC } from './create-project.uc';
 import { ResolvedTutors, SetProjectTutorsUC } from './set-project-tutors.uc';
 import { CheckActiveSubmissionByEmailsUC } from './check-active-submission-by-emails.uc';
 import { eventTypeName } from './admin-change-project-state.uc';
+import {
+  INVITATION_COMMAND_PORT,
+  InvitationCommandPort,
+} from '../ports/invitation.command-port';
+
+/** Role given to the students when they accept the invitation, as in the public submission */
+const PARTICIPANT_ROLE_ID = 5;
 
 export type AdminCreateState = 'APPROVED' | 'UNDER_REVIEW';
 
@@ -60,8 +67,9 @@ export const CREATE_EFFECTS_WARNING =
 const EFFECT_TEXT: Record<AdminCreateEffect, string> = {
   DOCUMENTS: 'no se pudieron guardar los documentos',
   TUTOR_ACTIVATION: 'no se pudo activar a los tutores',
+  INVITATION: 'no se pudo invitar a todos los integrantes pendientes',
   NOTIFICATION:
-    'no se pudieron enviar todos los correos de invitación a los integrantes pendientes',
+    'no se pudieron enviar todos los correos de aprobación a los integrantes pendientes',
 };
 
 /** Spanish warning listing the effects that failed, null when none did */
@@ -85,9 +93,11 @@ const stackOf = (error: unknown) =>
  * PARTICIPANT_IN_OTHER_PROJECT), under the same locks as an administrative addition.
  *
  * The project, its tutors, its participants and its CREATED change log entry are saved in one
- * transaction. Created APPROVED, its tutors are activated and its pending participants get the
- * approval email (and become INVITED); created UNDER_REVIEW, both happen at the approval. A
- * failure there does not undo the creation: it is reported in failedEffects.
+ * transaction. Then each pending participant is invited to the project, as in the public
+ * submission (accepting it is how they join). Created APPROVED, its tutors are activated and
+ * its pending participants also get the approval email (and become INVITED); created
+ * UNDER_REVIEW, both happen at the approval. A failure there does not undo the creation: it is
+ * reported in failedEffects.
  */
 @Injectable()
 export class AdminCreateProjectUC {
@@ -105,6 +115,8 @@ export class AdminCreateProjectUC {
     @Inject(PROJECT_CHANGE_LOG_REPOSITORY)
     private readonly changeLog: ProjectChangeLogRepository,
     private readonly uow: UnitOfWork,
+    @Inject(INVITATION_COMMAND_PORT)
+    private readonly invitations: InvitationCommandPort,
   ) {}
 
   async execute(
@@ -175,20 +187,29 @@ export class AdminCreateProjectUC {
 
     const failedEffects: AdminCreateEffect[] = [];
     let result = participants.map(({ email, status }) => ({ email, status }));
+    const pendings = participants.flatMap((p) =>
+      p.pending ? [p.pending] : [],
+    );
+    const eventType = eventTypeName(
+      (await this.events.getEventById(project.eventId).catch(() => null)) as {
+        eventType?: unknown;
+      } | null,
+    );
+    if (
+      !(await this.createInvitations(
+        project,
+        pendings,
+        eventType,
+        input.actingUserId,
+      ))
+    ) {
+      failedEffects.push('INVITATION');
+    }
     if (state === 'APPROVED') {
-      const eventType = eventTypeName(
-        (await this.events.getEventById(project.eventId).catch(() => null)) as {
-          eventType?: unknown;
-        } | null,
-      );
       if (!(await this.activateTutors(project, eventType))) {
         failedEffects.push('TUTOR_ACTIVATION');
       }
-      const invited = await this.invitePendings(
-        project,
-        participants.flatMap((p) => (p.pending ? [p.pending] : [])),
-        eventType,
-      );
+      const invited = await this.invitePendings(project, pendings, eventType);
       if (!invited.ok) failedEffects.push('NOTIFICATION');
       result = result.map((p) =>
         invited.emails.includes(p.email) ? { ...p, status: 'INVITED' } : p,
@@ -332,6 +353,37 @@ export class AdminCreateProjectUC {
       );
       return false;
     }
+  }
+
+  /** Invitation to the project for each pending participant; false when any of them failed. */
+  private async createInvitations(
+    project: Project,
+    pendings: PendingProjectParticipant[],
+    eventType: string,
+    actingUserId: number,
+  ): Promise<boolean> {
+    let ok = true;
+    for (const pending of pendings) {
+      try {
+        await this.invitations.createInvitation({
+          email: pending.email,
+          eventType,
+          targetType: 'PROJECT',
+          targetId: project.id,
+          roleIds: [PARTICIPANT_ROLE_ID],
+          firstName: pending.firstName,
+          lastName: pending.lastName ?? '',
+          requestedByUserId: actingUserId,
+        });
+      } catch (error) {
+        this.logger.error(
+          `Invitation of ${pending.email} failed after the administrative creation of project ${project.id}`,
+          stackOf(error),
+        );
+        ok = false;
+      }
+    }
+    return ok;
   }
 
   /** Sends the approval email to each pending participant and marks as INVITED those it reached. */
