@@ -183,7 +183,11 @@ describe('ProjectImportsService', () => {
 
       const result = await service.execute(
         7,
-        upload('feria.xlsx', await filledTemplate()),
+        // Multer reads the UTF-8 name of the upload as latin1
+        upload(
+          Buffer.from('Inscripción.xlsx', 'utf8').toString('latin1'),
+          await filledTemplate(),
+        ),
         12,
       );
 
@@ -191,7 +195,7 @@ describe('ProjectImportsService', () => {
         expect.objectContaining({
           eventId: 7,
           actingUserId: 12,
-          fileName: 'feria.xlsx',
+          fileName: 'Inscripción.xlsx',
         }),
       );
       expect(result).toEqual({

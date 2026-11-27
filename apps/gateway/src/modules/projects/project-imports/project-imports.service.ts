@@ -14,6 +14,7 @@ import {
   ProjectImportTotals,
   ProjectsServiceClient,
 } from '@app/common/generated/project';
+import { decodeOriginalName } from '@app/common/utils/file-name.util';
 import { fileNamePart } from '../../../common/excel/xlsx-file';
 import { parseProjectImportSheet } from './parse-project-import-sheet';
 import { buildProjectImportTemplate } from './build-project-import-template';
@@ -126,7 +127,7 @@ export class ProjectImportsService implements OnModuleInit {
         eventId,
         rows,
         actingUserId,
-        fileName: file!.originalname,
+        fileName: decodeOriginalName(file!.originalname),
       }),
     );
     const totals = res.totals as ProjectImportExecutionTotals;
