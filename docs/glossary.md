@@ -16,6 +16,7 @@ these docs stay in English.
 | tutor | tutor | |
 | juror | jurado | |
 | juror import | importación de jurados | |
+| project import | importación de proyectos | Bulk creation of projects from a spreadsheet. |
 | evaluation | evaluación | |
 | rubric | rúbrica | |
 | component | componente | A group of criteria with a weight. |
