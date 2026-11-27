@@ -95,7 +95,9 @@ export class DiplomasService {
 
   /**
    * Diploma of any project of the event, for the staff that manages the event and its
-   * awards (`manage:events`). Same rules as the student one; a project of another event
+   * awards (`manage:events`). Unlike the student one it does not wait for the results to
+   * be published, so the diplomas can be printed before the ceremony; the project still
+   * needs an award of the event and the event a design. A project of another event
    * answers 404 like a missing one.
    */
   async getEventProjectDiploma(
@@ -109,23 +111,25 @@ export class DiplomasService {
         `El proyecto ${projectId} no pertenece al evento ${eventId}`,
       );
     }
-    return this.getProjectDiploma(project);
+    const event = await this.eventsService.getEventById(eventId);
+    return this.diplomaOf(
+      project,
+      eventId,
+      event,
+      'El proyecto no tiene premios en este evento, así que no tiene diploma',
+      { requirePublished: false },
+    );
   }
 
   /**
    * The diplomas of every winner of the event in one PDF, one page per project ordered by
    * category and award position, for the staff with `manage:events`. Same rules as the
-   * single one: published results, a published award of the event and a design.
+   * single staff one: an award of the event and a design, published results or not.
    */
   async getEventDiplomas(eventId: number): Promise<DiplomaFile> {
     const event = await this.eventsService.getEventById(eventId);
     if (!event) {
       throw new NotFoundException(`No se encontró el evento con ID ${eventId}`);
-    }
-    if (!event.resultsPublished) {
-      throw new ForbiddenException(
-        'Los resultados del evento aún no se han publicado',
-      );
     }
     const template = this.templates.get(eventId);
     if (!template) {
@@ -139,9 +143,7 @@ export class DiplomasService {
       ? await this.eventsService.listAwardsByProjects(winnerIds)
       : { awards: [] };
     const awarded = new Set(
-      awards
-        .filter((a) => a.eventId === eventId && a.resultsPublished)
-        .map((a) => a.projectId),
+      awards.filter((a) => a.eventId === eventId).map((a) => a.projectId),
     );
     const projectIds = winnerIds.filter((id) => awarded.has(id));
     if (!projectIds.length) {
@@ -214,17 +216,23 @@ export class DiplomasService {
     );
   }
 
-  /** Published results, a published award of the event and a design, then the PDF */
+  /**
+   * An award of the event and a design, then the PDF. With `requirePublished` (students
+   * and academic profiles) the results and the award must be published too.
+   */
   private async diplomaOf(
     project: { id: number; name: string },
     eventId: number,
     event: EventProto | undefined,
     noAwardMessage: string,
+    { requirePublished }: { requirePublished: boolean } = {
+      requirePublished: true,
+    },
   ): Promise<DiplomaFile> {
     if (!event) {
       throw new NotFoundException(`No se encontró el evento con ID ${eventId}`);
     }
-    if (!event.resultsPublished) {
+    if (requirePublished && !event.resultsPublished) {
       throw new ForbiddenException(
         'Los resultados del evento aún no se han publicado',
       );
@@ -233,7 +241,9 @@ export class DiplomasService {
     const { awards = [] } = await this.eventsService.listAwardsByProjects([
       project.id,
     ]);
-    const won = awards.some((a) => a.eventId === eventId && a.resultsPublished);
+    const won = awards.some(
+      (a) => a.eventId === eventId && (!requirePublished || a.resultsPublished),
+    );
     if (!won) {
       throw new NotFoundException(noAwardMessage);
     }
