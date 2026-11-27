@@ -373,6 +373,22 @@ describe('PreviewProjectImportUC', () => {
       expect(res.canConfirm).toBe(true);
     });
 
+    it('skips a row whose project is in a category deactivated after the load', async () => {
+      projects = [existing(40, 'Robot', OLD.id)];
+
+      const res = await preview([
+        row(2, { name: 'Robot', categoryName: OLD.name }),
+        row(3),
+      ]);
+
+      expect(res.rows[0]).toMatchObject({
+        outcome: 'SKIP',
+        projectId: 40,
+        categoryName: OLD.name,
+      });
+      expect(res.canConfirm).toBe(true);
+    });
+
     it('rejects a name that exists in another category of the event, naming it', async () => {
       projects = [existing(40, 'Robot', CIVIL.id)];
 

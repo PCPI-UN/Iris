@@ -394,7 +394,27 @@ export class PreviewProjectImportUC {
     }
     ctx.firstRowByName.set(name, row.rowNumber);
 
-    // 2. Category of the event, by normalized name
+    // 4a. Already created in that category: SKIP, even when the category was deactivated
+    // afterwards, so that loading the same file again stays safe
+    const existing = ctx.projectsByName.get(name);
+    const existingCategory =
+      existing && ctx.categoryNameById.get(existing.courseId);
+    if (
+      existing &&
+      existingCategory !== undefined &&
+      normalizeText(existingCategory) === normalizeText(row.categoryName)
+    ) {
+      return {
+        result: {
+          ...base(existingCategory),
+          outcome: 'SKIP',
+          projectId: existing.id,
+          message: `Ya existe en el evento (Id ${existing.id}); se omite.`,
+        },
+      };
+    }
+
+    // 2. Category of the event, by normalized name; only active ones take new projects
     const matches =
       ctx.categoriesByName.get(normalizeText(row.categoryName)) ?? [];
     if (matches.length === 0) {
@@ -410,19 +430,9 @@ export class PreviewProjectImportUC {
     const category = matches[0];
     const inCategory = (message: string) => error(message, category.name);
 
-    // 4. Name already in the event (unique per event, compared as AdminCreateProjectUC does)
-    const existing = ctx.projectsByName.get(name);
+    // 4b. Name already in another category of the event (unique per event, compared as
+    // AdminCreateProjectUC does)
     if (existing) {
-      if (existing.courseId === category.id) {
-        return {
-          result: {
-            ...base(category.name),
-            outcome: 'SKIP',
-            projectId: existing.id,
-            message: `Ya existe en el evento (Id ${existing.id}); se omite.`,
-          },
-        };
-      }
       return inCategory(
         `Ya existe un proyecto con ese nombre en la categoría «${
           ctx.categoryNameById.get(existing.courseId) ?? existing.courseId
