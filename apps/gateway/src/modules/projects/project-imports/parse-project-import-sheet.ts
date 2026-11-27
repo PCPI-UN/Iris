@@ -7,12 +7,14 @@ import {
 } from '@app/common/generated/project';
 import { cellText, normalizeHeader } from '../../../common/excel/excel-cells';
 import {
+  PROJECT_IMPORT_CAREERS,
   PROJECT_IMPORT_FIXED_COLUMNS,
   PROJECT_IMPORT_HEADER_SEARCH_ROWS,
   PROJECT_IMPORT_MAX_PARTICIPANTS,
   PROJECT_IMPORT_MAX_ROWS,
   PROJECT_IMPORT_MAX_TUTORS,
   PROJECT_IMPORT_PARTICIPANT_COLUMNS,
+  PROJECT_IMPORT_SEMESTERS,
   PROJECT_IMPORT_SHEET,
   PROJECT_IMPORT_STATE_APPROVED,
   PROJECT_IMPORT_STATE_UNDER_REVIEW,
@@ -41,6 +43,18 @@ const STATES = new Map<string, ProjectState>([
     ProjectState.UNDER_REVIEW,
   ],
 ]);
+
+// The sheet shows the labels of the public form lists; projects store their keys. The key
+// itself is accepted too, so a file filled by hand with keys also works
+const optionKeys = (options: readonly { key: string; label: string }[]) =>
+  new Map<string, string>(
+    options.flatMap(({ key, label }) => [
+      [normalizeHeader(label), key],
+      [normalizeHeader(key), key],
+    ]),
+  );
+const SEMESTER_KEYS = optionKeys(PROJECT_IMPORT_SEMESTERS);
+const CAREER_KEYS = optionKeys(PROJECT_IMPORT_CAREERS);
 
 /** "<prefix> N" -> N ("correo tutor 2" with prefix "correo tutor" -> 2), or null */
 const slotOf = (header: string, prefix: string): number | null => {
@@ -164,13 +178,28 @@ export async function parseProjectImportSheet(
         );
         continue;
       }
+      const semester = SEMESTER_KEYS.get(normalizeHeader(values[4].value));
+      const career = CAREER_KEYS.get(normalizeHeader(values[5].value));
+      if (!semester || !career) {
+        if (!semester) {
+          formatErrors.push(
+            `Integrante ${slot}: el semestre «${values[4].value}» no está en la lista.`,
+          );
+        }
+        if (!career) {
+          formatErrors.push(
+            `Integrante ${slot}: la carrera «${values[5].value}» no está en la lista.`,
+          );
+        }
+        continue;
+      }
       participants.push({
         firstName: values[0].value,
         lastName: values[1].value,
         email: values[2].value,
         studentCode: values[3].value,
-        semester: values[4].value,
-        career: values[5].value,
+        semester,
+        career,
       });
     }
     const tutorEmails = orderedTutors

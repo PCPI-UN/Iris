@@ -107,8 +107,8 @@ describe('parseProjectImportSheet', () => {
             lastName: 'Pérez Ríos',
             email: 'ana.perez@uninorte.edu.co',
             studentCode: '200012345',
-            semester: '3er Semestre',
-            career: 'Ingeniería Civil',
+            semester: '3',
+            career: 'ingenieria_civil',
           },
         ],
         tutorEmails: ['tutor@uninorte.edu.co'],
@@ -182,8 +182,8 @@ describe('parseProjectImportSheet', () => {
         lastName: 'Ríos',
         email: 'a@x.co',
         studentCode: '1',
-        semester: '2do Semestre',
-        career: 'Derecho',
+        semester: '2',
+        career: 'derecho',
       },
     ]);
   });
@@ -258,6 +258,20 @@ describe('parseProjectImportSheet', () => {
         'Integrante 2 incompleto: falta Apellido(s), Código estudiantil, Carrera.',
       ]);
       expect(rows[1].formatErrors).toEqual([]);
+    });
+
+    it('accepts the keys of the lists and reports values outside them', async () => {
+      const byKey = ['Luis', 'Gómez', 'luis@x.co', '2001', '7', 'derecho'];
+      const unknown = ['Eva', 'Díaz', 'eva@x.co', '2002', '13vo', 'Astronomía'];
+      const file = await workbook([project(FIXED, [byKey, unknown])]);
+      const [row] = await parseProjectImportSheet(file);
+      expect(row.participants).toEqual([
+        expect.objectContaining({ semester: '7', career: 'derecho' }),
+      ]);
+      expect(row.formatErrors).toEqual([
+        'Integrante 2: el semestre «13vo» no está en la lista.',
+        'Integrante 2: la carrera «Astronomía» no está en la lista.',
+      ]);
     });
 
     it('a row with only a half student is still a row, so it is reported', async () => {

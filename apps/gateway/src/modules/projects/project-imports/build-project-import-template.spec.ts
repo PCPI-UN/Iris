@@ -198,6 +198,6 @@ describe('buildProjectImportTemplate', () => {
       name: 'Mi proyecto',
       formatErrors: [],
     });
-    expect(rows[0].participants[0].career).toBe('Derecho');
+    expect(rows[0].participants[0].career).toBe('derecho');
   });
 });
