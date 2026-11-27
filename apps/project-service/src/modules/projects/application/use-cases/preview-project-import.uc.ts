@@ -1,6 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { isEmail } from 'class-validator';
 import { normalizeEmail } from '@app/common/utils/email.util';
+import { mapWithConcurrency } from '@app/common/utils/concurrency.util';
+import { normalizeText } from '@app/common/utils/text.util';
 import { ProjectRepository } from '../../domain/repositories/project.repository';
 import {
   PROFESSOR_ROLE_ID,
@@ -26,7 +28,6 @@ import {
 import { CheckActiveSubmissionByEmailsUC } from './check-active-submission-by-emails.uc';
 import { CreateProjectUC } from './create-project.uc';
 import { AdminCreateState } from './admin-create-project.uc';
-import { mapWithConcurrency, normalizeText } from './preview-juror-import.uc';
 import {
   eventRequiresCourse,
   getProjectImportEvent,
