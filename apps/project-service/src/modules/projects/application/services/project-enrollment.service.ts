@@ -19,7 +19,7 @@ import { AddPendingParticipantUC } from '../use-cases/add-pending-participant.us
 import { CheckActiveSubmissionByEmailsUC } from '../use-cases/check-active-submission-by-emails.uc';
 
 /** States in which a project keeps its participants busy in the event */
-const ACTIVE_STATES: ProjectState[] = [
+export const ACTIVE_STATES: ProjectState[] = [
   'UNDER_REVIEW',
   'APPROVED',
   'REQUEST_CHANGES',

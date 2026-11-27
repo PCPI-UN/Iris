@@ -29,13 +29,3 @@ export const JUROR_IMPORT_SLOT_COLUMNS = [
   { field: 'lastName', label: 'Apellido(s) jurado' },
   { field: 'email', label: 'Correo jurado' },
 ] as const;
-
-/** "Número*" -> "numero" */
-export const normalizeHeader = (value: string): string =>
-  value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\*/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();

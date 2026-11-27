@@ -59,6 +59,13 @@ service ProjectsService {
   rpc ExecuteJurorImport (ExecuteJurorImportRequest) returns (ExecuteJurorImportResponse);
   // Data to build the downloadable template: departments and approved projects of the event
   rpc GetJurorImportTemplate (GetJurorImportTemplateRequest) returns (GetJurorImportTemplateResponse);
+  // Project import from the template spreadsheet: validates every row, writes nothing
+  rpc PreviewProjectImport (PreviewProjectImportRequest) returns (PreviewProjectImportResponse);
+  // Creates the projects of a confirmed project import, one row at a time; refuses it when the preview
+  // cannot be confirmed. A row that fails at creation is reported as an error and the others go on
+  rpc ExecuteProjectImport (ExecuteProjectImportRequest) returns (ExecuteProjectImportResponse);
+  // Data to build the downloadable template: event name, its categories and whether it requires a course section
+  rpc GetProjectImportTemplate (GetProjectImportTemplateRequest) returns (GetProjectImportTemplateResponse);
   // Fails with PERMISSION_DENIED unless the user may read or edit the project: a confirmed
   // participant, an assigned juror (read only) or platform staff (read:events / manage:events)
   rpc CheckProjectAccess (CheckProjectAccessRequest) returns (CheckProjectAccessResponse);
@@ -667,6 +674,120 @@ message GetJurorImportTemplateResponse {
   string eventName = 1;
   reserved 2;  // departments
   repeated JurorImportTemplateProject projects = 3;  // approved projects, by department and number
+}
+
+/************** Project import **************/
+enum ProjectImportOutcome {
+  PROJECT_IMPORT_OUTCOME_UNSPECIFIED = 0;
+  PROJECT_IMPORT_CREATE = 1;    // preview: will be created on confirm
+  PROJECT_IMPORT_SKIP = 2;      // a project with that name already exists in the event and category: nothing to do
+  PROJECT_IMPORT_ERROR = 3;     // preview: blocks the confirmation; execution: not created
+  PROJECT_IMPORT_CREATED = 4;  // execution: created now
+}
+
+enum ProjectImportParticipantStatus {
+  PROJECT_IMPORT_PARTICIPANT_STATUS_UNSPECIFIED = 0;
+  PROJECT_IMPORT_HAS_ACCOUNT = 1;  // joins the project directly
+  PROJECT_IMPORT_NO_ACCOUNT = 2;   // stays pending until the student signs up
+}
+
+// One student of a row ("... integrante N"), as read by the gateway
+message ProjectImportParticipant {
+  string firstName = 1;
+  string lastName = 2;
+  string email = 3;  // as written; project-service normalizes it
+  string studentCode = 4;
+  string semester = 5;
+  string career = 6;
+  int32 slot = 7;  // N of "integrante N" in the sheet
+}
+
+// One row of the "Proyectos" sheet, as read by the gateway
+message ProjectImportRow {
+  int32 rowNumber = 1;  // spreadsheet row, 1-based as the user sees it
+  string categoryName = 2;
+  string nrc = 3;          // empty when not written
+  string name = 4;
+  string description = 5;  // empty when not written
+  string projectCode = 6;  // empty when not written
+  ProjectState state = 7;  // APPROVED (empty cell) or UNDER_REVIEW
+  repeated ProjectImportParticipant participants = 8;  // in slot order, only the filled ones
+  repeated string tutorEmails = 9;                     // as written, only the filled ones
+  // Problems the gateway found while reading the row (a student half filled, an unknown state...).
+  // When not empty the row is an ERROR with these messages and is not validated further
+  repeated string formatErrors = 10;
+}
+
+message PreviewProjectImportRequest {
+  int32 eventId = 1;
+  repeated ProjectImportRow rows = 2;
+}
+
+message ProjectImportParticipantResult {
+  string email = 1;  // normalized
+  ProjectImportParticipantStatus status = 2;
+}
+
+message ProjectImportRowResult {
+  int32 rowNumber = 1;
+  ProjectImportOutcome outcome = 2;
+  string message = 3;  // in Spanish, for the person who uploaded the file
+  string projectName = 4;
+  optional string categoryName = 5;  // the category of the event, as named in the event
+  ProjectState state = 6;
+  repeated ProjectImportParticipantResult participants = 7;
+  optional int32 projectId = 8;  // SKIP: the existing project; CREATED: the new one
+  // Execution only: work in other services that failed after the project was saved (see AdminCreateProject)
+  repeated string failedEffects = 9;
+}
+
+message ProjectImportTotals {
+  int32 rows = 1;
+  int32 toCreate = 2;
+  int32 skipped = 3;
+  int32 errors = 4;
+  int32 participants = 5;    // students in rows to create
+  int32 withoutAccount = 6;  // of those, the ones without an account
+}
+
+message PreviewProjectImportResponse {
+  repeated ProjectImportRowResult rows = 1;
+  ProjectImportTotals totals = 2;
+  // Event-level problems (inactive event, published results); any of them blocks the confirmation.
+  // A closed inscription deadline is not one: creating after it is the usual case
+  repeated string eventWarnings = 3;
+  bool canConfirm = 4;  // no row errors, no event warnings and at least one row to create
+}
+
+message ExecuteProjectImportRequest {
+  int32 eventId = 1;
+  repeated ProjectImportRow rows = 2;  // the same rows of the preview
+  int32 actingUserId = 3;              // auth-service user making the change
+  string fileName = 4;                 // kept with the row number in the CREATED change log entry
+}
+
+message ProjectImportExecutionTotals {
+  int32 rows = 1;
+  int32 created = 2;
+  int32 skipped = 3;
+  int32 errors = 4;
+  int32 emailsSent = 5;     // approval emails sent to pending students (INVITED)
+  int32 failedEffects = 6;  // created rows with some failed effect
+}
+
+message ExecuteProjectImportResponse {
+  repeated ProjectImportRowResult rows = 1;  // CREATED, SKIP or ERROR
+  ProjectImportExecutionTotals totals = 2;
+}
+
+message GetProjectImportTemplateRequest {
+  int32 eventId = 1;
+}
+
+message GetProjectImportTemplateResponse {
+  string eventName = 1;
+  repeated string categoryNames = 2;  // categories of the event, by name
+  bool requiresCourse = 3;            // the NRC column is required
 }
 
 // ===== STUDENT DASHBOARD =====

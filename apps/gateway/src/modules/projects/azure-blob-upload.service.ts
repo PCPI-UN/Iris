@@ -14,6 +14,7 @@ import {
 } from '@azure/storage-blob';
 import { randomUUID } from 'crypto';
 import * as path from 'path';
+import { decodeOriginalName } from '@app/common/utils/file-name.util';
 
 /** Matches values that carry a scheme, e.g. https://… (blob names never do) */
 const ABSOLUTE_URL = /^[a-z][a-z0-9+.-]*:\/\//i;
@@ -27,20 +28,6 @@ const READ_SAS_TTL_SEC = 3600;
  * ranges of the same URL while the document stays open.
  */
 const OPEN_SAS_TTL_SEC = 3600;
-
-/**
- * Multer reads multipart file names as latin1, while browsers send them as
- * UTF-8: "Pendón.pdf" arrives as "PendoÌ\x81n.pdf". A name that already holds
- * characters above latin1, or that is not valid UTF-8 once re-read, came in
- * decoded (e.g. through filename*=UTF-8'') and stays as it is.
- */
-const decodeOriginalName = (name: string): string => {
-  if ([...name].some((char) => char.charCodeAt(0) > 0xff)) {
-    return name;
-  }
-  const decoded = Buffer.from(name, 'latin1').toString('utf8');
-  return decoded.includes('\uFFFD') ? name : decoded;
-};
 
 const toAscii = (value: string): string =>
   value

@@ -64,6 +64,9 @@ import { AuthServiceModule } from './auth-service.module';
 import { PreviewJurorImportUC } from './application/use-cases/preview-juror-import.uc';
 import { ExecuteJurorImportUC } from './application/use-cases/execute-juror-import.uc';
 import { GetJurorImportTemplateUC } from './application/use-cases/get-juror-import-template.uc';
+import { PreviewProjectImportUC } from './application/use-cases/preview-project-import.uc';
+import { ExecuteProjectImportUC } from './application/use-cases/execute-project-import.uc';
+import { GetProjectImportTemplateUC } from './application/use-cases/get-project-import-template.uc';
 import { AUTH_SERVICE_PORT } from './application/ports/auth-service.port';
 import { AuthServiceAdapter } from './infrastructure/grpc-client/auth-service.adapter';
 import { PROJECT_CHANGE_LOG_REPOSITORY } from './domain/repositories/project-change-log.repository';
@@ -164,6 +167,9 @@ import { EvaluationServiceAdapter } from './infrastructure/grpc-client/evaluatio
     PreviewJurorImportUC,
     ExecuteJurorImportUC,
     GetJurorImportTemplateUC,
+    PreviewProjectImportUC,
+    ExecuteProjectImportUC,
+    GetProjectImportTemplateUC,
     {
       provide: NOTIFICATION_SERVICE_PORT,
       useExisting: NotificationServiceAdapter,

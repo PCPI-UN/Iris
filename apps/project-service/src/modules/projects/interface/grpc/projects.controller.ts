@@ -24,6 +24,10 @@ import {
   toPreviewJurorImportResponse,
   toExecuteJurorImportResponse,
   toGetJurorImportTemplateResponse,
+  protoToProjectImportRow,
+  toPreviewProjectImportResponse,
+  toExecuteProjectImportResponse,
+  toGetProjectImportTemplateResponse,
   toProtoStudentParticipationStats,
   toProtoProjectInScope,
   protoToReadScope,
@@ -72,11 +76,17 @@ import {
   ExecuteJurorImportRequest,
   GetJurorImportTemplateRequest,
   PreviewJurorImportRequest,
+  PreviewProjectImportRequest,
+  ExecuteProjectImportRequest,
+  GetProjectImportTemplateRequest,
   ProjectAccessAction,
 } from '@app/common/generated/project';
 import { GetJurorImportTemplateUC } from '../../application/use-cases/get-juror-import-template.uc';
 import { PreviewJurorImportUC } from '../../application/use-cases/preview-juror-import.uc';
 import { ExecuteJurorImportUC } from '../../application/use-cases/execute-juror-import.uc';
+import { PreviewProjectImportUC } from '../../application/use-cases/preview-project-import.uc';
+import { ExecuteProjectImportUC } from '../../application/use-cases/execute-project-import.uc';
+import { GetProjectImportTemplateUC } from '../../application/use-cases/get-project-import-template.uc';
 import { ListProjectChangeLogUC } from '../../application/use-cases/list-project-change-log.uc';
 import { AdminChangeProjectStateUC } from '../../application/use-cases/admin-change-project-state.uc';
 import { ProjectApprovalEffects } from '../../application/services/project-approval-effects.service';
@@ -152,6 +162,9 @@ export class ProjectsController {
     private readonly adminChangeProjectDocumentStateUC: AdminChangeProjectDocumentStateUC,
     private readonly createProjectWithPendingParticipantsUC: CreateProjectWithPendingParticipantsUC,
     private readonly adminCreateProjectUC: AdminCreateProjectUC,
+    private readonly previewProjectImportUC: PreviewProjectImportUC,
+    private readonly executeProjectImportUC: ExecuteProjectImportUC,
+    private readonly getProjectImportTemplateUC: GetProjectImportTemplateUC,
   ) {}
 
   private async tutorsOf(projectId: number) {
@@ -609,6 +622,34 @@ export class ProjectsController {
       eventId: req.eventId,
     });
     return toGetJurorImportTemplateResponse(template);
+  }
+
+  @GrpcMethod('ProjectsService', 'PreviewProjectImport')
+  async previewProjectImportRpc(req: PreviewProjectImportRequest) {
+    const preview = await this.previewProjectImportUC.execute({
+      eventId: req.eventId,
+      rows: (req.rows ?? []).map(protoToProjectImportRow),
+    });
+    return toPreviewProjectImportResponse(preview);
+  }
+
+  @GrpcMethod('ProjectsService', 'ExecuteProjectImport')
+  async executeProjectImportRpc(req: ExecuteProjectImportRequest) {
+    const execution = await this.executeProjectImportUC.execute({
+      eventId: req.eventId,
+      rows: (req.rows ?? []).map(protoToProjectImportRow),
+      actingUserId: req.actingUserId,
+      fileName: req.fileName ?? '',
+    });
+    return toExecuteProjectImportResponse(execution);
+  }
+
+  @GrpcMethod('ProjectsService', 'GetProjectImportTemplate')
+  async getProjectImportTemplateRpc(req: GetProjectImportTemplateRequest) {
+    const template = await this.getProjectImportTemplateUC.execute({
+      eventId: req.eventId,
+    });
+    return toGetProjectImportTemplateResponse(template);
   }
 
   @GrpcMethod('ProjectsService', 'ListUserParticipations')

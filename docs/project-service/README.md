@@ -93,6 +93,16 @@ An administrator (`manage:projects`) creates a project with `POST /projects/admi
 
 Rejections come back in `rejected` with a code (`PROJECT_NAME_TAKEN`, `PARTICIPANT_IN_OTHER_PROJECT`, `EVENT_RESULTS_PUBLISHED`), and the gateway answers them with 409.
 
+### Bulk creation from a spreadsheet
+
+The same creation also runs from a spreadsheet, one project per row, in three steps under `/events/:eventId/project-imports` (`manage:projects`):
+
+1. **Template** (`GET …/template`): the gateway builds the `.xlsx` with the categories of the event from `GetProjectImportTemplate`.
+2. **Preview** (`POST …/preview`): the gateway reads the file into rows and `PreviewProjectImport` validates each one against the event, without writing anything. A row is `CREATE`, `SKIP` (a project with that name already exists in that category, so loading the same file again creates nothing new) or `ERROR` with a message in Spanish. The file can be confirmed only with no `ERROR` rows, no event warnings (inactive event, published results) and at least one row to create.
+3. **Execution** (`POST …/execute`): `ExecuteProjectImport` validates the rows again and refuses the whole file if the preview cannot be confirmed. Then it creates each `CREATE` row with `AdminCreateProject`, in file order and each in its own transaction, with the file name and row number in the `origin` of the `CREATED` entry. A row rejected at that point (a student someone else added meanwhile, say) comes back as `ERROR` and the next rows go on; failed effects are reported per row, as in the form.
+
+The documents of each project are not in the spreadsheet: they are uploaded afterwards from the project.
+
 ## Student participation statistics
 
 `GetStudentParticipationStats` feeds the student dashboard (`GET /students/me/dashboard` in the gateway, which always sends the session user id and shapes the response for the frontend).
