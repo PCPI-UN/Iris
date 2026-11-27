@@ -287,7 +287,10 @@ export const protoToProjectImportRow = (
   description: row.description,
   projectCode: row.projectCode,
   state: row.state ? protoToState(row.state) : undefined,
-  participants: row.participants ?? [],
+  participants: (row.participants ?? []).map((p) => ({
+    ...p,
+    slot: p.slot || undefined,
+  })),
   tutorEmails: row.tutorEmails ?? [],
   formatErrors: row.formatErrors ?? [],
 });

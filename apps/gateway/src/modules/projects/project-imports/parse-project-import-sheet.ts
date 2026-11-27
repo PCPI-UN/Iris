@@ -115,11 +115,22 @@ export async function parseProjectImportSheet(
 
   const participantSlots = new Map<number, ParticipantColumns>();
   const tutorColumns = new Map<number, number>();
+  // Student or tutor columns past the limit: a value in them is reported, never dropped quietly
+  const extraColumns: { column: number; label: string; limit: string }[] = [];
+  const studentsLimit = `${PROJECT_IMPORT_MAX_PARTICIPANTS} integrantes`;
+  const tutorsLimit = `${PROJECT_IMPORT_MAX_TUTORS} tutores`;
   sheet.getRow(headerRow).eachCell((cell, colNumber) => {
     const header = normalizeHeader(cellText(cell.value));
     const tutor = slotOf(header, TUTOR_PREFIX);
     if (tutor !== null) {
-      if (tutor < 1 || tutor > PROJECT_IMPORT_MAX_TUTORS) return;
+      if (tutor < 1 || tutor > PROJECT_IMPORT_MAX_TUTORS) {
+        extraColumns.push({
+          column: colNumber,
+          label: cell.text.trim(),
+          limit: tutorsLimit,
+        });
+        return;
+      }
       if (tutorColumns.has(tutor)) {
         throw new BadRequestException(
           `La columna «${cell.text.trim()}» aparece más de una vez.`,
@@ -131,7 +142,14 @@ export async function parseProjectImportSheet(
     for (const { field, prefix } of PARTICIPANT_PREFIXES) {
       const slot = slotOf(header, prefix);
       if (slot === null) continue;
-      if (slot < 1 || slot > PROJECT_IMPORT_MAX_PARTICIPANTS) return;
+      if (slot < 1 || slot > PROJECT_IMPORT_MAX_PARTICIPANTS) {
+        extraColumns.push({
+          column: colNumber,
+          label: cell.text.trim(),
+          limit: studentsLimit,
+        });
+        return;
+      }
       const columns = participantSlots.get(slot) ?? {};
       if (columns[field]) {
         throw new BadRequestException(
@@ -200,7 +218,18 @@ export async function parseProjectImportSheet(
         studentCode: values[3].value,
         semester,
         career,
+        slot,
       });
+    }
+    for (const limit of [studentsLimit, tutorsLimit]) {
+      const withData = extraColumns
+        .filter((c) => c.limit === limit && text(c.column))
+        .map((c) => `«${c.label}»`);
+      if (withData.length) {
+        formatErrors.push(
+          `Hay datos en ${withData.join(', ')}, pero el máximo es de ${limit}.`,
+        );
+      }
     }
     const tutorEmails = orderedTutors
       .map(([, column]) => text(column))

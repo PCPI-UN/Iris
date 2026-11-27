@@ -138,8 +138,8 @@ describe('ExecuteProjectImportUC', () => {
     const res = await execute([
       row(2, {
         participants: [
-          student('ana@uni.edu', '1'),
-          student('luis@uni.edu', '2'),
+          { ...student('ana@uni.edu', '1'), slot: 1 },
+          { ...student('luis@uni.edu', '2'), slot: 2 },
         ],
         description: '  ',
         projectCode: ' 07 ',

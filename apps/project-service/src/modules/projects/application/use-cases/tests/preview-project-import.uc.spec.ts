@@ -278,6 +278,21 @@ describe('PreviewProjectImportUC', () => {
         'El correo «ana@» del integrante 1 no es válido.',
       ],
       [
+        'only student 2 filled in the sheet',
+        { participants: [{ ...student('a@uni.edu', '1'), slot: 2 }] },
+        'Falta el dato obligatorio: Integrante 1.',
+      ],
+      [
+        'an invalid email in student 3 of the sheet, numbered as in the sheet',
+        {
+          participants: [
+            { ...student('a@uni.edu', '1'), slot: 1 },
+            { ...student('b@', '2'), slot: 3 },
+          ],
+        },
+        'El correo «b@» del integrante 3 no es válido.',
+      ],
+      [
         'an email repeated in the row',
         {
           participants: [student('a@uni.edu', '1'), student('A@uni.edu', '2')],

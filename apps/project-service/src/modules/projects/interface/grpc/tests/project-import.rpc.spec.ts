@@ -41,6 +41,7 @@ describe('ProjectsService project import', () => {
         studentCode: '1',
         semester: '6',
         career: 'Sistemas',
+        slot: 1,
       },
     ],
     tutorEmails: ['profe@uni.edu'],
@@ -109,7 +110,11 @@ describe('ProjectsService project import', () => {
           nrc: '1001',
           tutorEmails: ['profe@uni.edu'],
           participants: [
-            expect.objectContaining({ email: 'ana@uni.edu', studentCode: '1' }),
+            expect.objectContaining({
+              email: 'ana@uni.edu',
+              studentCode: '1',
+              slot: 1,
+            }),
           ],
         }),
         expect.objectContaining({ rowNumber: 5, state: 'UNDER_REVIEW' }),

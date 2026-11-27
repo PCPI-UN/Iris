@@ -49,6 +49,11 @@ const EMAIL_MAX = 255;
 export type ProjectImportOutcome = 'CREATE' | 'SKIP' | 'ERROR' | 'CREATED';
 export type ProjectImportParticipantStatus = 'HAS_ACCOUNT' | 'NO_ACCOUNT';
 
+/** A student of a row; `slot` is the N of "integrante N" in the sheet */
+export type ProjectImportParticipantInput = PendingStudentInput & {
+  slot?: number;
+};
+
 export interface ProjectImportRowInput {
   /** Spreadsheet row, 1-based as the user sees it */
   rowNumber: number;
@@ -60,7 +65,7 @@ export interface ProjectImportRowInput {
   /** APPROVED when left out */
   state?: ProjectState;
   /** In slot order, only the filled ones */
-  participants: PendingStudentInput[];
+  participants: ProjectImportParticipantInput[];
   tutorEmails: string[];
   /** Problems the gateway found reading the row: the row is an ERROR and is not validated further */
   formatErrors?: string[];
@@ -505,9 +510,13 @@ export class PreviewProjectImportUC {
     if (eventRequiresCourse(event) && !text(row.nrc)) missing.push('NRC');
     if (!text(row.name)) missing.push('Nombre del proyecto');
     const participants = row.participants ?? [];
-    if (!participants.length) missing.push('Integrante 1');
+    const slotOf = (p: ProjectImportParticipantInput, i: number) =>
+      p.slot ?? i + 1;
+    if (!participants.length || slotOf(participants[0], 0) !== 1) {
+      missing.push('Integrante 1');
+    }
     participants.forEach((p, i) => {
-      const n = i + 1;
+      const n = slotOf(p, i);
       if (!text(p.firstName)) missing.push(`Nombre(s) integrante ${n}`);
       if (!text(p.email)) missing.push(`Correo integrante ${n}`);
       if (!text(p.studentCode)) {
@@ -541,18 +550,19 @@ export class PreviewProjectImportUC {
     const emails: string[] = [];
     const codes: string[] = [];
     for (const [i, p] of participants.entries()) {
+      const n = slotOf(p, i);
       const email = normalizeEmail(p.email);
       if (!isValidEmail(email) || email.length > EMAIL_MAX) {
-        return `El correo «${text(p.email)}» del integrante ${i + 1} no es válido.`;
+        return `El correo «${text(p.email)}» del integrante ${n} no es válido.`;
       }
       if (
         text(p.firstName).length > PERSON_NAME_MAX ||
         text(p.lastName).length > PERSON_NAME_MAX
       ) {
-        return `El nombre y el apellido del integrante ${i + 1} no pueden pasar de ${PERSON_NAME_MAX} caracteres.`;
+        return `El nombre y el apellido del integrante ${n} no pueden pasar de ${PERSON_NAME_MAX} caracteres.`;
       }
       if (text(p.studentCode).length > STUDENT_CODE_MAX) {
-        return `El código estudiantil del integrante ${i + 1} no puede pasar de ${STUDENT_CODE_MAX} caracteres.`;
+        return `El código estudiantil del integrante ${n} no puede pasar de ${STUDENT_CODE_MAX} caracteres.`;
       }
       if (emails.includes(email)) {
         return `El correo ${email} está repetido entre los integrantes.`;

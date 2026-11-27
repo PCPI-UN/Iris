@@ -109,6 +109,7 @@ describe('parseProjectImportSheet', () => {
             studentCode: '200012345',
             semester: '3',
             career: 'ingenieria_civil',
+            slot: 1,
           },
         ],
         tutorEmails: ['tutor@uninorte.edu.co'],
@@ -130,9 +131,9 @@ describe('parseProjectImportSheet', () => {
       project(FIXED, [STUDENT, EMPTY_STUDENT, second], ['', 'segundo@x.co']),
     ]);
     const [row] = await parseProjectImportSheet(file);
-    expect(row.participants.map((p) => p.email)).toEqual([
-      'ana.perez@uninorte.edu.co',
-      'luis@x.co',
+    expect(row.participants.map((p) => [p.slot, p.email])).toEqual([
+      [1, 'ana.perez@uninorte.edu.co'],
+      [3, 'luis@x.co'],
     ]);
     expect(row.tutorEmails).toEqual(['segundo@x.co']);
     expect(row.formatErrors).toEqual([]);
@@ -184,7 +185,31 @@ describe('parseProjectImportSheet', () => {
         studentCode: '1',
         semester: '2',
         career: 'derecho',
+        slot: 1,
       },
+    ]);
+  });
+
+  it('reports data in student or tutor columns past the limit instead of dropping it', async () => {
+    const headers = [
+      ...allHeaders(),
+      ...participantHeaders(7),
+      'Correo tutor 3',
+    ];
+    const file = await workbook(
+      [
+        project(FIXED, [STUDENT]),
+        [...project(FIXED, [STUDENT]), ...STUDENT, 'tercero@x.co'],
+      ],
+      { headers },
+    );
+    const [clean, extra] = await parseProjectImportSheet(file);
+    expect(clean.formatErrors).toEqual([]);
+    expect(extra.formatErrors).toEqual([
+      `Hay datos en ${participantHeaders(7)
+        .map((h) => `«${h}»`)
+        .join(', ')}, pero el máximo es de 6 integrantes.`,
+      'Hay datos en «Correo tutor 3», pero el máximo es de 2 tutores.',
     ]);
   });
 

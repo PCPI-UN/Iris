@@ -699,6 +699,7 @@ message ProjectImportParticipant {
   string studentCode = 4;
   string semester = 5;
   string career = 6;
+  int32 slot = 7;  // N of "integrante N" in the sheet
 }
 
 // One row of the "Proyectos" sheet, as read by the gateway
