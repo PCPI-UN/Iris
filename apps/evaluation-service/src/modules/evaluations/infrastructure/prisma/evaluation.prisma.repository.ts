@@ -267,11 +267,12 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
         }));
     }
 
-    async findEvaluationsForStats(projectIds: number[]): Promise<StatsEvaluation[][]> {
+    async findEvaluationsForStats(projectIds: number[]): Promise<Map<number, StatsEvaluation[]>> {
         const evaluations = await this.prisma.db.evaluation.findMany({
             where: { projectId: { in: projectIds } },
             select: {
                 projectId: true,
+                grade: true,
                 scores: {
                     select: {
                         score: true,
@@ -292,6 +293,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
         for (const evaluation of evaluations) {
             const projectEvaluations = byProject.get(evaluation.projectId) ?? [];
             projectEvaluations.push({
+                grade: evaluation.grade,
                 details: evaluation.scores.map((detail) => ({
                     criterionId: detail.criterion.id,
                     criterionName: detail.criterion.name,
@@ -303,7 +305,7 @@ export class EvaluationPrismaRepository implements EvaluationRepositoryPort {
             });
             byProject.set(evaluation.projectId, projectEvaluations);
         }
-        return [...byProject.values()];
+        return byProject;
     }
 
     async getProjectStats(projectId: number): Promise<ProjectStats> {

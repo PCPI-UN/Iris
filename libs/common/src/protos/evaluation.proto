@@ -157,6 +157,27 @@ message GetEventCriteriaStatsRequest {
   int32 eventId = 1;
   // Projects to average; the ones without evaluations are left out
   repeated int32 projectIds = 2;
+  // Optional subsets (such as the projects of each department), averaged the same way
+  repeated ProjectGroup groups = 3;
+}
+
+message ProjectGroup {
+  repeated int32 projectIds = 1;
+}
+
+// Projects whose final grade falls in [from, to); the last range also includes `to`
+message ScoreBucketProto {
+  double from = 1;
+  double to = 2;
+  int32 count = 3;
+}
+
+message GroupCriteriaStatsProto {
+  // Projects of the group with at least one evaluation
+  int32 evaluatedCount = 1;
+  repeated ComponentStatsProto components = 2;
+  // Empty when the event has no grading scale
+  repeated ScoreBucketProto distribution = 3;
 }
 
 message CriterionStatsProto {
@@ -184,6 +205,13 @@ message GetEventCriteriaStatsResponse {
   // Highest grade of the event's grading scale; absent when the event has none
   optional double maxScore = 1;
   repeated ComponentStatsProto components = 2;
+  // Projects of projectIds with at least one evaluation
+  int32 evaluatedCount = 3;
+  // How many final grades of projectIds fall in each of 5 equal ranges from 0 to maxScore;
+  // empty when the event has no grading scale
+  repeated ScoreBucketProto distribution = 4;
+  // One per requested group, in the same order
+  repeated GroupCriteriaStatsProto groups = 5;
 }
 
 message CheckEvaluationStatusRequest {

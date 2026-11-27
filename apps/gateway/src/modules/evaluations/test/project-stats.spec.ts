@@ -50,6 +50,7 @@ describe('EvaluationsService.getProjectStats', () => {
     expect(evaluationGrpc.getEventCriteriaStats).toHaveBeenCalledWith({
       eventId: 7,
       projectIds: [3],
+      groups: [],
     });
     expect(result).toEqual({ ...stats, maxScore: 90, components: [component] });
   });
