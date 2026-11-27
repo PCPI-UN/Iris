@@ -142,7 +142,7 @@ describe('ExecuteProjectImportUC', () => {
           student('luis@uni.edu', '2'),
         ],
         description: '  ',
-        projectCode: ' P-7 ',
+        projectCode: ' 07 ',
       }),
       row(3, { state: 'UNDER_REVIEW' }),
     ]);
@@ -153,7 +153,7 @@ describe('ExecuteProjectImportUC', () => {
       courseId: SISTEMAS.id,
       name: 'Proyecto 2',
       description: undefined,
-      projectCode: 'P-7',
+      projectCode: '07',
       nrc: '1001',
       state: 'APPROVED',
       participants: [student('ana@uni.edu', '1'), student('luis@uni.edu', '2')],

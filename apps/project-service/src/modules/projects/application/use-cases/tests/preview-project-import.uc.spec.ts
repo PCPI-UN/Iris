@@ -249,6 +249,30 @@ describe('PreviewProjectImportUC', () => {
         'La descripción no puede pasar de 3000 caracteres.',
       ],
       [
+        'a project code with letters',
+        { projectCode: 'ABC-1' },
+        'El código del proyecto «ABC-1» debe tener solo números.',
+      ],
+      [
+        'a project code too long',
+        { projectCode: '1'.repeat(51) },
+        'El código del proyecto no puede pasar de 50 caracteres.',
+      ],
+      [
+        'a student code too long',
+        { participants: [student('a@uni.edu', '1'.repeat(21))] },
+        'El código estudiantil del integrante 1 no puede pasar de 20 caracteres.',
+      ],
+      [
+        'a student last name too long',
+        {
+          participants: [
+            { ...student('a@uni.edu', '1'), lastName: 'x'.repeat(101) },
+          ],
+        },
+        'El nombre y el apellido del integrante 1 no pueden pasar de 100 caracteres.',
+      ],
+      [
         'an invalid student email',
         { participants: [student('ana@', '1')] },
         'El correo «ana@» del integrante 1 no es válido.',

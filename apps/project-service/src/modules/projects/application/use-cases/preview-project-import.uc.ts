@@ -40,6 +40,11 @@ const LOOKUP_CONCURRENCY = 10;
 const NAME_MIN = 3;
 const NAME_MAX = 255;
 const DESCRIPTION_MAX = 3000;
+/** Column limits of the tables, the same the admin form checks */
+const PROJECT_CODE_MAX = 50;
+const STUDENT_CODE_MAX = 20;
+const PERSON_NAME_MAX = 100;
+const EMAIL_MAX = 255;
 
 export type ProjectImportOutcome = 'CREATE' | 'SKIP' | 'ERROR' | 'CREATED';
 export type ProjectImportParticipantStatus = 'HAS_ACCOUNT' | 'NO_ACCOUNT';
@@ -515,13 +520,29 @@ export class PreviewProjectImportUC {
     if (text(row.description).length > DESCRIPTION_MAX) {
       return `La descripción no puede pasar de ${DESCRIPTION_MAX} caracteres.`;
     }
+    const projectCode = text(row.projectCode);
+    if (projectCode && !/^\d+$/.test(projectCode)) {
+      return `El código del proyecto «${projectCode}» debe tener solo números.`;
+    }
+    if (projectCode.length > PROJECT_CODE_MAX) {
+      return `El código del proyecto no puede pasar de ${PROJECT_CODE_MAX} caracteres.`;
+    }
 
     const emails: string[] = [];
     const codes: string[] = [];
     for (const [i, p] of participants.entries()) {
       const email = normalizeEmail(p.email);
-      if (!isValidEmail(email)) {
+      if (!isValidEmail(email) || email.length > EMAIL_MAX) {
         return `El correo «${text(p.email)}» del integrante ${i + 1} no es válido.`;
+      }
+      if (
+        text(p.firstName).length > PERSON_NAME_MAX ||
+        text(p.lastName).length > PERSON_NAME_MAX
+      ) {
+        return `El nombre y el apellido del integrante ${i + 1} no pueden pasar de ${PERSON_NAME_MAX} caracteres.`;
+      }
+      if (text(p.studentCode).length > STUDENT_CODE_MAX) {
+        return `El código estudiantil del integrante ${i + 1} no puede pasar de ${STUDENT_CODE_MAX} caracteres.`;
       }
       if (emails.includes(email)) {
         return `El correo ${email} está repetido entre los integrantes.`;
@@ -534,7 +555,8 @@ export class PreviewProjectImportUC {
       codes.push(code);
     }
     for (const raw of row.tutorEmails ?? []) {
-      if (!isValidEmail(normalizeEmail(raw ?? ''))) {
+      const email = normalizeEmail(raw ?? '');
+      if (!isValidEmail(email) || email.length > EMAIL_MAX) {
         return `El correo de tutor «${text(raw)}» no es válido.`;
       }
     }
