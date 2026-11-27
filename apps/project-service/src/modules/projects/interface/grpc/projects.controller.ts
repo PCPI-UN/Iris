@@ -16,6 +16,7 @@ import {
   toProtoParticipant,
   protoToStatus,
   toProtoPendingParticipant,
+  adminCreateRejection,
   protoToTypedDocument,
   toProtoProjectComplete,
   toProtoTutor,
@@ -64,6 +65,8 @@ import { GetStudentParticipationStatsDTO } from '../../application/dto/get-stude
 import { CheckActiveSubmissionByEmailsUC } from '../../application/use-cases/check-active-submission-by-emails.uc';
 import { status } from '@grpc/grpc-js';
 import {
+  AdminCreateProjectRequest,
+  AdminCreateProjectResponse,
   CheckProjectAccessRequest,
   CreateProjectWithParticipantsRequest,
   ExecuteJurorImportRequest,
@@ -81,6 +84,10 @@ import { ProjectStateChangeBlockedError } from '../../domain/admin-state-change'
 import { AdminUpdateProjectUC } from '../../application/use-cases/admin-update-project.uc';
 import { AdminProjectEditConflictError } from '../../domain/admin-project-edit';
 import { AdminAddParticipantUC } from '../../application/use-cases/admin-add-participant.uc';
+import {
+  AdminCreateProjectUC,
+  AdminCreateState,
+} from '../../application/use-cases/admin-create-project.uc';
 import { AdminRemoveParticipantUC } from '../../application/use-cases/admin-remove-participant.uc';
 import { ReplaceProjectTutorsUC } from '../../application/use-cases/replace-project-tutors.uc';
 import { AdminParticipantsError } from '../../domain/admin-participants';
@@ -144,6 +151,7 @@ export class ProjectsController {
     private readonly adminReplaceProjectDocumentUC: AdminReplaceProjectDocumentUC,
     private readonly adminChangeProjectDocumentStateUC: AdminChangeProjectDocumentStateUC,
     private readonly createProjectWithPendingParticipantsUC: CreateProjectWithPendingParticipantsUC,
+    private readonly adminCreateProjectUC: AdminCreateProjectUC,
   ) {}
 
   private async tutorsOf(projectId: number) {
@@ -799,6 +807,57 @@ export class ProjectsController {
       // Nothing changed: the gateway answers 409 (or 400) with the cause
       if (error instanceof AdminParticipantsError) {
         return { rejected: error.rejection, failedEffects: [], warning: '' };
+      }
+      throw error;
+    }
+  }
+
+  @GrpcMethod('ProjectsService', 'AdminCreateProject')
+  async adminCreateProjectRpc(
+    req: AdminCreateProjectRequest,
+  ): Promise<AdminCreateProjectResponse> {
+    try {
+      const result = await this.adminCreateProjectUC.execute({
+        eventId: req.eventId,
+        courseId: req.courseId,
+        name: req.name,
+        description: req.description,
+        projectCode: req.projectCode,
+        nrc: req.nrc,
+        // Unset is APPROVED; REJECTED or REQUEST_CHANGES reach the use case and get a 400
+        state: req.state
+          ? (protoToState(req.state) as AdminCreateState)
+          : undefined,
+        participants: req.participants ?? [],
+        tutorUserIds: req.tutorUserIds,
+        pendingTutors: req.pendingTutors,
+        actingUserId: req.actingUserId,
+        origin:
+          req.originKind === 'ADMIN_BULK'
+            ? {
+                kind: 'ADMIN_BULK',
+                fileName: req.originFileName ?? '',
+                rowNumber: req.originRowNumber ?? 0,
+              }
+            : { kind: 'ADMIN_FORM' },
+      });
+      return {
+        project: toProtoProject(result.project),
+        participants: result.participants,
+        tutors: (await this.tutorsOf(result.project.id)).map(toProtoTutor),
+        failedEffects: result.failedEffects,
+        warning: result.warning ?? '',
+      };
+    } catch (error) {
+      const rejected = adminCreateRejection(error);
+      if (rejected) {
+        return {
+          participants: [],
+          tutors: [],
+          rejected,
+          failedEffects: [],
+          warning: '',
+        };
       }
       throw error;
     }

@@ -2,6 +2,12 @@ import { TypedDocument ,ProjectState, ProjectDocument, Project, JurorKey, Status
 import { AcademicCourseView } from '../../domain/repositories/project.repository';
 import { RequestedReadScope } from '../../domain/read-scope';
 import { ProjectChangeLogEntry } from '../../domain/entities/project-change-log.entity';
+import { AdminParticipantsError } from '../../domain/admin-participants';
+import {
+  EventResultsPublishedError,
+  ParticipantInOtherProjectError,
+  ProjectNameTakenError,
+} from '../../domain/admin-project-creation';
 import {
   JurorImportOutcome as ProtoJurorImportOutcome,
   JurorImportUserStatus as ProtoJurorImportUserStatus,
@@ -323,3 +329,26 @@ export function toProtoProjectChangeLogEntry(entry: ProjectChangeLogEntry) {
     createdAt: entry.createdAt.toISOString(),
   };
 }
+
+/**
+ * Coded rejection of an administrative creation, or null for any other error. A student
+ * rejection from the shared enrollment checks keeps its own code and email.
+ */
+export const adminCreateRejection = (
+  error: unknown,
+): { code: string; message: string; emails: string[] } | null => {
+  if (error instanceof ParticipantInOtherProjectError) {
+    return { code: error.code, message: error.message, emails: error.emails };
+  }
+  if (
+    error instanceof ProjectNameTakenError ||
+    error instanceof EventResultsPublishedError
+  ) {
+    return { code: error.code, message: error.message, emails: [] };
+  }
+  if (error instanceof AdminParticipantsError) {
+    const { code, message, email } = error.rejection;
+    return { code, message, emails: email ? [email] : [] };
+  }
+  return null;
+};
