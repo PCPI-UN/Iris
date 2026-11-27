@@ -102,7 +102,9 @@ export class AcademicController {
       'position in the ranking of its category with its published awards (tied projects share it; null if the project ' +
       'is not approved or the event has no ranking). Without read:grades the result and ' +
       'the position are only sent once the results are published (resultHidden: true until then). ' +
-      '`evaluation` is null when the evaluation could not be read; the project is still sent.',
+      '`evaluation` is null when the evaluation could not be read; the project is still sent. ' +
+      '`diplomaAvailable` tells whether GET /academic/projects/:id/diploma gives its diploma ' +
+      'to this profile (always false for PROFESSOR and TUTOR).',
   })
   @ApiResponse({ status: 200, description: 'The project and its evaluation' })
   @ApiResponse({
@@ -120,6 +122,46 @@ export class AcademicController {
     @Query() query: AcademicProfileQueryDto,
   ): Promise<AcademicProjectDetail> {
     return this.academicService.getProject(user, projectId, query.profile);
+  }
+
+  @Get('projects/:id/diploma')
+  @RequirePermission('read:academic_projects')
+  @ApiOperation({
+    summary: 'Download the award diploma of one project of my academic scope',
+    description:
+      'Same PDF the students of the project download. Only for the profiles DIRECTOR ' +
+      '(their department) and DEAN (all), once the results of the event are published ' +
+      'and only if the project won at least one award.',
+  })
+  @ApiProduces('application/pdf')
+  @ApiResponse({ status: 200, description: 'The PDF file' })
+  @ApiResponse({
+    status: 403,
+    description:
+      'The user lacks read:academic_projects or the role of the profile, the profile is ' +
+      'not DIRECTOR or DEAN, or the results of the event are not published yet',
+  })
+  @ApiResponse({
+    status: 404,
+    description:
+      'The project does not exist or is outside the caller scope, it won no award, or ' +
+      'the event has no diploma design',
+  })
+  async getDiploma(
+    @GetUser() user: AppUser,
+    @Param('id', ParseIntPipe) projectId: number,
+    @Query() query: AcademicProfileQueryDto,
+  ): Promise<StreamableFile> {
+    const { buffer, fileName } = await this.academicService.getDiploma(
+      user,
+      projectId,
+      query.profile,
+    );
+    return new StreamableFile(buffer, {
+      type: 'application/pdf',
+      disposition: `attachment; filename="${fileName}"`,
+      length: buffer.length,
+    });
   }
 
   @Get('events')

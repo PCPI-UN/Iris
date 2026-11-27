@@ -182,4 +182,65 @@ describe('DiplomasService', () => {
     expect(service.hasDiploma(12)).toBe(false);
     expect(build({ templates: undefined }).service.hasDiploma(10)).toBe(false);
   });
+
+  describe('isAvailable', () => {
+    const PROJECT = { id: 5, eventId: 10 };
+
+    it('is true with a design, published results and a published award', async () => {
+      await expect(build().service.isAvailable(PROJECT)).resolves.toBe(true);
+    });
+
+    it('is false without a design, before asking event-service', async () => {
+      const { service, eventsService } = build({ templates: '11:x' });
+
+      await expect(service.isAvailable(PROJECT)).resolves.toBe(false);
+      expect(eventsService.getEventById).not.toHaveBeenCalled();
+    });
+
+    it('is false before publication or without an award of the event', async () => {
+      await expect(
+        build({
+          event: { id: 10, resultsPublished: false },
+        }).service.isAvailable(PROJECT),
+      ).resolves.toBe(false);
+      await expect(
+        build({
+          awards: [{ projectId: 5, eventId: 9, resultsPublished: true }],
+        }).service.isAvailable(PROJECT),
+      ).resolves.toBe(false);
+    });
+  });
+
+  describe('getProjectDiploma (academic profiles)', () => {
+    const PROJECT = { id: 5, eventId: 10, name: 'Riego Inteligente IoT' };
+
+    it('renders the diploma of the given project without looking up the caller', async () => {
+      const { service, projectsService, eventsService, renderer } = build();
+
+      const file = await service.getProjectDiploma(PROJECT);
+
+      expect(projectsService.getMyProjectByEvent).not.toHaveBeenCalled();
+      expect(eventsService.getEventById).toHaveBeenCalledWith(10);
+      expect(renderer.render).toHaveBeenCalledWith({
+        template: 'feria-proyectos-stem',
+        projectName: 'Riego Inteligente IoT',
+      });
+      expect(file.fileName).toBe('diploma_riego_inteligente_iot.pdf');
+    });
+
+    it('keeps the rules of the student one: published results and an award', async () => {
+      await expect(
+        build({
+          event: { id: 10, resultsPublished: false },
+        }).service.getProjectDiploma(PROJECT),
+      ).rejects.toThrow(ForbiddenException);
+      await expect(
+        build({ awards: [] }).service.getProjectDiploma(PROJECT),
+      ).rejects.toThrow(
+        new NotFoundException(
+          'El proyecto no tiene premios en este evento, así que no tiene diploma',
+        ),
+      );
+    });
+  });
 });

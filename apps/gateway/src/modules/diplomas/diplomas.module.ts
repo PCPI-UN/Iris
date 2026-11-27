@@ -12,7 +12,7 @@ import { DiplomaPdfRenderer } from './diploma.pdf';
     DiplomasService,
     { provide: DiplomaPdfRenderer, useFactory: () => new DiplomaPdfRenderer() },
   ],
-  // hasDiploma() for the student dashboard
+  // hasDiploma() for the student dashboard; the academic diploma and its availability
   exports: [DiplomasService],
 })
 export class DiplomasModule {}

@@ -43,6 +43,7 @@ export const ROUTE_POLICY: Record<string, RouteAccess> = {
   'GET /academic/grades': { permission: ['read:academic_projects'] },
   'GET /academic/projects': { permission: ['read:academic_projects'] },
   'GET /academic/projects/:id': { permission: ['read:academic_projects'] },
+  'GET /academic/projects/:id/diploma': { permission: ['read:academic_projects'] },
   'GET /academic/registrations': { permission: ['read:academic_projects'] },
   'GET /academic/stats': { permission: ['read:academic_projects'] },
   // modules/auth/auth.controller.ts
